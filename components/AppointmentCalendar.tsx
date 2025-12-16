@@ -239,7 +239,7 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
     }
     if (status === 'requested' || status === 'pending') {
       return (
-        <Badge variant="outline" className="text-xs font-body">
+        <Badge className="bg-red-100 text-red-800 border-none text-xs font-body">
           <Clock className="w-3 h-3 mr-1" />
           Ausstehend
         </Badge>
@@ -262,11 +262,14 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
   };
 
   const upcomingAppointments = getUpcomingAppointments();
+  const selectedDateAppointments = selectedDate ? getAppointmentsForDate(selectedDate).sort((a, b) => {
+    return parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime();
+  }) : [];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Calendar View */}
-      <Card className="lg:col-span-2 border-2">
+      <Card className="border-2">
         <CardHeader>
           <div>
             <CardTitle className="font-heading text-xl">Kalender</CardTitle>
@@ -305,97 +308,25 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
               </div>
             </div>
           </div>
-
-          {/* Selected Date Appointments */}
-          {selectedDate && (
-            <div className="mt-6 pt-6 border-t">
-              <h3 className="font-heading font-semibold text-lg mb-4">
-                Termine am {format(selectedDate, 'EEEE, d. MMMM yyyy', { locale: de })}
-              </h3>
-              {getAppointmentsForDate(selectedDate).length === 0 ? (
-                <p className="text-gray-500 font-body text-sm">Keine Termine an diesem Tag</p>
-              ) : (
-                <div className="space-y-3">
-                  {getAppointmentsForDate(selectedDate).map((apt) => (
-                    <div
-                      key={apt.id}
-                      onClick={() => {
-                        setSelectedAppointmentId(apt.id);
-                        setIsDetailModalOpen(true);
-                      }}
-                      className={`p-3 rounded-lg border-2 bg-white hover:border-primary-blue cursor-pointer transition-colors ${
-                        apt.status === 'confirmed' && apt.is_newly_accepted
-                          ? 'border-primary-green'
-                          : apt.status === 'confirmed'
-                          ? 'border-info-text/30'
-                          : 'border-gray-200'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Clock className="w-4 h-4 text-gray-500" />
-                            <span className="font-body font-semibold text-sm">
-                              {formatTime(apt.start_time)} - {formatTime(apt.end_time)}
-                            </span>
-                          </div>
-                          <p className="font-heading font-semibold text-sm mb-1">
-                            {apt.offer.title}
-                          </p>
-                          <div className="flex items-center gap-2 text-xs text-gray-600">
-                            {apt.offer.format === 'online' ? (
-                              <Video className="w-3 h-3" />
-                            ) : (
-                              <MapPin className="w-3 h-3" />
-                            )}
-                            <span>{apt.offer.format === 'online' ? 'Online' : 'Vor Ort'}</span>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          {getStatusBadge(apt.status)}
-                          {role === 'client' && apt.expert && (
-                            <div className="flex items-center gap-2">
-                              <Avatar className="w-6 h-6">
-                                <AvatarImage src={apt.expert.avatar_url} />
-                                <AvatarFallback>
-                                  <User className="w-3 h-3" />
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="text-xs text-gray-600 font-body">
-                                {apt.expert.full_name}
-                              </span>
-                            </div>
-                          )}
-                          {role === 'expert' && apt.client && (
-                            <div className="flex items-center gap-2">
-                              <Avatar className="w-6 h-6">
-                                <AvatarImage src={apt.client.avatar_url} />
-                                <AvatarFallback>
-                                  <User className="w-3 h-3" />
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="text-xs text-gray-600 font-body">
-                                {apt.client.full_name}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {/* Upcoming Appointments List */}
+      {/* Selected Date Details */}
       <Card className="border-2">
         <CardHeader>
-          <CardTitle className="font-heading text-xl">Kommende Termine</CardTitle>
+          <CardTitle className="font-heading text-xl">
+            {selectedDate 
+              ? `Termine am ${format(selectedDate, 'EEEE, d. MMMM yyyy', { locale: de })}`
+              : 'Wähle ein Datum'
+            }
+          </CardTitle>
           <CardDescription className="font-body">
-            Nächste {upcomingAppointments.length} Termine
+            {selectedDate && selectedDateAppointments.length > 0
+              ? `${selectedDateAppointments.length} ${selectedDateAppointments.length === 1 ? 'Termin' : 'Termine'}`
+              : selectedDate 
+                ? 'Keine Termine an diesem Tag'
+                : 'Klicke auf ein Datum im Kalender'
+            }
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -403,57 +334,112 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="animate-pulse">
-                  <div className="h-20 bg-gray-200 rounded"></div>
+                  <div className="h-24 bg-gray-200 rounded"></div>
                 </div>
               ))}
             </div>
-          ) : upcomingAppointments.length === 0 ? (
-            <p className="text-gray-500 font-body text-sm text-center py-8">
-              Keine kommenden Termine
-            </p>
+          ) : !selectedDate ? (
+            <div className="text-center py-12">
+              <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 font-body">
+                Wähle ein Datum im Kalender aus, um die Termine zu sehen
+              </p>
+            </div>
+          ) : selectedDateAppointments.length === 0 ? (
+            <div className="text-center py-12">
+              <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 font-body">
+                Keine Termine an diesem Tag
+              </p>
+            </div>
           ) : (
-            <div className="space-y-3">
-              {upcomingAppointments.map((apt) => (
+            <div className="space-y-3 max-h-[500px] overflow-y-auto">
+              {selectedDateAppointments.map((apt) => (
                 <div
                   key={apt.id}
                   onClick={() => {
                     setSelectedAppointmentId(apt.id);
                     setIsDetailModalOpen(true);
                   }}
-                  className={`p-3 rounded-lg border-2 bg-white hover:border-primary-blue cursor-pointer transition-colors ${
+                  className={cn(
+                    "p-4 rounded-lg border-2 bg-white hover:border-primary-blue cursor-pointer transition-all",
                     apt.status === 'confirmed' && apt.is_newly_accepted
-                      ? 'border-primary-green'
+                      ? 'border-primary-green bg-primary-green/5'
                       : apt.status === 'confirmed'
-                      ? 'border-info-text/30'
+                      ? 'border-primary-green/30 bg-primary-green/5'
+                      : apt.status === 'requested' || apt.status === 'pending'
+                      ? 'border-red-300 bg-red-50'
                       : 'border-gray-200'
-                  }`}
+                  )}
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <p className="font-heading font-semibold text-sm mb-1">
-                        {apt.offer.title}
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
-                        <Clock className="w-3 h-3" />
-                        <span>
-                          {format(parseISO(apt.start_time), 'd. MMM', { locale: de })} • {formatTime(apt.start_time)}
-                        </span>
-                      </div>
-                      {role === 'client' && apt.expert && (
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                          <User className="w-3 h-3" />
-                          <span>{apt.expert.full_name}</span>
-                        </div>
-                      )}
-                      {role === 'expert' && apt.client && (
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                          <User className="w-3 h-3" />
-                          <span>{apt.client.full_name}</span>
-                        </div>
-                      )}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-gray-500" />
+                      <span className="font-body font-semibold text-base">
+                        {formatTime(apt.start_time)} - {formatTime(apt.end_time)}
+                      </span>
                     </div>
                     {getStatusBadge(apt.status)}
                   </div>
+                  
+                  <h4 className="font-heading font-semibold text-lg text-text-dark mb-2">
+                    {apt.offer.title}
+                  </h4>
+                  
+                  {role === 'expert' && apt.client && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage src={apt.client.avatar_url} />
+                        <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white">
+                          {apt.client.full_name.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-body font-semibold text-sm text-text-dark">
+                          {apt.client.full_name}
+                        </p>
+                        {apt.client.phone && (
+                          <p className="text-xs text-gray-500 font-body">
+                            {apt.client.phone}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {role === 'client' && apt.expert && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage src={apt.expert.avatar_url} />
+                        <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white">
+                          {apt.expert.full_name.split(' ').map(n => n[0]).join('')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <p className="font-body font-semibold text-sm text-text-dark">
+                        {apt.expert.full_name}
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-200">
+                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                      {apt.offer.format === 'online' ? (
+                        <Video className="w-4 h-4" />
+                      ) : (
+                        <MapPin className="w-4 h-4" />
+                      )}
+                      <span className="font-body">{apt.offer.format === 'online' ? 'Online' : 'Vor Ort'}</span>
+                    </div>
+                    <div className="text-sm font-heading font-semibold text-text-dark">
+                      €{apt.total_price.toFixed(2)}
+                    </div>
+                  </div>
+                  
+                  {apt.notes && (
+                    <div className="mt-3 p-2 bg-gray-50 rounded text-sm text-gray-700 font-body">
+                      {apt.notes}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

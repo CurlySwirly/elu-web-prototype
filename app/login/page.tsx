@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,11 +12,25 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, role, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+
+  // Handle redirect after successful login
+  useEffect(() => {
+    if (!authLoading && shouldRedirect && role) {
+      if (role === 'admin') {
+        router.push('/admin');
+      } else {
+        router.push('/app');
+      }
+      setShouldRedirect(false);
+      setLoading(false);
+    }
+  }, [role, authLoading, shouldRedirect, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,10 +39,22 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password);
-      router.push('/app');
+      
+      // Check email pattern for admin (works in mock mode immediately)
+      // In Supabase mode, role will be set from profile and useEffect will handle redirect
+      const emailLower = email.toLowerCase();
+      const isAdminEmail = emailLower.includes('admin@') || emailLower.startsWith('admin');
+      
+      if (isAdminEmail) {
+        // For mock mode, redirect immediately based on email pattern
+        router.push('/admin');
+        setLoading(false);
+      } else {
+        // For Supabase mode, wait for role to be set
+        setShouldRedirect(true);
+      }
     } catch (err: any) {
       setError(err.message || 'Anmeldung fehlgeschlagen');
-    } finally {
       setLoading(false);
     }
   };

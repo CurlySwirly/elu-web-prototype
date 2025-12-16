@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from './ui/button';
-import { Calendar, Home, MapPin, Settings, TrendingUp, User, Users, Briefcase, DollarSign } from 'lucide-react';
+import { Calendar, Home, MapPin, Settings, TrendingUp, User, Users, Briefcase, Euro } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function AppNav() {
@@ -22,7 +22,7 @@ export function AppNav() {
     { href: '/app', label: 'Dashboard', icon: Home },
     { href: '/app/kalender', label: 'Kalender', icon: Calendar },
     { href: '/app/angebote', label: 'Angebote', icon: Briefcase },
-    { href: '/app/finanzen', label: 'Finanzen', icon: DollarSign },
+    { href: '/app/finanzen', label: 'Finanzen', icon: Euro },
     { href: '/app/expert-profil', label: 'Profil', icon: User },
   ];
 

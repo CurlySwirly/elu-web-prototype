@@ -305,8 +305,8 @@ export default function AppointmentsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed': return 'bg-primary-green/20 text-text-dark';
-      case 'requested': return 'bg-info-bg text-info-text';
-      case 'pending': return 'bg-info-bg text-info-text';
+      case 'requested': return 'bg-red-100 text-red-800';
+      case 'pending': return 'bg-red-100 text-red-800';
       case 'completed': return 'bg-info-bg text-info-text';
       case 'cancelled_by_client': return 'bg-gray-100 text-gray-600';
       case 'cancelled_by_expert': return 'bg-gray-100 text-gray-600';

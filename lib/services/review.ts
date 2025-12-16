@@ -14,6 +14,14 @@ export interface Review {
     full_name: string;
     avatar_url?: string;
   };
+  appointment?: {
+    start_time: string;
+    end_time: string;
+    offer?: {
+      title: string;
+      format?: string;
+    };
+  };
 }
 
 export const reviewService = {
@@ -25,13 +33,33 @@ export const reviewService = {
         client:client_id (
           full_name,
           avatar_url
+        ),
+        appointments:appointment_id (
+          start_time,
+          end_time,
+          expert_offers:offer_id (
+            title,
+            format
+          )
         )
       `)
       .eq('expert_profile_id', expertProfileId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data as Review[];
+    
+    // Transform the nested appointment data structure
+    return (data || []).map((review: any) => ({
+      ...review,
+      appointment: review.appointments ? {
+        start_time: review.appointments.start_time,
+        end_time: review.appointments.end_time,
+        offer: review.appointments.expert_offers ? {
+          title: review.appointments.expert_offers.title,
+          format: review.appointments.expert_offers.format,
+        } : undefined,
+      } : undefined,
+    })) as Review[];
   },
 
   async getExpertRating(expertProfileId: string) {
