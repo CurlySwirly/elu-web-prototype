@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { backend } from '@/lib/backend/client';
 import type { AuthUser } from '@/lib/types';
 
-type UserRole = 'client' | 'expert' | 'provider' | 'admin';
+type UserRole = 'client' | 'expert' | 'admin';
 
 interface AuthState {
   user: AuthUser | null;

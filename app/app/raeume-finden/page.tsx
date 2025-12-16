@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -56,23 +56,7 @@ export default function FindRoomsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [linkedAppointment, setLinkedAppointment] = useState<any>(null);
 
-  useEffect(() => {
-    if (userId) {
-      loadExpertProfile();
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    if (appointmentId && expertProfileId) {
-      loadAppointmentDetails();
-    }
-  }, [appointmentId, expertProfileId]);
-
-  useEffect(() => {
-    filterRooms();
-  }, [searchQuery, rooms]);
-
-  const loadExpertProfile = async () => {
+  const loadExpertProfile = useCallback(async () => {
     try {
       const { data: profile } = await supabase
         .from('expert_profiles')
@@ -92,9 +76,9 @@ export default function FindRoomsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
 
-  const loadAppointmentDetails = async () => {
+  const loadAppointmentDetails = useCallback(async () => {
     if (!appointmentId) return;
 
     try {
@@ -119,7 +103,7 @@ export default function FindRoomsPage() {
     } catch (err: any) {
       console.error('Error loading appointment:', err);
     }
-  };
+  }, [appointmentId]);
 
   const loadRooms = async () => {
     try {
@@ -167,7 +151,7 @@ export default function FindRoomsPage() {
     }
   };
 
-  const filterRooms = () => {
+  const filterRooms = useCallback(() => {
     if (!searchQuery.trim()) {
       setFilteredRooms(rooms);
       return;
@@ -181,7 +165,7 @@ export default function FindRoomsPage() {
       room.amenities.some(a => a.toLowerCase().includes(query))
     );
     setFilteredRooms(filtered);
-  };
+  }, [searchQuery, rooms]);
 
   const handleSelectRoom = (room: Room) => {
     setSelectedRoom(room);

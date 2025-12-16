@@ -1,38 +1,24 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { AlertCircle } from 'lucide-react';
 
 export default function ProviderSignupPage() {
   const router = useRouter();
-  const { signUp } = useAuth();
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  useEffect(() => {
+    // Redirect to main signup page after a brief delay
+    const timer = setTimeout(() => {
+      router.push('/signup');
+    }, 3000);
 
-    try {
-      await signUp(email, password, fullName, 'provider');
-      router.push('/onboarding/provider');
-    } catch (err: any) {
-      setError(err.message || 'Registrierung fehlgeschlagen');
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => clearTimeout(timer);
+  }, [router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg-light px-4 py-12">
@@ -44,82 +30,33 @@ export default function ProviderSignupPage() {
             </Link>
           </div>
           <CardTitle className="text-2xl font-heading text-center text-text-dark">
-            Anbieter werden
+            Anbieter-Registrierung nicht verfügbar
           </CardTitle>
           <CardDescription className="text-center font-body text-gray-600">
-            Registriere dich und vermiete deine Räume stundenweise
+            Die Plattform konzentriert sich derzeit auf Client- und Expert-Rollen
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+          <Alert className="mb-4 border-2 border-yellow-200 bg-yellow-50">
+            <AlertCircle className="h-5 w-5 text-yellow-600" />
+            <AlertDescription className="ml-2 text-yellow-900 font-body">
+              Die Anbieter-Rolle ist vorübergehend nicht verfügbar. Du wirst zur Hauptregistrierungsseite weitergeleitet.
+            </AlertDescription>
+          </Alert>
 
-            <div className="space-y-2">
-              <Label htmlFor="fullName" className="font-body font-medium text-text-dark">Vollständiger Name / Unternehmen</Label>
-              <Input
-                id="fullName"
-                type="text"
-                placeholder="Max Mustermann oder Studio Name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                className="font-body"
-              />
-            </div>
+          <Button
+            onClick={() => router.push('/signup')}
+            className="w-full bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 transition-opacity font-body font-semibold"
+          >
+            Zur Registrierung
+          </Button>
 
-            <div className="space-y-2">
-              <Label htmlFor="email" className="font-body font-medium text-text-dark">E-Mail</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="deine@email.de"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="font-body"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="font-body font-medium text-text-dark">Passwort</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Mindestens 6 Zeichen"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="font-body"
-              />
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 transition-opacity font-body font-semibold"
-              disabled={loading}
-            >
-              {loading ? 'Wird registriert...' : 'Registrieren'}
-            </Button>
-
-            <div className="text-center text-sm text-gray-600 font-body">
-              Bereits registriert?{' '}
-              <Link href="/login" className="text-primary-blue hover:underline font-semibold">
-                Jetzt anmelden
-              </Link>
-            </div>
-
-            <div className="text-center text-sm text-gray-600 font-body pt-2 border-t">
-              Du bist Kund:in oder Expert:in?{' '}
-              <Link href="/signup" className="text-primary-blue hover:underline">
-                Andere Rolle wählen
-              </Link>
-            </div>
-          </form>
+          <div className="text-center text-sm text-gray-600 font-body mt-4">
+            Bereits registriert?{' '}
+            <Link href="/login" className="text-primary-blue hover:underline font-semibold">
+              Jetzt anmelden
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -75,13 +75,7 @@ export default function AppointmentDetailModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (appointmentId && isOpen) {
-      loadAppointmentDetails();
-    }
-  }, [appointmentId, isOpen]);
-
-  const loadAppointmentDetails = async () => {
+  const loadAppointmentDetails = useCallback(async () => {
     if (!appointmentId) return;
 
     setLoading(true);
@@ -197,7 +191,13 @@ export default function AppointmentDetailModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [appointmentId]);
+
+  useEffect(() => {
+    if (appointmentId && isOpen) {
+      loadAppointmentDetails();
+    }
+  }, [appointmentId, isOpen, loadAppointmentDetails]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {

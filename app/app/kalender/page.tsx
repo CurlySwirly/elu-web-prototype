@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,13 +64,7 @@ export default function ExpertCalendarPage() {
     end_time: '17:00',
   });
 
-  useEffect(() => {
-    if (userId) {
-      loadExpertData();
-    }
-  }, [userId]);
-
-  const loadExpertData = async () => {
+  const loadExpertData = useCallback(async () => {
     try {
       const { data: profile } = await supabase
         .from('expert_profiles')
@@ -90,7 +84,19 @@ export default function ExpertCalendarPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    if (userId) {
+      loadExpertData();
+    }
+  }, [userId, loadExpertData]);
+
+  useEffect(() => {
+    if (userId) {
+      loadExpertData();
+    }
+  }, [userId, loadExpertData]);
 
   const loadAppointments = async (profileId: string) => {
     try {

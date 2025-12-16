@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,13 +58,7 @@ export default function ProviderDashboard() {
     monthlyRevenue: 0
   });
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchProviderData();
-    }
-  }, [user]);
-
-  const fetchProviderData = async () => {
+  const fetchProviderData = useCallback(async () => {
     try {
       const { data: profile } = await supabase
         .from('provider_profiles')
@@ -95,7 +89,13 @@ export default function ProviderDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchProviderData();
+    }
+  }, [user, fetchProviderData]);
 
   if (loading) {
     return (

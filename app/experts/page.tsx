@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,9 +50,11 @@ export default function ExpertsPage() {
 
               <div className="relative">
                 <div className="aspect-square w-full max-w-lg mx-auto bg-white rounded-3xl overflow-hidden shadow-xl border border-gray-200">
-                  <img
+                  <Image
                     src="https://images.pexels.com/photos/6111617/pexels-photo-6111617.jpeg?auto=compress&cs=tinysrgb&w=800"
                     alt="Expert:in bei der Arbeit"
+                    width={800}
+                    height={800}
                     className="w-full h-full object-cover"
                   />
                 </div>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,21 +46,15 @@ export default async function Home() {
                   </a>
                 </div>
 
-                <div className="flex flex-wrap gap-6 pt-4">
-                  <Link href="/experts" className="text-sm text-gray-600 hover:text-primary-blue transition-colors font-body flex items-center gap-1">
-                    Für Expert:innen →
-                  </Link>
-                  <Link href="/spaces" className="text-sm text-gray-600 hover:text-primary-blue transition-colors font-body flex items-center gap-1">
-                    Für Studios & Praxen →
-                  </Link>
-                </div>
               </div>
 
               <div className="relative">
                 <div className="aspect-square w-full max-w-lg mx-auto bg-gradient-to-br from-primary-blue/10 to-primary-green/10 rounded-3xl overflow-hidden">
-                  <img
+                  <Image
                     src="https://images.pexels.com/photos/3822621/pexels-photo-3822621.jpeg?auto=compress&cs=tinysrgb&w=800"
                     alt="Gesundheitsexpert:in bei der Arbeit"
+                    width={800}
+                    height={800}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -336,7 +331,6 @@ export default async function Home() {
                 <h4 className="font-heading font-semibold mb-4">Für Profis</h4>
                 <ul className="space-y-2 font-body text-gray-400">
                   <li><Link href="/experts" className="hover:text-white transition-colors">Als Expert:in beitreten</Link></li>
-                  <li><Link href="/spaces" className="hover:text-white transition-colors">Räume anbieten</Link></li>
                 </ul>
               </div>
             </div>

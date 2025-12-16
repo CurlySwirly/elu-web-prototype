@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,14 +57,45 @@ export default function OffersPage() {
     price: 0,
   });
 
-  useEffect(() => {
-    if (userId) {
-      loadExpertProfile();
-    }
-  }, [userId]);
-
-  const loadExpertProfile = async () => {
+  const loadOffers = useCallback(async (profileId: string) => {
     try {
+      const { data, error } = await supabase
+        .from('expert_offers')
+        .select('*')
+        .eq('expert_id', profileId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setOffers(data || []);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, []);
+
+  const loadExpertProfile = useCallback(async () => {
+    try {
+      // Check if we're in mock mode
+      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      
+      if (backendMode === 'mock') {
+        // In mock mode, create a mock expert profile ID and load mock offers
+        setExpertProfileId(`mock-expert-${userId}`);
+        const { mockExpertOwnOffers } = await import('@/lib/backend/mock/data');
+        setOffers(mockExpertOwnOffers.map(offer => ({
+          id: offer.id,
+          title: offer.title,
+          description: offer.description,
+          category: offer.category,
+          format: offer.format,
+          duration_minutes: offer.duration_minutes,
+          price: offer.price,
+          is_active: offer.is_active,
+        })));
+        setLoading(false);
+        return;
+      }
+
+      // In Supabase mode, fetch from database
       const { data: profile } = await supabase
         .from('expert_profiles')
         .select('id')
@@ -80,22 +111,13 @@ export default function OffersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, loadOffers]);
 
-  const loadOffers = async (profileId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('expert_offers')
-        .select('*')
-        .eq('expert_id', profileId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setOffers(data || []);
-    } catch (err: any) {
-      setError(err.message);
+  useEffect(() => {
+    if (userId) {
+      loadExpertProfile();
     }
-  };
+  }, [userId, loadExpertProfile]);
 
   const handleOpenDialog = (offer?: ExpertOffer) => {
     if (offer) {
@@ -125,7 +147,10 @@ export default function OffersPage() {
   };
 
   const handleSaveOffer = async () => {
-    if (!expertProfileId) return;
+    if (!expertProfileId) {
+      setError('Expert Profil nicht gefunden');
+      return;
+    }
 
     setError('');
     setSuccess('');
@@ -136,6 +161,48 @@ export default function OffersPage() {
     }
 
     try {
+      // Check if we're in mock mode
+      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      
+      if (backendMode === 'mock') {
+        // In mock mode, simulate success
+        const newOffer: ExpertOffer = editingOffer || {
+          id: `mock-offer-${Date.now()}`,
+          title: formData.title,
+          description: formData.description,
+          category: formData.category,
+          format: formData.format,
+          duration_minutes: formData.duration_minutes,
+          price: formData.price,
+          is_active: true,
+        };
+
+        if (editingOffer) {
+          // Update existing offer in the list
+          setOffers(offers.map(o => o.id === editingOffer.id ? { ...o, ...formData } : o));
+          setSuccess('Angebot erfolgreich aktualisiert');
+        } else {
+          // Add new offer to the list
+          setOffers([newOffer, ...offers]);
+          setSuccess('Angebot erfolgreich erstellt');
+        }
+
+        setTimeout(() => {
+          setIsDialogOpen(false);
+          setSuccess('');
+          setFormData({
+            title: '',
+            description: '',
+            category: '',
+            format: 'online',
+            duration_minutes: 60,
+            price: 0,
+          });
+        }, 1500);
+        return;
+      }
+
+      // In Supabase mode, save to database
       if (editingOffer) {
         const { error } = await supabase
           .from('expert_offers')
@@ -173,9 +240,18 @@ export default function OffersPage() {
       setTimeout(() => {
         setIsDialogOpen(false);
         setSuccess('');
+        setFormData({
+          title: '',
+          description: '',
+          category: '',
+          format: 'online',
+          duration_minutes: 60,
+          price: 0,
+        });
       }, 1500);
     } catch (err: any) {
-      setError(err.message);
+      console.error('Error saving offer:', err);
+      setError(err.message || 'Fehler beim Speichern');
     }
   };
 

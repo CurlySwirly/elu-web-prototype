@@ -21,14 +21,29 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     // Check if expert profile is complete
     const checkExpertProfile = async () => {
       if (!loading && user && role === 'expert' && pathname !== '/app/complete-profile') {
-        const { data } = await supabase
-          .from('expert_profiles')
-          .select('is_profile_complete, profile_completion_status')
-          .eq('user_id', userId)
-          .maybeSingle();
+        // Check if we're in mock mode
+        const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+        
+        if (backendMode === 'mock') {
+          // In mock mode, skip profile check - allow access to all pages
+          setProfileCheckLoading(false);
+          return;
+        }
 
-        if (data && !data.is_profile_complete) {
-          router.push('/app/complete-profile');
+        // In Supabase mode, check profile completion
+        try {
+          const { data } = await supabase
+            .from('expert_profiles')
+            .select('is_profile_complete, profile_completion_status')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (data && !data.is_profile_complete) {
+            router.push('/app/complete-profile');
+          }
+        } catch (error) {
+          // If check fails, don't block access - just log error
+          console.error('Error checking expert profile:', error);
         }
       }
       setProfileCheckLoading(false);

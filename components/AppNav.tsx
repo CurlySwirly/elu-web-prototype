@@ -22,20 +22,11 @@ export function AppNav() {
     { href: '/app', label: 'Dashboard', icon: Home },
     { href: '/app/kalender', label: 'Kalender', icon: Calendar },
     { href: '/app/angebote', label: 'Angebote', icon: Briefcase },
-    { href: '/app/raeume-finden', label: 'Räume finden', icon: MapPin },
     { href: '/app/finanzen', label: 'Finanzen', icon: DollarSign },
     { href: '/app/expert-profil', label: 'Profil', icon: User },
   ];
 
-  const providerLinks = [
-    { href: '/app', label: 'Dashboard', icon: Home },
-    { href: '/app/raeume', label: 'Räume', icon: MapPin },
-    { href: '/app/buchungen', label: 'Buchungen', icon: Calendar },
-    { href: '/app/finanzen-provider', label: 'Finanzen', icon: DollarSign },
-    { href: '/app/einstellungen', label: 'Einstellungen', icon: Settings },
-  ];
-
-  const links = role === 'expert' ? expertLinks : role === 'provider' ? providerLinks : clientLinks;
+  const links = role === 'expert' ? expertLinks : clientLinks;
 
   return (
     <nav className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 flex flex-col">

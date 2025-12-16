@@ -10,15 +10,6 @@ export function Header() {
             elu
           </Link>
 
-          <nav className="hidden md:flex items-center gap-8">
-            <Link href="/experts" className="text-text-dark hover:text-primary-blue transition-colors">
-              Für Expert:innen
-            </Link>
-            <Link href="/spaces" className="text-text-dark hover:text-primary-blue transition-colors">
-              Für Anbieter
-            </Link>
-          </nav>
-
           <div className="flex items-center gap-3">
             <Link href="/login">
               <Button variant="ghost" className="text-text-dark hover:text-primary-blue">

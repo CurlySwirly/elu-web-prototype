@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +23,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import AppointmentCalendar from './AppointmentCalendar';
 
 interface ExpertProfile {
   id: string;
@@ -56,13 +57,7 @@ export default function ExpertDashboard() {
     monthlyRevenue: 0
   });
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchExpertData();
-    }
-  }, [user]);
-
-  const fetchExpertData = async () => {
+  const fetchExpertData = useCallback(async () => {
     try {
       const { data: profile } = await supabase
         .from('expert_profiles')
@@ -78,7 +73,13 @@ export default function ExpertDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchExpertData();
+    }
+  }, [user, fetchExpertData]);
 
   if (loading) {
     return (
@@ -369,44 +370,34 @@ export default function ExpertDashboard() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="border-2">
-              <CardHeader>
-                <CardTitle className="font-heading text-xl">Heutige Termine</CardTitle>
-                <CardDescription className="font-body">Deine Sessions für heute</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 font-body">Keine Termine für heute geplant.</p>
-              </CardContent>
-            </Card>
+          <AppointmentCalendar role="expert" />
 
-            <Card className="border-2">
-              <CardHeader>
-                <CardTitle className="font-heading text-xl">Schnellzugriff</CardTitle>
-                <CardDescription className="font-body">Häufig verwendete Funktionen</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Link href="/app/angebote">
-                  <Button variant="outline" className="w-full justify-start">
-                    <Briefcase className="w-4 h-4 mr-2" />
-                    Angebote verwalten
-                  </Button>
-                </Link>
-                <Link href="/app/kalender">
-                  <Button variant="outline" className="w-full justify-start">
-                    <CalendarClock className="w-4 h-4 mr-2" />
-                    Verfügbarkeiten bearbeiten
-                  </Button>
-                </Link>
-                <Link href="/app/finanzen">
-                  <Button variant="outline" className="w-full justify-start">
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Auszahlungen ansehen
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </div>
+          <Card className="border-2 mt-6">
+            <CardHeader>
+              <CardTitle className="font-heading text-xl">Schnellzugriff</CardTitle>
+              <CardDescription className="font-body">Häufig verwendete Funktionen</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Link href="/app/angebote">
+                <Button variant="outline" className="w-full justify-start">
+                  <Briefcase className="w-4 h-4 mr-2" />
+                  Angebote verwalten
+                </Button>
+              </Link>
+              <Link href="/app/kalender">
+                <Button variant="outline" className="w-full justify-start">
+                  <CalendarClock className="w-4 h-4 mr-2" />
+                  Verfügbarkeiten bearbeiten
+                </Button>
+              </Link>
+              <Link href="/app/finanzen">
+                <Button variant="outline" className="w-full justify-start">
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Auszahlungen ansehen
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

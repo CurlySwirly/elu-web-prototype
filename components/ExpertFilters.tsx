@@ -14,8 +14,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { X } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { X, ChevronDown, Clock, Calendar as CalendarIcon } from 'lucide-react';
 import type { ExpertFilters } from '@/lib/types';
+import { format } from 'date-fns';
+import { de } from 'date-fns/locale';
 
 interface ExpertFiltersProps {
   filters: ExpertFilters;
@@ -73,17 +81,94 @@ export function ExpertFilters({
     }
   };
 
-  const handleAvailabilityChange = (value: string) => {
-    if (value === 'all') {
-      const { availability, ...rest } = filters;
-      onFiltersChange(rest);
+  const [isAvailabilityPopoverOpen, setIsAvailabilityPopoverOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedTime, setSelectedTime] = useState<string>('');
+
+  const timePeriods = [
+    { id: 'morning', label: 'Vormittag (08:00-12:00)' },
+    { id: 'afternoon', label: 'Nachmittag (12:00-17:00)' },
+    { id: 'evening', label: 'Abend (17:00-21:00)' },
+  ];
+
+  const dayOptions = [
+    { id: 'weekdays', label: 'Wochentage (Mo-Fr)' },
+    { id: 'weekends', label: 'Wochenende (Sa-So)' },
+    { id: 'monday', label: 'Montag' },
+    { id: 'tuesday', label: 'Dienstag' },
+    { id: 'wednesday', label: 'Mittwoch' },
+    { id: 'thursday', label: 'Donnerstag' },
+    { id: 'friday', label: 'Freitag' },
+    { id: 'saturday', label: 'Samstag' },
+    { id: 'sunday', label: 'Sonntag' },
+  ];
+
+  const handleAvailabilityDayToggle = (dayId: string) => {
+    const current = filters.availabilityDays || [];
+    const updated = current.includes(dayId)
+      ? current.filter((d) => d !== dayId)
+      : [...current, dayId];
+    onFiltersChange({
+      ...filters,
+      availabilityDays: updated.length > 0 ? updated : undefined,
+    });
+  };
+
+  const handleAvailabilityTimePeriodToggle = (periodId: string) => {
+    const current = filters.availabilityTimePeriods || [];
+    const updated = current.includes(periodId)
+      ? current.filter((p) => p !== periodId)
+      : [...current, periodId];
+    onFiltersChange({
+      ...filters,
+      availabilityTimePeriods: updated.length > 0 ? updated : undefined,
+    });
+  };
+
+  const handleSpecificTimeChange = (time: string) => {
+    onFiltersChange({
+      ...filters,
+      availabilitySpecificTime: time || undefined,
+    });
+    setSelectedTime(time);
+  };
+
+  const handleDateSelect = (date: Date | undefined) => {
+    setSelectedDate(date);
+    if (date) {
+      // Add the specific date to availabilityDays
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const current = filters.availabilityDays || [];
+      if (!current.includes(dateStr)) {
+        onFiltersChange({
+          ...filters,
+          availabilityDays: [...current, dateStr],
+        });
+      }
     } else {
-      onFiltersChange({
-        ...filters,
-        availability: value as 'available' | 'busy' | 'unavailable',
-      });
+      // Remove date if deselected
+      const current = filters.availabilityDays || [];
+      const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
+      if (dateStr && current.includes(dateStr)) {
+        onFiltersChange({
+          ...filters,
+          availabilityDays: current.filter((d) => d !== dateStr),
+        });
+      }
     }
   };
+
+  const clearAvailabilityFilters = () => {
+    const { availabilityDays, availabilityTimePeriods, availabilitySpecificTime, ...rest } = filters;
+    onFiltersChange(rest);
+    setSelectedDate(undefined);
+    setSelectedTime('');
+  };
+
+  const hasAvailabilityFilters =
+    (filters.availabilityDays && filters.availabilityDays.length > 0) ||
+    (filters.availabilityTimePeriods && filters.availabilityTimePeriods.length > 0) ||
+    filters.availabilitySpecificTime;
 
   const handleSpecializationToggle = (spec: string) => {
     const current = filters.specializations || [];
@@ -107,6 +192,7 @@ export function ExpertFilters({
     filters.minPrice !== undefined ||
     filters.minRating !== undefined ||
     filters.availability ||
+    hasAvailabilityFilters ||
     (filters.specializations && filters.specializations.length > 0);
 
   return (
@@ -209,24 +295,190 @@ export function ExpertFilters({
           </Select>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="availability" className="font-body font-medium">
-            Verfügbarkeit
-          </Label>
-          <Select
-            value={filters.availability || 'all'}
-            onValueChange={handleAvailabilityChange}
-          >
-            <SelectTrigger className="font-body">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="font-body">Alle</SelectItem>
-              <SelectItem value="available" className="font-body">Verfügbar</SelectItem>
-              <SelectItem value="busy" className="font-body">Beschäftigt</SelectItem>
-              <SelectItem value="unavailable" className="font-body">Nicht verfügbar</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="availability" className="font-body font-medium">
+              Verfügbarkeit
+            </Label>
+            {hasAvailabilityFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAvailabilityFilters}
+                className="text-xs font-body h-auto p-1"
+              >
+                <X className="w-3 h-3 mr-1" />
+                Zurücksetzen
+              </Button>
+            )}
+          </div>
+          
+          <Popover open={isAvailabilityPopoverOpen} onOpenChange={setIsAvailabilityPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full justify-between font-body"
+              >
+                <span className="text-left">
+                  {hasAvailabilityFilters
+                    ? `${filters.availabilityDays?.length || 0} Tag(e), ${filters.availabilityTimePeriods?.length || 0} Zeitraum(e)${filters.availabilitySpecificTime ? `, ${filters.availabilitySpecificTime}` : ''}`
+                    : 'Verfügbarkeit filtern'}
+                </span>
+                <ChevronDown className="w-4 h-4 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-4" align="start">
+              <div className="space-y-4">
+                {/* Specific Date Selection */}
+                <div className="space-y-2">
+                  <Label className="font-body font-medium text-sm flex items-center gap-2">
+                    <CalendarIcon className="w-4 h-4" />
+                    Spezifisches Datum
+                  </Label>
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={handleDateSelect}
+                    locale={de}
+                    className="rounded-md border"
+                  />
+                </div>
+
+                {/* Day Selection */}
+                <div className="space-y-2">
+                  <Label className="font-body font-medium text-sm">Wochentage</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {dayOptions.map((day) => {
+                      const isSelected = filters.availabilityDays?.includes(day.id);
+                      return (
+                        <Badge
+                          key={day.id}
+                          variant={isSelected ? 'default' : 'outline'}
+                          className={`cursor-pointer font-body text-xs ${
+                            isSelected
+                              ? 'bg-primary-blue text-white hover:bg-primary-blue/90'
+                              : 'hover:bg-gray-100'
+                          }`}
+                          onClick={() => handleAvailabilityDayToggle(day.id)}
+                        >
+                          {day.label}
+                          {isSelected && <X className="ml-1 w-3 h-3" />}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Time Period Selection */}
+                <div className="space-y-2">
+                  <Label className="font-body font-medium text-sm flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    Zeiträume
+                  </Label>
+                  <div className="space-y-2">
+                    {timePeriods.map((period) => {
+                      const isSelected = filters.availabilityTimePeriods?.includes(period.id);
+                      return (
+                        <div
+                          key={period.id}
+                          className={`flex items-center gap-2 p-2 rounded border-2 cursor-pointer transition-colors ${
+                            isSelected
+                              ? 'border-primary-blue bg-info-bg'
+                              : 'border-gray-200 hover:border-primary-blue/50'
+                          }`}
+                          onClick={() => handleAvailabilityTimePeriodToggle(period.id)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-4 h-4 text-primary-blue"
+                          />
+                          <span className="font-body text-sm">{period.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Specific Time Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="specific-time" className="font-body font-medium text-sm">
+                    Spezifische Uhrzeit (optional)
+                  </Label>
+                  <Input
+                    id="specific-time"
+                    type="time"
+                    value={filters.availabilitySpecificTime || ''}
+                    onChange={(e) => handleSpecificTimeChange(e.target.value)}
+                    className="font-body"
+                  />
+                </div>
+
+                <div className="pt-2 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsAvailabilityPopoverOpen(false)}
+                    className="w-full font-body"
+                  >
+                    Anwenden
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Show selected filters */}
+          {hasAvailabilityFilters && (
+            <div className="flex flex-wrap gap-2 pt-2">
+              {filters.availabilityDays?.map((day) => {
+                const dayOption = dayOptions.find((d) => d.id === day);
+                if (!dayOption && !day.match(/^\d{4}-\d{2}-\d{2}$/)) return null;
+                return (
+                  <Badge
+                    key={day}
+                    variant="outline"
+                    className="font-body text-xs bg-info-bg border-info-text"
+                  >
+                    {dayOption?.label || format(new Date(day), 'd. MMM', { locale: de })}
+                    <X
+                      className="ml-1 w-3 h-3 cursor-pointer"
+                      onClick={() => handleAvailabilityDayToggle(day)}
+                    />
+                  </Badge>
+                );
+              })}
+              {filters.availabilityTimePeriods?.map((period) => {
+                const periodOption = timePeriods.find((p) => p.id === period);
+                return (
+                  <Badge
+                    key={period}
+                    variant="outline"
+                    className="font-body text-xs bg-info-bg border-info-text"
+                  >
+                    {periodOption?.label}
+                    <X
+                      className="ml-1 w-3 h-3 cursor-pointer"
+                      onClick={() => handleAvailabilityTimePeriodToggle(period)}
+                    />
+                  </Badge>
+                );
+              })}
+              {filters.availabilitySpecificTime && (
+                <Badge
+                  variant="outline"
+                  className="font-body text-xs bg-info-bg border-info-text"
+                >
+                  {filters.availabilitySpecificTime} Uhr
+                  <X
+                    className="ml-1 w-3 h-3 cursor-pointer"
+                    onClick={() => handleSpecificTimeChange('')}
+                  />
+                </Badge>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">

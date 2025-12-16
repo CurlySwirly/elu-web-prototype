@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { verificationService } from '@/lib/services/verification';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,10 +55,6 @@ export default function AdminExpertsPage() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    filterExperts();
-  }, [experts, activeTab]);
-
   const loadExperts = async () => {
     try {
       const data = await verificationService.getAllExperts();
@@ -70,13 +66,17 @@ export default function AdminExpertsPage() {
     }
   };
 
-  const filterExperts = () => {
+  const filterExperts = useCallback(() => {
     if (activeTab === 'all') {
       setFilteredExperts(experts);
     } else {
       setFilteredExperts(experts.filter(e => e.verification_status === activeTab));
     }
-  };
+  }, [experts, activeTab]);
+
+  useEffect(() => {
+    filterExperts();
+  }, [filterExperts]);
 
   const loadDocuments = async (expertId: string) => {
     try {

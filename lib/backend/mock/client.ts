@@ -12,6 +12,8 @@ import {
   mockExperts,
   mockExpertOffers,
   mockAppointments,
+  mockClientAppointments,
+  mockExpertAppointments,
   mockRooms,
   mockRoomBookings,
   mockProfile,
@@ -24,10 +26,24 @@ class MockAuthService implements IAuthService {
   async signIn(data: SignInData): Promise<AuthUser> {
     await this.delay(500);
 
+    // Development helper: detect role from email pattern
+    // Use these emails to login as different roles:
+    // - client@test.com or any email -> client
+    // - expert@test.com -> expert
+    // - admin@test.com -> admin
+    let role: 'client' | 'expert' | 'admin' = 'client';
+    
+    const emailLower = data.email.toLowerCase();
+    if (emailLower.includes('expert@') || emailLower.startsWith('expert')) {
+      role = 'expert';
+    } else if (emailLower.includes('admin@') || emailLower.startsWith('admin')) {
+      role = 'admin';
+    }
+
     const user: AuthUser = {
-      id: 'mock-user-1',
+      id: `mock-user-${role}-${Date.now()}`,
       email: data.email,
-      role: 'client',
+      role,
     };
 
     this.currentUser = user;
@@ -110,12 +126,12 @@ class MockAppointmentRepository implements IAppointmentRepository {
 
   async findByClientId(userId: string) {
     await this.delay(300);
-    return [...mockAppointments];
+    return [...mockClientAppointments];
   }
 
   async findByExpertId(expertId: string) {
     await this.delay(300);
-    return [...mockAppointments];
+    return [...mockExpertAppointments];
   }
 }
 

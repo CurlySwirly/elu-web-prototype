@@ -169,9 +169,47 @@ export const mockExpertOffers: ExpertOffer[] = [
   },
 ];
 
-export const mockAppointments: Appointment[] = [
+// Mock offers for logged-in expert (when expert_id matches logged-in expert)
+export const mockExpertOwnOffers: ExpertOffer[] = [
   {
-    id: 'apt-1',
+    id: 'offer-expert-1',
+    expert_id: 'mock-expert-profile-id',
+    title: 'Physiotherapie Erstberatung',
+    description: 'Umfassende Erstberatung mit Bewegungsanalyse, Anamnese und individuellem Behandlungsplan',
+    category: 'Physiotherapie',
+    format: 'Präsenz',
+    duration_minutes: 60,
+    price: 90.00,
+    is_active: true,
+  },
+  {
+    id: 'offer-expert-2',
+    expert_id: 'mock-expert-profile-id',
+    title: 'Online Beratung',
+    description: 'Flexible Online-Beratung per Video-Call für Fragen und Follow-ups',
+    category: 'Beratung',
+    format: 'online',
+    duration_minutes: 30,
+    price: 50.00,
+    is_active: true,
+  },
+  {
+    id: 'offer-expert-3',
+    expert_id: 'mock-expert-profile-id',
+    title: 'Behandlungssession',
+    description: 'Intensive Behandlungssession mit manueller Therapie und Übungen',
+    category: 'Behandlung',
+    format: 'Präsenz',
+    duration_minutes: 45,
+    price: 75.00,
+    is_active: true,
+  },
+];
+
+// Client appointments (viewed from client side) - using Appointment type but with expert field
+export const mockClientAppointments: any[] = [
+  {
+    id: 'apt-client-1',
     expert: {
       full_name: 'Sarah Müller',
       avatar_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
@@ -180,27 +218,151 @@ export const mockAppointments: Appointment[] = [
       title: 'Erstberatung & Analyse',
       format: 'Präsenz',
     },
-    start_time: new Date(Date.now() + 86400000).toISOString(),
-    end_time: new Date(Date.now() + 90000000).toISOString(),
+    start_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(), // Tomorrow
+    end_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
     status: 'confirmed',
     total_price: 85.00,
+    notes: 'Bitte bringen Sie bequeme Kleidung mit.',
   },
   {
-    id: 'apt-2',
+    id: 'apt-client-2',
     expert: {
       full_name: 'Michael Schmidt',
       avatar_url: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
     },
     offer: {
       title: 'Personal Training Session',
-      format: 'Präsenz',
+      format: 'online',
     },
-    start_time: new Date(Date.now() + 172800000).toISOString(),
-    end_time: new Date(Date.now() + 176400000).toISOString(),
-    status: 'confirmed',
+    start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
+    end_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    status: 'pending',
     total_price: 75.00,
   },
+  {
+    id: 'apt-client-3',
+    expert: {
+      full_name: 'Julia Weber',
+      avatar_url: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg',
+    },
+    offer: {
+      title: 'Yoga & Meditation Session',
+      format: 'Präsenz',
+    },
+    start_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+    end_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
+    status: 'confirmed',
+    total_price: 65.00,
+  },
 ];
+
+// Expert appointments (viewed from expert side) - using AppointmentCalendar interface with client field
+export const mockExpertAppointments: any[] = [
+  {
+    id: 'apt-expert-1',
+    client: {
+      full_name: 'Max Mustermann',
+      avatar_url: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg',
+      phone: '+49 170 1234567',
+    },
+    offer: {
+      title: 'Erstberatung & Analyse',
+      format: 'Präsenz',
+    },
+    start_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(), // Tomorrow
+    end_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    status: 'confirmed',
+    total_price: 85.00,
+    notes: 'Erste Sitzung, Rückenschmerzen',
+  },
+  {
+    id: 'apt-expert-2',
+    client: {
+      full_name: 'Anna Schmidt',
+      avatar_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
+      phone: '+49 170 9876543',
+    },
+    offer: {
+      title: 'Manuelle Therapie',
+      format: 'Präsenz',
+    },
+    start_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days from now
+    end_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 45 * 60 * 1000).toISOString(),
+    status: 'pending',
+    total_price: 70.00,
+  },
+  {
+    id: 'apt-expert-3',
+    client: {
+      full_name: 'Tom Weber',
+      avatar_url: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
+      phone: '+49 170 5555555',
+    },
+    offer: {
+      title: 'Erstberatung & Analyse',
+      format: 'online',
+    },
+    start_time: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days from now
+    end_time: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    status: 'confirmed',
+    total_price: 85.00,
+  },
+];
+
+// Client booking requests (includes requested and confirmed)
+export const mockClientBookingRequests: any[] = [
+  {
+    id: 'req-client-1',
+    expert: {
+      full_name: 'Sarah Müller',
+      avatar_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
+    },
+    offer: {
+      title: 'Erstberatung & Analyse',
+      format: 'Präsenz',
+    },
+    start_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+    end_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    status: 'requested',
+    total_price: 85.00,
+    notes: 'Bitte bringen Sie bequeme Kleidung mit.',
+  },
+  {
+    id: 'req-client-2',
+    expert: {
+      full_name: 'Michael Schmidt',
+      avatar_url: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
+    },
+    offer: {
+      title: 'Personal Training Session',
+      format: 'online',
+    },
+    start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    end_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    status: 'confirmed',
+    total_price: 75.00,
+    is_newly_accepted: true, // Highlighted as newly accepted
+  },
+  {
+    id: 'req-client-3',
+    expert: {
+      full_name: 'Julia Weber',
+      avatar_url: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg',
+    },
+    offer: {
+      title: 'Yoga & Meditation Session',
+      format: 'Präsenz',
+    },
+    start_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    end_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
+    status: 'confirmed',
+    total_price: 65.00,
+    is_newly_accepted: false, // Already accepted, not new
+  },
+];
+
+// Legacy export for backward compatibility
+export const mockAppointments: Appointment[] = mockClientAppointments;
 
 export const mockRooms: Room[] = [
   {

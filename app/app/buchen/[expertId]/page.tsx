@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -12,7 +12,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Clock, MapPin, Video, CheckCircle2, ArrowLeft, CreditCard, AlertCircle } from 'lucide-react';
+import { Clock, MapPin, Video, CheckCircle2, ArrowLeft, AlertCircle } from 'lucide-react';
 import { format, addDays, setHours, setMinutes, isBefore, isAfter, startOfToday } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -53,7 +53,7 @@ export default function BookingPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [step, setStep] = useState<'select' | 'confirm' | 'payment' | 'success'>('select');
+  const [step, setStep] = useState<'select' | 'confirm' | 'success'>('select');
 
   const timeSlots: TimeSlot[] = [
     { time: '08:00', available: true },
@@ -70,11 +70,7 @@ export default function BookingPage() {
     { time: '19:00', available: false },
   ];
 
-  useEffect(() => {
-    loadBookingData();
-  }, [expertId, offerId]);
-
-  const loadBookingData = async () => {
+  const loadBookingData = useCallback(async () => {
     try {
       const { data: expertData } = await supabase
         .from('expert_profiles')
@@ -106,15 +102,28 @@ export default function BookingPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [expertId, offerId]);
 
-  const handleProcessPayment = async () => {
+  useEffect(() => {
+    loadBookingData();
+  }, [loadBookingData]);
+
+  const handleSubmitBookingRequest = async () => {
     setSubmitting(true);
     setError('');
 
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     try {
+      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      
+      if (backendMode === 'mock') {
+        // In mock mode, just simulate success
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setStep('success');
+        return;
+      }
+
       const [hours, minutes] = selectedTime.split(':');
       const startTime = setMinutes(setHours(selectedDate!, parseInt(hours)), parseInt(minutes));
       const endTime = new Date(startTime.getTime() + (offer!.duration_minutes * 60000));
@@ -137,7 +146,7 @@ export default function BookingPage() {
           offer_id: offerId,
           start_time: startTime.toISOString(),
           end_time: endTime.toISOString(),
-          status: 'pending',
+          status: 'requested',
           notes: notes,
           total_price: offer!.price,
         });
@@ -146,18 +155,19 @@ export default function BookingPage() {
 
       setStep('success');
     } catch (err: any) {
-      setError(err.message || 'Fehler bei der Buchung');
+      setError(err.message || 'Fehler bei der Buchungsanfrage');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleConfirmBooking = () => {
+  const handleContinueToConfirm = () => {
     if (!selectedDate || !selectedTime) {
       setError('Bitte wähle ein Datum und eine Uhrzeit');
       return;
     }
-    setStep('payment');
+    setError('');
+    setStep('confirm');
   };
 
   if (loading) {
@@ -186,14 +196,14 @@ export default function BookingPage() {
       <div className="min-h-screen bg-bg-light flex items-center justify-center p-8">
         <Card className="max-w-2xl w-full border-2">
           <CardContent className="py-12 text-center">
-            <div className="w-20 h-20 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-6">
-              <CheckCircle2 className="w-10 h-10 text-success-text" />
+            <div className="w-20 h-20 rounded-full bg-primary-green/20 flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 className="w-10 h-10 text-primary-green" />
             </div>
             <h2 className="font-heading text-3xl font-bold text-text-dark mb-4">
-              Buchung erfolgreich!
+              Buchungsanfrage gesendet!
             </h2>
             <p className="text-gray-600 font-body mb-8">
-              Deine Buchungsanfrage wurde an {expert.full_name} gesendet. Du erhältst eine Benachrichtigung, sobald die Buchung bestätigt wurde.
+              Deine Buchungsanfrage wurde erfolgreich an {expert.full_name} gesendet. Du erhältst eine Benachrichtigung, sobald die Expert:in deine Anfrage bestätigt hat.
             </p>
             <div className="flex gap-4 justify-center">
               <Button
@@ -216,13 +226,13 @@ export default function BookingPage() {
     );
   }
 
-  if (step === 'payment') {
+  if (step === 'confirm') {
     return (
       <div className="min-h-screen bg-bg-light p-8">
         <div className="max-w-2xl mx-auto">
           <Button
             variant="ghost"
-            onClick={() => setStep('confirm')}
+            onClick={() => setStep('select')}
             className="mb-6 font-body"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -231,39 +241,67 @@ export default function BookingPage() {
 
           <Card className="border-2">
             <CardHeader>
-              <CardTitle className="font-heading text-2xl text-text-dark">Zahlung</CardTitle>
+              <CardTitle className="font-heading text-2xl text-text-dark">Buchungsanfrage bestätigen</CardTitle>
               <CardDescription className="font-body">
-                Bezahle sicher mit unserer Mock-Zahlungsabwicklung
+                Bitte überprüfe deine Angaben bevor du die Anfrage absendest
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <Alert className="border-info-text bg-info-bg">
-                <CreditCard className="h-4 w-4 text-info-text" />
-                <AlertDescription className="text-info-text font-body">
-                  Dies ist eine Demonstrationszahlung. In der Produktionsumgebung wird Stripe Connect integriert.
-                </AlertDescription>
-              </Alert>
+              <div className="bg-gray-50 rounded-lg p-6 space-y-4">
+                <div className="flex items-center gap-3 pb-4 border-b">
+                  <Avatar className="w-12 h-12">
+                    <AvatarImage src={expert.avatar_url} alt={expert.full_name} />
+                    <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white font-heading">
+                      {expert.full_name.split(' ').map(n => n[0]).join('')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-heading font-semibold text-text-dark">{expert.full_name}</p>
+                    <p className="text-sm text-gray-600 font-body">Expert:in</p>
+                  </div>
+                </div>
 
-              <div className="bg-gray-50 rounded-lg p-6 space-y-3">
-                <div className="flex justify-between">
-                  <span className="font-body text-gray-600">Termin</span>
-                  <span className="font-body font-semibold text-text-dark">
-                    {selectedDate && format(selectedDate, 'dd. MMMM yyyy', { locale: de })} um {selectedTime}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-body text-gray-600">Angebot</span>
-                  <span className="font-body font-semibold text-text-dark">{offer.title}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-body text-gray-600">Dauer</span>
-                  <span className="font-body font-semibold text-text-dark">{offer.duration_minutes} Min.</span>
-                </div>
-                <div className="border-t pt-3 flex justify-between">
-                  <span className="font-heading text-lg font-bold text-text-dark">Gesamt</span>
-                  <span className="font-heading text-2xl font-bold text-text-dark">€{offer.price}</span>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="font-body text-gray-600">Termin</span>
+                    <span className="font-body font-semibold text-text-dark">
+                      {selectedDate && format(selectedDate, 'dd. MMMM yyyy', { locale: de })} um {selectedTime}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-body text-gray-600">Angebot</span>
+                    <span className="font-body font-semibold text-text-dark">{offer.title}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-body text-gray-600">Dauer</span>
+                    <span className="font-body font-semibold text-text-dark">{offer.duration_minutes} Min.</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-body text-gray-600">Format</span>
+                    <Badge className="bg-info-bg text-info-text border-none font-body flex items-center gap-1">
+                      {offer.format === 'online' ? <Video className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
+                      {offer.format === 'online' ? 'Online' : 'Vor Ort'}
+                    </Badge>
+                  </div>
+                  {notes && (
+                    <div className="pt-2 border-t">
+                      <span className="font-body text-gray-600 block mb-1">Notizen</span>
+                      <span className="font-body text-text-dark">{notes}</span>
+                    </div>
+                  )}
+                  <div className="border-t pt-3 flex justify-between">
+                    <span className="font-heading text-lg font-bold text-text-dark">Preis</span>
+                    <span className="font-heading text-2xl font-bold text-text-dark">€{offer.price}</span>
+                  </div>
                 </div>
               </div>
+
+              <Alert className="border-info-text bg-info-bg">
+                <AlertCircle className="h-4 w-4 text-info-text" />
+                <AlertDescription className="text-info-text font-body">
+                  Die Zahlung erfolgt erst nach Bestätigung der Buchung durch die Expert:in.
+                </AlertDescription>
+              </Alert>
 
               {error && (
                 <Alert className="border-error-text bg-error-bg">
@@ -273,11 +311,11 @@ export default function BookingPage() {
               )}
 
               <Button
-                onClick={handleProcessPayment}
+                onClick={handleSubmitBookingRequest}
                 disabled={submitting}
                 className="w-full bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 font-body py-6 text-lg"
               >
-                {submitting ? 'Wird verarbeitet...' : `€${offer.price} bezahlen`}
+                {submitting ? 'Wird gesendet...' : 'Buchungsanfrage absenden'}
               </Button>
             </CardContent>
           </Card>
@@ -426,11 +464,11 @@ export default function BookingPage() {
                   </div>
 
                   <Button
-                    onClick={handleConfirmBooking}
+                    onClick={handleContinueToConfirm}
                     disabled={!selectedDate || !selectedTime}
                     className="w-full bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 font-body py-6 text-lg"
                   >
-                    Weiter zur Zahlung
+                    Weiter zur Bestätigung
                   </Button>
                 </div>
               </CardContent>

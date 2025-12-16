@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,14 +31,14 @@ export default function SpacesPage() {
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <Link href="/signup/provider">
+                  <Link href="/signup">
                     <Button size="lg" className="bg-primary-green text-white hover:opacity-90 transition-opacity px-8 py-6 text-lg font-body font-semibold shadow-lg">
-                      Räume anbieten
+                      Jetzt registrieren
                     </Button>
                   </Link>
                   <Link href="/experts">
                     <Button size="lg" variant="outline" className="border-2 border-primary-green text-primary-green hover:bg-primary-green/5 px-8 py-6 text-lg font-body font-semibold">
-                      Als Expert:in Räume finden
+                      Als Expert:in starten
                     </Button>
                   </Link>
                 </div>
@@ -61,9 +62,11 @@ export default function SpacesPage() {
               <div className="relative">
                 <div className="absolute inset-0 bg-primary-green/10 rounded-3xl transform rotate-3"></div>
                 <div className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden shadow-2xl border-4 border-white">
-                  <img
+                  <Image
                     src="https://images.pexels.com/photos/4498362/pexels-photo-4498362.jpeg?auto=compress&cs=tinysrgb&w=800"
                     alt="Modernes Studio"
+                    width={800}
+                    height={600}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -295,9 +298,9 @@ export default function SpacesPage() {
             <p className="text-xl text-white/90 mb-10 max-w-2xl mx-auto font-body">
               Registrieren Sie sich kostenlos und listen Sie Ihre ersten Räume innerhalb weniger Minuten.
             </p>
-            <Link href="/signup/provider">
+            <Link href="/signup">
               <Button size="lg" className="bg-white text-primary-green hover:bg-gray-100 transition-colors px-8 py-6 text-lg font-body font-semibold shadow-xl">
-                Räume anbieten
+                Jetzt registrieren
               </Button>
             </Link>
           </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetchExpertById, fetchExpertOffers, ExpertOffer } from '@/lib/api';
@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Star, CheckCircle2, Clock, MapPin, Video } from 'lucide-react';
+import { CheckCircle2, Clock, MapPin, Video, Star } from 'lucide-react';
 
 export default function ExpertProfilePage() {
   const params = useParams();
@@ -17,11 +17,7 @@ export default function ExpertProfilePage() {
   const [offers, setOffers] = useState<ExpertOffer[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadExpert();
-  }, [expertId]);
-
-  const loadExpert = async () => {
+  const loadExpert = useCallback(async () => {
     try {
       const [expertData, offersData] = await Promise.all([
         fetchExpertById(expertId),
@@ -34,7 +30,11 @@ export default function ExpertProfilePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [expertId]);
+
+  useEffect(() => {
+    loadExpert();
+  }, [loadExpert]);
 
   if (loading) {
     return (
@@ -62,7 +62,7 @@ export default function ExpertProfilePage() {
   }
 
   return (
-    <div className="min-h-screen" style={{backgroundColor: '#E2E8FB'}}>
+    <div className="min-h-screen" style={{ backgroundColor: '#E2E8FB' }}>
       <div className="bg-white px-8 py-6 border-b">
         <Link href="/app/experten" className="text-primary-blue hover:underline font-body inline-block">
           ← Zurück zur Übersicht
@@ -80,24 +80,13 @@ export default function ExpertProfilePage() {
             </Avatar>
 
             <div className="flex-1 text-center md:text-left">
-              <div className="flex flex-col md:flex-row items-center md:items-start gap-4 mb-4">
-                <div>
-                  <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
-                    <h1 className="font-heading text-3xl font-bold text-text-dark">
-                      {expert.full_name}
-                    </h1>
-                    {expert.is_verified && (
-                      <CheckCircle2 className="w-6 h-6 text-primary-blue" />
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-center md:justify-start gap-1 mb-3">
-                    <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-                    <span className="font-body text-gray-600">
-                      {expert.rating.toFixed(1)} ({expert.total_reviews} Bewertungen)
-                    </span>
-                  </div>
-                </div>
+              <div className="flex items-center justify-center md:justify-start gap-2 mb-4">
+                <h1 className="font-heading text-3xl font-bold text-text-dark">
+                  {expert.full_name}
+                </h1>
+                {expert.is_verified && (
+                  <CheckCircle2 className="w-6 h-6 text-primary-blue" />
+                )}
               </div>
 
               <div className="flex flex-wrap gap-6 justify-center md:justify-start mb-4">
@@ -109,6 +98,17 @@ export default function ExpertProfilePage() {
                   <p className="text-sm text-gray-500 font-body mb-1">Stundensatz</p>
                   <p className="font-heading font-semibold text-text-dark">Ab €{expert.hourly_rate}/Std.</p>
                 </div>
+                {expert.rating && expert.total_reviews && (
+                  <div>
+                    <p className="text-sm text-gray-500 font-body mb-1">Bewertung</p>
+                    <div className="flex items-center gap-1">
+                      <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                      <span className="font-heading font-semibold text-text-dark">
+                        {expert.rating.toFixed(1)} ({expert.total_reviews} Bewertungen)
+                      </span>
+                    </div>
+                  </div>
+                )}
                 {expert.location && (
                   <div>
                     <p className="text-sm text-gray-500 font-body mb-1">Standort</p>
@@ -129,7 +129,7 @@ export default function ExpertProfilePage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1">
+          <div className="lg:col-span-1">
           {expert.certifications?.length > 0 && (
             <Card className="border-2 mb-6">
               <CardHeader>
@@ -147,9 +147,9 @@ export default function ExpertProfilePage() {
               </CardContent>
             </Card>
           )}
-        </div>
+          </div>
 
-        <div className="lg:col-span-2">
+          <div className="lg:col-span-2">
           {expert.bio && (
             <Card className="border-2 mb-6">
               <CardHeader>
@@ -218,9 +218,9 @@ export default function ExpertProfilePage() {
               </div>
             )}
           </div>
+          </div>
         </div>
       </div>
-    </div>
     </div>
   );
 }

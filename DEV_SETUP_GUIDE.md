@@ -335,19 +335,11 @@ npm run lint
 ### Expert
 - Must be **verified** first
 - Confirm/reject bookings
-- Book rooms for sessions
 - Manage availability
-- View earnings
-
-### Provider
-- Manage rooms
-- View room bookings
-- Set availability
 - View earnings
 
 ### Admin
 - Verify experts
-- Approve providers
 - View all data
 - Manage users
 

@@ -114,9 +114,9 @@ export default function ClientSignupPage() {
             </div>
 
             <div className="text-center text-sm text-gray-600 font-body pt-2 border-t">
-              Du bist Expert:in oder Anbieter?{' '}
-              <Link href="/signup" className="text-primary-blue hover:underline">
-                Andere Rolle wählen
+              Du bist Expert:in?{' '}
+              <Link href="/signup/expert" className="text-primary-blue hover:underline">
+                Als Expert:in registrieren
               </Link>
             </div>
           </form>

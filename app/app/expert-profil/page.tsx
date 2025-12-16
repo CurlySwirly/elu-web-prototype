@@ -1,6 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,10 +14,47 @@ import { User, Star, ThumbsUp } from 'lucide-react';
 import { mockPlatformReviews } from '@/lib/backend/mock/data';
 import { formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { DocumentUpload } from '@/components/DocumentUpload';
 
 export default function ExpertProfilePage() {
-  const { user } = useAuth();
+  const { user, userId } = useAuth();
   const reviews = mockPlatformReviews;
+  const [expertProfileId, setExpertProfileId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchExpertProfile = async () => {
+      // Check if we're in mock mode
+      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      
+      if (backendMode === 'mock') {
+        setExpertProfileId(`mock-expert-${userId}`);
+        setLoading(false);
+        return;
+      }
+
+      // In Supabase mode, fetch from database
+      try {
+        const { data } = await supabase
+          .from('expert_profiles')
+          .select('id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (data) {
+          setExpertProfileId(data.id);
+        }
+      } catch (error) {
+        console.error('Error fetching expert profile:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (userId) {
+      fetchExpertProfile();
+    }
+  }, [userId]);
 
   const averageRating = reviews.length > 0
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
@@ -92,34 +131,12 @@ export default function ExpertProfilePage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="experience" className="font-body">Erfahrung (Jahre)</Label>
-                  <Input
-                    id="experience"
-                    type="number"
-                    placeholder="5"
-                    className="font-body"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="rate" className="font-body">Stundensatz (€)</Label>
-                  <Input
-                    id="rate"
-                    type="number"
-                    placeholder="80"
-                    className="font-body"
-                  />
-                </div>
-              </div>
-
               <div className="space-y-2">
-                <Label htmlFor="certifications" className="font-body">Zertifikate</Label>
-                <Textarea
-                  id="certifications"
-                  placeholder="Liste deine Zertifikate auf (eine pro Zeile)"
-                  rows={3}
+                <Label htmlFor="experience" className="font-body">Erfahrung (Jahre)</Label>
+                <Input
+                  id="experience"
+                  type="number"
+                  placeholder="5"
                   className="font-body"
                 />
               </div>
@@ -130,6 +147,28 @@ export default function ExpertProfilePage() {
             </form>
           </CardContent>
         </Card>
+
+        {expertProfileId && (
+          <Card className="border-2 mt-6">
+            <CardHeader>
+              <CardTitle className="font-heading text-xl text-text-dark">
+                Qualifikationen hochladen
+              </CardTitle>
+              <CardDescription className="font-body">
+                Lade deine Abschlüsse, Zertifikate und Lizenzen hoch für die Verifizierung
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DocumentUpload 
+                expertProfileId={expertProfileId}
+                onUploadComplete={() => {
+                  // Refresh data if needed
+                  console.log('Documents uploaded successfully');
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="border-2 mt-6">
           <CardHeader>

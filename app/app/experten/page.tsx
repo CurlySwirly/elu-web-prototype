@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ExpertFilters } from '@/components/ExpertFilters';
-import { Star, Search, MapPin, CheckCircle2, Clock } from 'lucide-react';
+import { Search, MapPin, CheckCircle2, Clock, Star } from 'lucide-react';
 import type { ExpertFilters as ExpertFiltersType } from '@/lib/types';
 
 export default function ExpertsPage() {

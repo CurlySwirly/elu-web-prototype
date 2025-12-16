@@ -26,6 +26,9 @@ export interface ExpertFilters {
   maxPrice?: number;
   minRating?: number;
   availability?: 'available' | 'busy' | 'unavailable';
+  availabilityDays?: string[]; // e.g., ['monday', 'tuesday', 'weekdays', 'weekends']
+  availabilityTimePeriods?: string[]; // e.g., ['morning', 'afternoon', 'evening']
+  availabilitySpecificTime?: string; // e.g., '14:00'
   specializations?: string[];
 }
 
@@ -92,7 +95,7 @@ export interface UserProfile {
   id: string;
   email: string;
   full_name: string;
-  role: 'client' | 'expert' | 'provider' | 'admin';
+  role: 'client' | 'expert' | 'admin';
   avatar_url?: string;
   phone?: string;
   created_at?: string;
@@ -102,14 +105,14 @@ export interface UserProfile {
 export interface AuthUser {
   id: string;
   email: string;
-  role: 'client' | 'expert' | 'provider' | 'admin';
+  role: 'client' | 'expert' | 'admin';
 }
 
 export interface SignUpData {
   email: string;
   password: string;
   fullName: string;
-  role: 'client' | 'expert' | 'provider' | 'admin';
+  role: 'client' | 'expert' | 'admin';
 }
 
 export interface SignInData {

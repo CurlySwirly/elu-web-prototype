@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,12 +8,22 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, MapPin, Video, Check, X, AlertCircle, User, Eye } from 'lucide-react';
-import { format } from 'date-fns';
+import { Calendar, Clock, MapPin, Video, Check, X, AlertCircle, User, Eye, CalendarClock, Trash2 } from 'lucide-react';
+import { format, parseISO, isBefore, addHours } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { confirmAppointment, cancelAppointmentByExpert } from '@/lib/services/booking';
+import { confirmAppointment, cancelAppointmentByExpert, cancelAppointmentByClient } from '@/lib/services/booking';
 import AppointmentDetailModal from '@/components/AppointmentDetailModal';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Appointment {
   id: string;
@@ -45,14 +55,13 @@ export default function AppointmentsPage() {
   const [success, setSuccess] = useState('');
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [rescheduleReason, setRescheduleReason] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
-  useEffect(() => {
-    if (userId) {
-      loadAppointments();
-    }
-  }, [userId, role]);
-
-  const loadAppointments = async () => {
+  const loadAppointments = useCallback(async () => {
     try {
       if (role === 'expert') {
         const { data: expertProfile } = await supabase
@@ -105,6 +114,77 @@ export default function AppointmentsPage() {
           })));
         }
       } else {
+        const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+        
+        if (backendMode === 'mock') {
+          // Mock client appointments
+          await new Promise(resolve => setTimeout(resolve, 300));
+          setAppointments([
+            {
+              id: 'apt-client-upcoming-1',
+              start_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+              end_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+              status: 'confirmed',
+              total_price: 85.00,
+              expert: {
+                full_name: 'Sarah Müller',
+                avatar_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
+              },
+              offer: {
+                title: 'Erstberatung & Analyse',
+                format: 'Präsenz',
+              },
+            },
+            {
+              id: 'apt-client-upcoming-2',
+              start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+              end_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+              status: 'confirmed',
+              total_price: 75.00,
+              expert: {
+                full_name: 'Michael Schmidt',
+                avatar_url: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
+              },
+              offer: {
+                title: 'Personal Training Session',
+                format: 'online',
+              },
+            },
+            {
+              id: 'apt-client-upcoming-3',
+              start_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              end_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
+              status: 'requested',
+              total_price: 65.00,
+              expert: {
+                full_name: 'Julia Weber',
+                avatar_url: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg',
+              },
+              offer: {
+                title: 'Yoga & Meditation Session',
+                format: 'Präsenz',
+              },
+            },
+            {
+              id: 'apt-client-upcoming-4',
+              start_time: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+              end_time: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+              status: 'confirmed',
+              total_price: 90.00,
+              expert: {
+                full_name: 'Thomas Fischer',
+                avatar_url: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg',
+              },
+              offer: {
+                title: 'Sportphysiotherapie',
+                format: 'Präsenz',
+              },
+            },
+          ]);
+          setLoading(false);
+          return;
+        }
+
         const { data: profile } = await supabase
           .from('profiles')
           .select('id')
@@ -167,7 +247,13 @@ export default function AppointmentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, role]);
+
+  useEffect(() => {
+    if (userId) {
+      loadAppointments();
+    }
+  }, [userId, role, loadAppointments]);
 
   const handleConfirmAppointment = async (appointmentId: string) => {
     setError('');
@@ -218,13 +304,13 @@ export default function AppointmentsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'confirmed': return 'bg-success-bg text-success-text';
-      case 'requested': return 'bg-yellow-100 text-yellow-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      case 'cancelled_by_client': return 'bg-error-bg text-error-text';
-      case 'cancelled_by_expert': return 'bg-error-bg text-error-text';
-      case 'cancelled': return 'bg-error-bg text-error-text';
+      case 'confirmed': return 'bg-primary-green/20 text-text-dark';
+      case 'requested': return 'bg-info-bg text-info-text';
+      case 'pending': return 'bg-info-bg text-info-text';
+      case 'completed': return 'bg-info-bg text-info-text';
+      case 'cancelled_by_client': return 'bg-gray-100 text-gray-600';
+      case 'cancelled_by_expert': return 'bg-gray-100 text-gray-600';
+      case 'cancelled': return 'bg-gray-100 text-gray-600';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -261,6 +347,116 @@ export default function AppointmentsPage() {
     loadAppointments();
   };
 
+  const handleRequestReschedule = (appointmentId: string) => {
+    setSelectedAppointmentId(appointmentId);
+    setRescheduleReason('');
+    setIsRescheduleDialogOpen(true);
+  };
+
+  const handleSubmitReschedule = async () => {
+    if (!selectedAppointmentId) return;
+
+    setActionLoading(true);
+    try {
+      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      
+      if (backendMode === 'mock') {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setSuccess('Umbuchungsanfrage gesendet! Die Expert:in wird dich kontaktieren.');
+        setIsRescheduleDialogOpen(false);
+        setSelectedAppointmentId(null);
+        setRescheduleReason('');
+        setTimeout(() => setSuccess(''), 5000);
+        setActionLoading(false);
+        return;
+      }
+
+      // In real implementation, this would create a reschedule request
+      // For now, we'll just show a success message
+      setSuccess('Umbuchungsanfrage gesendet! Die Expert:in wird dich kontaktieren.');
+      setIsRescheduleDialogOpen(false);
+      setSelectedAppointmentId(null);
+      setRescheduleReason('');
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (err: any) {
+      setError(err.message || 'Fehler beim Senden der Umbuchungsanfrage');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancelAppointment = (appointmentId: string) => {
+    setSelectedAppointmentId(appointmentId);
+    setCancelReason('');
+    setIsCancelDialogOpen(true);
+  };
+
+  const handleSubmitCancel = async () => {
+    if (!selectedAppointmentId) return;
+
+    setActionLoading(true);
+    try {
+      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      
+      if (backendMode === 'mock') {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const appointment = appointments.find(apt => apt.id === selectedAppointmentId);
+        const startTime = appointment ? parseISO(appointment.start_time) : new Date();
+        const hoursUntilStart = (startTime.getTime() - new Date().getTime()) / (1000 * 60 * 60);
+        const refundAmount = hoursUntilStart > 24 ? appointment?.total_price || 0 : 0;
+        
+        setSuccess(
+          refundAmount > 0
+            ? `Termin storniert. Du erhältst €${refundAmount.toFixed(2)} zurück (mehr als 24h vor Termin).`
+            : 'Termin storniert. Keine Rückerstattung möglich (weniger als 24h vor Termin).'
+        );
+        setIsCancelDialogOpen(false);
+        setSelectedAppointmentId(null);
+        setCancelReason('');
+        await loadAppointments();
+        setTimeout(() => setSuccess(''), 5000);
+        setActionLoading(false);
+        return;
+      }
+
+      const result = await cancelAppointmentByClient(selectedAppointmentId, cancelReason);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Fehler bei der Stornierung');
+      }
+
+      const refundMessage = result.refund_amount && result.refund_amount > 0
+        ? `Termin storniert. Du erhältst €${result.refund_amount.toFixed(2)} zurück.`
+        : 'Termin storniert. Keine Rückerstattung möglich (weniger als 24h vor Termin).';
+
+      setSuccess(refundMessage);
+      setIsCancelDialogOpen(false);
+      setSelectedAppointmentId(null);
+      setCancelReason('');
+      await loadAppointments();
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (err: any) {
+      setError(err.message || 'Fehler bei der Stornierung');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const canCancel = (appointment: Appointment) => {
+    if (appointment.status !== 'confirmed' && appointment.status !== 'requested') {
+      return false;
+    }
+    return true;
+  };
+
+  const canReschedule = (appointment: Appointment) => {
+    if (appointment.status !== 'confirmed') {
+      return false;
+    }
+    const startTime = parseISO(appointment.start_time);
+    return isBefore(new Date(), startTime);
+  };
+
   if (loading) {
     return (
       <div className="p-8">
@@ -289,15 +485,15 @@ export default function AppointmentsPage() {
       </div>
 
       {error && (
-        <Alert className="mb-6 border-error-text bg-error-bg">
-          <AlertCircle className="h-4 w-4 text-error-text" />
-          <AlertDescription className="text-error-text font-body">{error}</AlertDescription>
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="font-body">{error}</AlertDescription>
         </Alert>
       )}
 
       {success && (
-        <Alert className="mb-6 border-success-text bg-success-bg">
-          <AlertDescription className="text-success-text font-body">{success}</AlertDescription>
+        <Alert className="mb-6 border-primary-green bg-primary-green/20">
+          <AlertDescription className="text-text-dark font-body">{success}</AlertDescription>
         </Alert>
       )}
 
@@ -412,7 +608,7 @@ export default function AppointmentsPage() {
                         <div className="flex gap-2">
                           <Button
                             onClick={() => handleConfirmAppointment(appointment.id)}
-                            className="flex-1 bg-success-bg text-success-text hover:bg-success-bg/80 font-body"
+                            className="flex-1 bg-primary-green text-text-dark hover:bg-primary-green/80 font-body"
                           >
                             <Check className="w-4 h-4 mr-2" />
                             Bestätigen
@@ -420,7 +616,7 @@ export default function AppointmentsPage() {
                           <Button
                             onClick={() => handleRejectAppointment(appointment.id)}
                             variant="outline"
-                            className="flex-1 border-error-text text-error-text hover:bg-error-bg font-body"
+                            className="flex-1 border-gray-300 text-gray-600 hover:bg-gray-100 font-body"
                           >
                             <X className="w-4 h-4 mr-2" />
                             Ablehnen
@@ -462,6 +658,146 @@ export default function AppointmentsPage() {
         onClose={handleCloseDetail}
         userRole={role as 'client' | 'expert'}
       />
+
+      {/* Reschedule Dialog */}
+      <Dialog open={isRescheduleDialogOpen} onOpenChange={setIsRescheduleDialogOpen}>
+        <DialogContent className="font-body">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">Termin umbuchen</DialogTitle>
+            <DialogDescription className="font-body">
+              Bitte teile der Expert:in mit, wann du den Termin gerne verschieben möchtest.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reschedule-reason" className="font-body">
+                Gewünschter neuer Termin / Nachricht
+              </Label>
+              <Textarea
+                id="reschedule-reason"
+                placeholder="z.B. Bitte verschieben auf nächste Woche, Donnerstag Nachmittag..."
+                value={rescheduleReason}
+                onChange={(e) => setRescheduleReason(e.target.value)}
+                rows={4}
+                className="font-body"
+              />
+            </div>
+            <Alert className="border-info-text bg-info-bg">
+              <AlertCircle className="h-4 w-4 text-info-text" />
+              <AlertDescription className="text-info-text font-body text-sm">
+                Die Expert:in wird deine Anfrage prüfen und dich kontaktieren.
+              </AlertDescription>
+            </Alert>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsRescheduleDialogOpen(false);
+                setRescheduleReason('');
+                setSelectedAppointmentId(null);
+              }}
+              className="font-body"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              onClick={handleSubmitReschedule}
+              disabled={actionLoading || !rescheduleReason.trim()}
+              className="bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 font-body"
+            >
+              {actionLoading ? 'Wird gesendet...' : 'Anfrage senden'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Dialog */}
+      <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
+        <DialogContent className="font-body">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">Termin stornieren</DialogTitle>
+            <DialogDescription className="font-body">
+              Möchtest du diesen Termin wirklich stornieren?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {selectedAppointmentId && (() => {
+              const appointment = appointments.find(apt => apt.id === selectedAppointmentId);
+              if (!appointment) return null;
+              const startTime = parseISO(appointment.start_time);
+              const hoursUntilStart = (startTime.getTime() - new Date().getTime()) / (1000 * 60 * 60);
+              const refundEligible = hoursUntilStart > 24;
+              
+              return (
+                <>
+                  <div className="p-4 bg-gray-50 rounded-lg space-y-2">
+                    <div className="flex justify-between">
+                      <span className="font-body text-gray-600">Termin</span>
+                      <span className="font-body font-semibold text-text-dark">
+                        {format(startTime, 'd. MMMM yyyy, HH:mm', { locale: de })} Uhr
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-body text-gray-600">Preis</span>
+                      <span className="font-body font-semibold text-text-dark">
+                        €{appointment.total_price.toFixed(2)}
+                      </span>
+                    </div>
+                    {refundEligible ? (
+                      <Alert className="border-primary-green bg-primary-green/20 mt-3">
+                        <AlertDescription className="text-text-dark font-body text-sm">
+                          Du erhältst eine vollständige Rückerstattung, da die Stornierung mehr als 24 Stunden vor dem Termin erfolgt.
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <Alert className="border-gray-300 bg-gray-50 mt-3">
+                        <AlertDescription className="text-gray-700 font-body text-sm">
+                          Keine Rückerstattung möglich, da die Stornierung weniger als 24 Stunden vor dem Termin erfolgt.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cancel-reason" className="font-body">
+                      Grund (optional)
+                    </Label>
+                    <Textarea
+                      id="cancel-reason"
+                      placeholder="Warum möchtest du den Termin stornieren?"
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      rows={3}
+                      className="font-body"
+                    />
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCancelDialogOpen(false);
+                setCancelReason('');
+                setSelectedAppointmentId(null);
+              }}
+              className="font-body"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              onClick={handleSubmitCancel}
+              disabled={actionLoading}
+              variant="destructive"
+              className="font-body"
+            >
+              {actionLoading ? 'Wird storniert...' : 'Termin stornieren'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

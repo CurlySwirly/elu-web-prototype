@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,13 +34,7 @@ export default function FinancesPage() {
     completed: 0,
   });
 
-  useEffect(() => {
-    if (userId) {
-      loadFinancialData();
-    }
-  }, [userId]);
-
-  const loadFinancialData = async () => {
+  const loadFinancialData = useCallback(async () => {
     try {
       const { data: profile } = await supabase
         .from('expert_profiles')
@@ -124,7 +118,13 @@ export default function FinancesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    if (userId) {
+      loadFinancialData();
+    }
+  }, [userId, loadFinancialData]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

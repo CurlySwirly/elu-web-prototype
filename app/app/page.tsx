@@ -3,8 +3,9 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar, TrendingUp, Users } from 'lucide-react';
-import ProviderDashboard from '@/components/ProviderDashboard';
 import ExpertDashboard from '@/components/ExpertDashboard';
+import AppointmentCalendar from '@/components/AppointmentCalendar';
+import BookingRequests from '@/components/BookingRequests';
 
 export default function AppDashboard() {
   const { role } = useAuth();
@@ -59,25 +60,17 @@ export default function AppDashboard() {
           </Card>
         </div>
 
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="font-heading text-xl">Nächste Termine</CardTitle>
-            <CardDescription className="font-body">Deine bevorstehenden Wellness-Sessions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-600 font-body">Noch keine Termine gebucht. Starte jetzt!</p>
-          </CardContent>
-        </Card>
+        <div className="mb-8">
+          <BookingRequests />
+        </div>
+
+        <AppointmentCalendar role="client" />
       </div>
     );
   }
 
   if (role === 'expert') {
     return <ExpertDashboard />;
-  }
-
-  if (role === 'provider') {
-    return <ProviderDashboard />;
   }
 
   return null;

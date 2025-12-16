@@ -86,7 +86,7 @@ export function ExpertShowcase({ experts }: ExpertShowcaseProps) {
                       {expert.full_name.split(' ')[0]}
                     </CardTitle>
 
-                    <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-3">
+                    <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-2">
                       <MapPin className="w-4 h-4" />
                       <span>{expert.city || 'Deutschland'}</span>
                     </div>
@@ -116,9 +116,9 @@ export function ExpertShowcase({ experts }: ExpertShowcaseProps) {
                       <p className="text-sm text-gray-600 font-body">pro Stunde</p>
                     </div>
 
-                    <Link href={`/signup/client`}>
+                    <Link href={`/app/experten/${expert.id}`}>
                       <Button className="w-full bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 transition-opacity shadow-lg">
-                        Termin buchen
+                        Profil ansehen
                       </Button>
                     </Link>
                   </CardHeader>
@@ -131,7 +131,7 @@ export function ExpertShowcase({ experts }: ExpertShowcaseProps) {
         </Carousel>
 
         <div className="text-center">
-          <Link href="/signup/client">
+          <Link href="/app/experten">
             <Button size="lg" variant="outline" className="border-2 border-primary-blue text-primary-blue hover:bg-primary-blue hover:text-white transition-colors">
               Alle Expert:innen entdecken
             </Button>
