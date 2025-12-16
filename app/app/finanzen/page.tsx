@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DollarSign, TrendingUp, Calendar, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Euro, TrendingUp, Calendar, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subDays, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -225,7 +225,7 @@ export default function FinancesPage() {
         <Card className="border-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 font-heading text-base text-gray-600">
-              <DollarSign className="w-5 h-5 text-yellow-500" />
+              <Euro className="w-5 h-5 text-yellow-500" />
               Ausstehend
             </CardTitle>
           </CardHeader>
@@ -244,7 +244,7 @@ export default function FinancesPage() {
         <CardContent>
           {transactions.length === 0 ? (
             <div className="text-center py-12">
-              <DollarSign className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <Euro className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600 font-body mb-2">Noch keine Transaktionen vorhanden</p>
               <p className="text-sm text-gray-500 font-body">
                 Sobald du Sessions durchführst, erscheinen sie hier.
@@ -309,7 +309,7 @@ export default function FinancesPage() {
 
                   {filterTransactionsByStatus(tabValue === 'all' ? undefined : tabValue).length === 0 && (
                     <div className="text-center py-12">
-                      <DollarSign className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <Euro className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                       <p className="text-gray-600 font-body">
                         Keine Transaktionen in dieser Kategorie
                       </p>
