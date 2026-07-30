@@ -11,7 +11,12 @@ const PAGE_X = 'max-w-6xl mx-auto px-4 sm:px-5 lg:px-6';
 const SECTION_Y = 'py-12 sm:py-14 lg:py-16';
 
 export default async function Home() {
-  const featuredExperts = await fetchFeaturedExperts(8);
+  let featuredExperts: Awaited<ReturnType<typeof fetchFeaturedExperts>> = [];
+  try {
+    featuredExperts = await fetchFeaturedExperts(8);
+  } catch {
+    featuredExperts = [];
+  }
 
   return (
     <div className="min-h-screen">

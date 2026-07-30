@@ -14,7 +14,12 @@ export async function fetchExperts() {
 }
 
 export async function fetchFeaturedExperts(limit: number = 8) {
-  return backend.experts.findFeatured(limit);
+  try {
+    return await backend.experts.findFeatured(limit);
+  } catch {
+    // Keep static generation resilient when backend/network is unavailable
+    return [];
+  }
 }
 
 export async function fetchExpertById(expertId: string) {

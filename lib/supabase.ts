@@ -8,7 +8,9 @@ const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
 // In mock mode or when env vars are missing, create a dummy client to prevent errors
 let supabase: SupabaseClient;
 
-if (backendMode === 'mock' || !supabaseUrl || !supabaseAnonKey) {
+const usingPlaceholder = backendMode === 'mock' || !supabaseUrl || !supabaseAnonKey;
+
+if (usingPlaceholder) {
   // Create a dummy client with placeholder values for mock mode
   // This prevents errors when code imports supabase but won't actually work
   // Code should use backend abstraction layer instead of direct supabase imports
@@ -16,11 +18,9 @@ if (backendMode === 'mock' || !supabaseUrl || !supabaseAnonKey) {
     supabaseUrl || 'https://placeholder.supabase.co',
     supabaseAnonKey || 'placeholder-key'
   );
-  
-  if (backendMode === 'mock') {
-    console.log('Running in mock mode - Supabase client is a placeholder');
-  } else {
-    console.warn('Supabase environment variables missing - using placeholder client');
+
+  if (backendMode === 'mock' || !supabaseUrl || !supabaseAnonKey) {
+    console.log('Running without Supabase credentials - using placeholder client / mock data');
   }
 } else {
   supabase = createClient(supabaseUrl, supabaseAnonKey);
