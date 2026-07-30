@@ -2,36 +2,63 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { AppNav } from '@/components/AppNav';
+import { AppHeader } from '@/components/AppHeader';
+import { GuestBrowseShell, isGuestBrowsePath } from '@/components/GuestBrowseShell';
+import { cn } from '@/lib/utils';
+
+const DESKTOP_NAV_STORAGE_KEY = 'elu-desktop-nav-collapsed';
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading, role, userId } = useAuth();
   const [profileCheckLoading, setProfileCheckLoading] = useState(true);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [desktopNavCollapsed, setDesktopNavCollapsed] = useState(false);
+  const guestAllowed = isGuestBrowsePath(pathname);
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
+    try {
+      const stored = localStorage.getItem(DESKTOP_NAV_STORAGE_KEY);
+      if (stored === '1') setDesktopNavCollapsed(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleDesktopCollapsedChange = (collapsed: boolean) => {
+    setDesktopNavCollapsed(collapsed);
+    try {
+      localStorage.setItem(DESKTOP_NAV_STORAGE_KEY, collapsed ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      setProfileCheckLoading(false);
+      if (!guestAllowed) {
+        router.push('/login');
+      }
       return;
     }
 
-    // Check if expert profile is complete
     const checkExpertProfile = async () => {
-      if (!loading && user && role === 'expert' && pathname !== '/app/complete-profile') {
-        // Check if we're in mock mode
+      if (role === 'expert' && pathname !== '/app/complete-profile') {
         const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-        
+
         if (backendMode === 'mock') {
-          // In mock mode, skip profile check - allow access to all pages
           setProfileCheckLoading(false);
           return;
         }
 
-        // In Supabase mode, check profile completion
         try {
+          const { supabase } = await import('@/lib/supabase');
           const { data } = await supabase
             .from('expert_profiles')
             .select('is_profile_complete, profile_completion_status')
@@ -42,7 +69,6 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
             router.push('/app/complete-profile');
           }
         } catch (error) {
-          // If check fails, don't block access - just log error
           console.error('Error checking expert profile:', error);
         }
       }
@@ -50,9 +76,13 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     };
 
     checkExpertProfile();
-  }, [user, loading, role, userId, router, pathname]);
+  }, [user, loading, role, userId, router, pathname, guestAllowed]);
 
-  if (loading || profileCheckLoading) {
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  if (loading || (user && profileCheckLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-light">
         <div className="text-center">
@@ -64,23 +94,36 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
+    if (guestAllowed) {
+      return <GuestBrowseShell>{children}</GuestBrowseShell>;
+    }
     return null;
   }
 
   return (
     <div className="min-h-screen bg-bg-light">
-      <AppNav />
-      <main className="ml-64 min-h-screen">
-        {children}
-      </main>
+      <AppNav
+        mobileOpen={mobileNavOpen}
+        onMobileOpenChange={setMobileNavOpen}
+        desktopCollapsed={desktopNavCollapsed}
+        onDesktopCollapsedChange={handleDesktopCollapsedChange}
+      />
+      <div
+        className={cn(
+          'min-h-screen flex flex-col transition-[margin] duration-200 ease-in-out',
+          desktopNavCollapsed ? 'lg:ml-[72px]' : 'lg:ml-64'
+        )}
+      >
+        <AppHeader
+          mobileNavOpen={mobileNavOpen}
+          onToggleMobileNav={() => setMobileNavOpen((open) => !open)}
+        />
+        <main className="flex-1 min-w-0">{children}</main>
+      </div>
     </div>
   );
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <AuthProvider>
-      <AuthenticatedLayout>{children}</AuthenticatedLayout>
-    </AuthProvider>
-  );
+  return <AuthenticatedLayout>{children}</AuthenticatedLayout>;
 }

@@ -11,6 +11,8 @@ export interface Expert {
   is_verified: boolean;
   city?: string;
   country?: string;
+  address?: string;
+  postal_code?: string;
   phone?: string;
   email?: string;
   certifications?: string[];
@@ -30,6 +32,8 @@ export interface ExpertFilters {
   availabilityTimePeriods?: string[]; // e.g., ['morning', 'afternoon', 'evening']
   availabilitySpecificTime?: string; // e.g., '14:00'
   specializations?: string[];
+  sortBy?: 'earliest_availability' | 'best_rating';
+  format?: 'online' | 'in_person';
 }
 
 export interface ExpertOffer {

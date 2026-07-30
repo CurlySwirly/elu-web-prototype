@@ -1,72 +1,15 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, TrendingUp, Users } from 'lucide-react';
 import ExpertDashboard from '@/components/ExpertDashboard';
-import AppointmentCalendar from '@/components/AppointmentCalendar';
-import BookingRequests from '@/components/BookingRequests';
+import ClientDashboard from '@/components/ClientDashboard';
 
-export default function AppDashboard() {
+function DashboardContent() {
   const { role } = useAuth();
 
   if (role === 'client') {
-    return (
-      <div className="p-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-heading font-bold text-text-dark mb-2">
-            Dashboard
-          </h1>
-          <p className="text-gray-600 font-body">
-            Willkommen zurück! Hier ist eine Übersicht deiner Aktivitäten.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="border-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-heading text-lg">
-                <Calendar className="w-5 h-5 text-primary-blue" />
-                Kommende Termine
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-heading font-bold text-text-dark">3</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-heading text-lg">
-                <Users className="w-5 h-5 text-primary-blue" />
-                Gebuchte Expert:innen
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-heading font-bold text-text-dark">2</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-heading text-lg">
-                <TrendingUp className="w-5 h-5 text-primary-blue" />
-                Insgesamt Sessions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-heading font-bold text-text-dark">12</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="mb-8">
-          <BookingRequests />
-        </div>
-
-        <AppointmentCalendar role="client" />
-      </div>
-    );
+    return <ClientDashboard />;
   }
 
   if (role === 'expert') {
@@ -74,4 +17,12 @@ export default function AppDashboard() {
   }
 
   return null;
+}
+
+export default function AppDashboard() {
+  return (
+    <Suspense fallback={<div className="p-3 sm:p-4 lg:p-5 font-body text-gray-500">Wird geladen…</div>}>
+      <DashboardContent />
+    </Suspense>
+  );
 }

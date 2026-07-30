@@ -1,11 +1,16 @@
 import type { Expert, ExpertFilters } from '@/lib/types';
 
-export function filterExperts(experts: Expert[], searchTerm: string, filters: ExpertFilters): Expert[] {
+export function filterExperts(
+  experts: Expert[],
+  searchTerm: string,
+  filters: ExpertFilters,
+  expertFormats?: Record<string, Set<'online' | 'in_person'>>
+): Expert[] {
   if (experts.length === 0) return [];
 
   const searchLower = searchTerm.toLowerCase();
 
-  return experts.filter((expert) => {
+  const filtered = experts.filter((expert) => {
     if (searchTerm && !matchesSearch(expert, searchLower)) {
       return false;
     }
@@ -26,8 +31,11 @@ export function filterExperts(experts: Expert[], searchTerm: string, filters: Ex
       return false;
     }
 
-    if (filters.availability && expert.availability_status !== filters.availability) {
-      return false;
+    if (filters.format && expertFormats) {
+      const formats = expertFormats[expert.id];
+      if (!formats?.has(filters.format)) {
+        return false;
+      }
     }
 
     if (filters.specializations && filters.specializations.length > 0) {
@@ -37,6 +45,33 @@ export function filterExperts(experts: Expert[], searchTerm: string, filters: Ex
     }
 
     return true;
+  });
+
+  return sortExperts(filtered, filters.sortBy);
+}
+
+function availabilityRank(status?: string) {
+  if (status === 'available') return 0;
+  if (status === 'busy') return 1;
+  return 2;
+}
+
+export function sortExperts(
+  experts: Expert[],
+  sortBy?: ExpertFilters['sortBy']
+): Expert[] {
+  if (!sortBy) return experts;
+
+  return [...experts].sort((a, b) => {
+    if (sortBy === 'best_rating') {
+      if (b.rating !== a.rating) return b.rating - a.rating;
+      return (b.total_reviews || 0) - (a.total_reviews || 0);
+    }
+
+    const rankDiff =
+      availabilityRank(a.availability_status) - availabilityRank(b.availability_status);
+    if (rankDiff !== 0) return rankDiff;
+    return b.rating - a.rating;
   });
 }
 

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar as CalendarIcon, Clock, Plus, Trash2, AlertCircle, Check, X, User, MapPin, Video, XCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Plus, Trash2, AlertCircle, User, MapPin, Video, XCircle } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { format, startOfDay, isSameDay, parseISO, addMonths, subMonths, isWithinInterval, isAfter, isBefore, startOfWeek, addDays, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -18,7 +18,6 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import AppointmentDetailModal from '@/components/AppointmentDetailModal';
-import { confirmAppointment, cancelAppointmentByExpert } from '@/lib/services/booking';
 
 interface Appointment {
   id: string;
@@ -419,55 +418,6 @@ export default function ExpertCalendarPage() {
     }
   };
 
-  const handleConfirmAppointment = async (appointmentId: string) => {
-    setError('');
-    setSuccess('');
-
-    try {
-      const result = await confirmAppointment(appointmentId);
-
-      if (!result.success) {
-        throw new Error(result.error || 'Fehler bei der Bestätigung');
-      }
-
-      setSuccess('Termin bestätigt! Der Client wurde benachrichtigt.');
-      if (expertProfileId) {
-        await loadAppointments(expertProfileId);
-      }
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  const handleRejectAppointment = async (appointmentId: string) => {
-    if (!confirm('Möchtest du diesen Termin wirklich ablehnen? Der Client erhält eine vollständige Rückerstattung.')) {
-      return;
-    }
-
-    setError('');
-    setSuccess('');
-
-    try {
-      const result = await cancelAppointmentByExpert(
-        appointmentId,
-        'Termin vom Expert abgelehnt'
-      );
-
-      if (!result.success) {
-        throw new Error(result.error || 'Fehler bei der Ablehnung');
-      }
-
-      setSuccess(`Termin abgelehnt. Der Client erhält €${result.refund_amount?.toFixed(2) || '0.00'} zurück.`);
-      if (expertProfileId) {
-        await loadAppointments(expertProfileId);
-      }
-      setTimeout(() => setSuccess(''), 4000);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
   const getAppointmentsForDate = (date: Date) => {
     return appointments.filter(apt => {
       const aptDate = startOfDay(parseISO(apt.start_time));
@@ -492,7 +442,7 @@ export default function ExpertCalendarPage() {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'confirmed': return 'Bestätigt';
+      case 'confirmed': return 'Gebucht';
       case 'requested':
       case 'pending': return 'Ausstehend';
       case 'completed': return 'Abgeschlossen';
@@ -503,9 +453,6 @@ export default function ExpertCalendarPage() {
 
   const filterByStatus = (status?: string) => {
     if (!status) return appointments;
-    if (status === 'requested') {
-      return appointments.filter(apt => apt.status === 'requested' || apt.status === 'pending');
-    }
     return appointments.filter(apt => apt.status === status);
   };
 
@@ -513,7 +460,7 @@ export default function ExpertCalendarPage() {
     .filter(apt => parseISO(apt.start_time) >= startOfDay(new Date()))
     .slice(0, 5);
 
-  const requestedAppointments = appointments.filter(apt => apt.status === 'requested' || apt.status === 'pending');
+  const confirmedAppointments = appointments.filter(apt => apt.status === 'confirmed');
 
   const getWeekDays = () => {
     const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
@@ -536,7 +483,7 @@ export default function ExpertCalendarPage() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="p-3 sm:p-4 lg:p-5 space-y-4">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-blue"></div>
         </div>
@@ -545,12 +492,12 @@ export default function ExpertCalendarPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-4xl font-heading font-bold text-text-dark mb-2">
+    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
           Kalender & Verfügbarkeit
         </h1>
-        <p className="text-gray-600 font-body">
+        <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
           Verwalte deine Termine und wöchentliche Verfügbarkeit
         </p>
       </div>
@@ -572,23 +519,23 @@ export default function ExpertCalendarPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
         <Card className="border-2">
           <CardHeader>
-            <CardTitle className="font-heading text-base text-gray-600">Ausstehend</CardTitle>
+            <CardTitle className="font-heading text-base text-gray-600">Gebucht</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-heading font-bold text-text-dark">{requestedAppointments.length}</p>
-            <p className="text-sm text-gray-600 font-body">Buchungsanfragen</p>
+            <p className="text-3xl font-heading font-bold text-text-dark">{confirmedAppointments.length}</p>
+            <p className="text-sm text-gray-600 font-body">Termine</p>
           </CardContent>
         </Card>
 
         <Card className="border-2">
           <CardHeader>
-            <CardTitle className="font-heading text-base text-gray-600">Bestätigt</CardTitle>
+            <CardTitle className="font-heading text-base text-gray-600">Bevorstehend</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-heading font-bold text-text-dark">
-              {appointments.filter(a => a.status === 'confirmed').length}
+              {upcomingAppointments.length}
             </p>
-            <p className="text-sm text-gray-600 font-body">Termine</p>
+            <p className="text-sm text-gray-600 font-body">Nächste Termine</p>
           </CardContent>
         </Card>
 
@@ -756,12 +703,8 @@ export default function ExpertCalendarPage() {
 
           <div className="mt-4 pt-4 border-t flex items-center gap-4 text-xs text-gray-600 font-body flex-wrap">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-red-50 border-2 border-red-300"></div>
-              <span>Buchungsanfrage</span>
-            </div>
-            <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded bg-primary-green/10 border-2 border-primary-green"></div>
-              <span>Bestätigt</span>
+              <span>Gebucht</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded bg-gray-100 border-2 border-gray-400"></div>
@@ -839,23 +782,20 @@ export default function ExpertCalendarPage() {
       <Card className="border-2 mb-6">
         <CardHeader>
           <CardTitle className="font-heading text-xl">Buchungen</CardTitle>
-          <CardDescription className="font-body">Verwalte deine Buchungsanfragen und Termine</CardDescription>
+          <CardDescription className="font-body">Verwalte deine gebuchten Termine</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="requested" className="w-full">
+          <Tabs defaultValue="confirmed" className="w-full">
             <TabsList className="mb-6">
-              <TabsTrigger value="requested" className="font-body">
-                Ausstehend ({filterByStatus('requested').length})
-              </TabsTrigger>
               <TabsTrigger value="confirmed" className="font-body">
-                Bestätigt ({filterByStatus('confirmed').length})
+                Gebucht ({filterByStatus('confirmed').length})
               </TabsTrigger>
               <TabsTrigger value="all" className="font-body">
                 Alle ({appointments.length})
               </TabsTrigger>
             </TabsList>
 
-            {['requested', 'confirmed', 'all'].map((tabValue) => (
+            {['confirmed', 'all'].map((tabValue) => (
               <TabsContent key={tabValue} value={tabValue} className="space-y-4">
                 {filterByStatus(tabValue === 'all' ? undefined : tabValue).map((appointment) => (
                   <Card key={appointment.id} className="border-2 hover:border-primary-blue transition-colors">
@@ -919,27 +859,6 @@ export default function ExpertCalendarPage() {
                         </div>
                       </div>
 
-                      {(appointment.status === 'requested' || appointment.status === 'pending') && (
-                        <div className="mt-4 pt-4 border-t">
-                          <div className="flex gap-2">
-                            <Button
-                              onClick={() => handleConfirmAppointment(appointment.id)}
-                              className="flex-1 bg-primary-green text-text-dark hover:bg-primary-green/80 font-body"
-                            >
-                              <Check className="w-4 h-4 mr-2" />
-                              Bestätigen
-                            </Button>
-                            <Button
-                              onClick={() => handleRejectAppointment(appointment.id)}
-                              variant="outline"
-                              className="flex-1 border-gray-300 text-gray-600 hover:bg-gray-100 font-body"
-                            >
-                              <X className="w-4 h-4 mr-2" />
-                              Ablehnen
-                            </Button>
-                          </div>
-                        </div>
-                      )}
                     </CardHeader>
                   </Card>
                 ))}

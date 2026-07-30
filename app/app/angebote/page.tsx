@@ -89,7 +89,7 @@ export default function OffersPage() {
           format: offer.format,
           duration_minutes: offer.duration_minutes,
           price: offer.price,
-          is_active: offer.is_active,
+          is_active: offer.is_active ?? true,
         })));
         setLoading(false);
         return;
@@ -295,7 +295,7 @@ export default function OffersPage() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="p-3 sm:p-4 lg:p-5 space-y-4">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-blue"></div>
         </div>
@@ -304,13 +304,13 @@ export default function OffersPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-4xl font-heading font-bold text-text-dark mb-2">
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
             Meine Angebote
           </h1>
-          <p className="text-gray-600 font-body">
+          <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
             Verwalte deine Services und Preise
           </p>
         </div>

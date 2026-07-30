@@ -99,13 +99,32 @@ export const chatService = {
           client_profile:client_id (
             full_name,
             avatar_url
+          ),
+          expert_profiles:expert_id (
+            profiles:user_id (
+              full_name,
+              avatar_url
+            )
           )
         `)
         .eq(isExpert ? 'expert_id' : 'client_id', isExpert ? expertId : userId)
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      return data;
+
+      return (data || []).map((thread: any) => {
+        const expertProfiles = Array.isArray(thread.expert_profiles)
+          ? thread.expert_profiles[0]
+          : thread.expert_profiles;
+        const expertProfile = Array.isArray(expertProfiles?.profiles)
+          ? expertProfiles?.profiles[0]
+          : expertProfiles?.profiles;
+
+        return {
+          ...thread,
+          expert_profile: expertProfile || null,
+        };
+      });
     } catch (error) {
       logger.error('Failed to get threads by user', error, { userId, isExpert });
       throw error;

@@ -72,15 +72,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    await backend.auth.signIn({ email, password });
+    const user = await backend.auth.signIn({ email, password });
+    setAuthState({
+      user,
+      role: user.role,
+      userId: user.id,
+      loading: false,
+    });
   };
 
   const signUp = async (email: string, password: string, fullName: string, role: UserRole) => {
-    await backend.auth.signUp({ email, password, fullName, role });
+    const user = await backend.auth.signUp({ email, password, fullName, role });
+    setAuthState({
+      user,
+      role: user.role,
+      userId: user.id,
+      loading: false,
+    });
   };
 
   const signOut = async () => {
     await backend.auth.signOut();
+    setAuthState({
+      user: null,
+      role: null,
+      userId: null,
+      loading: false,
+    });
   };
 
   return (

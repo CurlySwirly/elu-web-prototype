@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,50 +10,35 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function LoginPage() {
-  const router = useRouter();
-  const { signIn, role, loading: authLoading } = useAuth();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [shouldRedirect, setShouldRedirect] = useState(false);
-
-  // Handle redirect after successful login
-  useEffect(() => {
-    if (!authLoading && shouldRedirect && role) {
-      if (role === 'admin') {
-        router.push('/admin');
-      } else {
-        router.push('/app');
-      }
-      setShouldRedirect(false);
-      setLoading(false);
-    }
-  }, [role, authLoading, shouldRedirect, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!email.trim() || !password) {
+      setError('Bitte E-Mail und Passwort eingeben.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await signIn(email, password);
-      
-      // Check email pattern for admin (works in mock mode immediately)
-      // In Supabase mode, role will be set from profile and useEffect will handle redirect
-      const emailLower = email.toLowerCase();
+      await signIn(email.trim(), password);
+
+      const emailLower = email.trim().toLowerCase();
       const isAdminEmail = emailLower.includes('admin@') || emailLower.startsWith('admin');
-      
-      if (isAdminEmail) {
-        // For mock mode, redirect immediately based on email pattern
-        router.push('/admin');
-        setLoading(false);
-      } else {
-        // For Supabase mode, wait for role to be set
-        setShouldRedirect(true);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Anmeldung fehlgeschlagen');
+      const target = isAdminEmail ? '/admin' : '/app';
+
+      // Hard navigation so auth session is always picked up after login
+      window.location.assign(target);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Anmeldung fehlgeschlagen';
+      setError(message);
       setLoading(false);
     }
   };
@@ -74,9 +58,12 @@ export default function LoginPage() {
           <CardDescription className="text-center font-body text-gray-600">
             Melde dich mit deinem Account an
           </CardDescription>
+          <p className="text-center text-xs text-gray-400 font-body pt-1">
+            Mock: expert@test.com / client@test.com — Passwort beliebig
+          </p>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
@@ -84,27 +71,33 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="font-body font-medium text-text-dark">E-Mail</Label>
+              <Label htmlFor="email" className="font-body font-medium text-text-dark">
+                E-Mail
+              </Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="deine@email.de"
+                name="email"
+                autoComplete="email"
+                placeholder="expert@test.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
                 className="font-body"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="font-body font-medium text-text-dark">Passwort</Label>
+              <Label htmlFor="password" className="font-body font-medium text-text-dark">
+                Passwort
+              </Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                name="password"
+                autoComplete="current-password"
+                placeholder="test"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
                 className="font-body"
               />
             </div>

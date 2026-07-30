@@ -10,18 +10,11 @@ export function Header() {
             elu
           </Link>
 
-          <div className="flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="ghost" className="text-text-dark hover:text-primary-blue">
-                Anmelden
-              </Button>
-            </Link>
-            <Link href="/signup/client">
-              <Button className="bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 transition-opacity">
-                Registrieren
-              </Button>
-            </Link>
-          </div>
+          <Link href="/login">
+            <Button className="bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 transition-opacity font-body">
+              Login/Signup
+            </Button>
+          </Link>
         </div>
       </div>
     </header>

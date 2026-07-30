@@ -21,13 +21,10 @@ import {
   CalendarClock,
   CreditCard,
   ShieldCheck,
-  Check,
-  X,
   Star
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import AppointmentCalendar from './AppointmentCalendar';
-import { confirmAppointment, cancelAppointmentByExpert } from '@/lib/services/booking';
 import { reviewService } from '@/lib/services/review';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -64,11 +61,7 @@ export default function ExpertDashboard() {
     activeClients: 0,
     monthlyRevenue: 0
   });
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [recentReviews, setRecentReviews] = useState<any[]>([]);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const fetchExpertData = useCallback(async () => {
     try {
@@ -119,10 +112,6 @@ export default function ExpertDashboard() {
           activeClients: uniqueClients,
           monthlyRevenue,
         });
-        
-        // Load pending requests
-        const pending = mockExpertAppointments.filter(apt => apt.status === 'pending' || apt.status === 'requested');
-        setPendingRequests(pending);
         
         // Load recent reviews - create mock reviews with appointment details
         const mockReviews = [
@@ -247,51 +236,6 @@ export default function ExpertDashboard() {
           });
         }
         
-        // Load pending requests
-        const { data: requests } = await supabase
-          .from('appointments')
-          .select(`
-            id,
-            start_time,
-            end_time,
-            status,
-            total_price,
-            notes,
-            profiles:client_id (
-              full_name,
-              avatar_url,
-              phone
-            ),
-            expert_offers:offer_id (
-              title,
-              format
-            )
-          `)
-          .eq('expert_id', profile.id)
-          .in('status', ['requested', 'pending'])
-          .order('created_at', { ascending: false })
-          .limit(5);
-        
-        if (requests) {
-          setPendingRequests(requests.map((apt: any) => ({
-            id: apt.id,
-            start_time: apt.start_time,
-            end_time: apt.end_time,
-            status: apt.status,
-            total_price: apt.total_price,
-            notes: apt.notes,
-            client: {
-              full_name: apt.profiles?.full_name || '',
-              avatar_url: apt.profiles?.avatar_url || '',
-              phone: apt.profiles?.phone || '',
-            },
-            offer: {
-              title: apt.expert_offers?.title || '',
-              format: apt.expert_offers?.format || '',
-            },
-          })));
-        }
-        
         // Load recent reviews (already includes appointment details via reviewService)
         try {
           const reviews = await reviewService.getExpertReviews(profile.id);
@@ -306,70 +250,6 @@ export default function ExpertDashboard() {
       setLoading(false);
     }
   }, [user?.id]);
-  
-  const handleConfirmRequest = async (appointmentId: string) => {
-    setActionLoading(appointmentId);
-    setError('');
-    setSuccess('');
-    
-    try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-      
-      if (backendMode === 'mock') {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setPendingRequests(prev => prev.filter(req => req.id !== appointmentId));
-        setSuccess('Termin bestätigt!');
-        setTimeout(() => setSuccess(''), 3000);
-        setActionLoading(null);
-        return;
-      }
-      
-      const result = await confirmAppointment(appointmentId);
-      if (!result.success) {
-        throw new Error(result.error || 'Fehler bei der Bestätigung');
-      }
-      setSuccess('Termin bestätigt!');
-      await fetchExpertData();
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-  
-  const handleRejectRequest = async (appointmentId: string) => {
-    if (!confirm('Möchtest du diese Buchungsanfrage wirklich ablehnen?')) return;
-    
-    setActionLoading(appointmentId);
-    setError('');
-    setSuccess('');
-    
-    try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-      
-      if (backendMode === 'mock') {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setPendingRequests(prev => prev.filter(req => req.id !== appointmentId));
-        setSuccess('Buchungsanfrage abgelehnt');
-        setTimeout(() => setSuccess(''), 3000);
-        setActionLoading(null);
-        return;
-      }
-      
-      const result = await cancelAppointmentByExpert(appointmentId, 'Vom Expert abgelehnt');
-      if (!result.success) {
-        throw new Error(result.error || 'Fehler bei der Ablehnung');
-      }
-      setSuccess('Buchungsanfrage abgelehnt');
-      await fetchExpertData();
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setActionLoading(null);
-    }
-  };
 
   useEffect(() => {
     if (user?.id) {
@@ -379,7 +259,7 @@ export default function ExpertDashboard() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="p-3 sm:p-4 lg:p-5 space-y-4">
         <div className="animate-pulse space-y-4">
           <div className="h-12 bg-gray-200 rounded w-1/3"></div>
           <div className="h-24 bg-gray-200 rounded"></div>
@@ -504,13 +384,13 @@ export default function ExpertDashboard() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className="mb-8 flex items-start justify-between">
+    <div className="p-3 sm:p-4 lg:p-5 space-y-4 max-w-7xl mx-auto">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-4xl font-heading font-bold text-text-dark mb-2">
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
             Expert:innen Dashboard
           </h1>
-          <p className="text-gray-600 font-body">
+          <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
             Verwalte deine Angebote, Termine und Finanzen
           </p>
         </div>
@@ -519,30 +399,17 @@ export default function ExpertDashboard() {
 
       {getAlertMessage()}
 
-      {error && (
-        <Alert className="mt-6 border-error-text bg-error-bg">
-          <AlertCircle className="h-4 w-4 text-error-text" />
-          <AlertDescription className="text-error-text font-body">{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {success && (
-        <Alert className="mt-6 border-success-text bg-success-bg">
-          <AlertDescription className="text-success-text font-body">{success}</AlertDescription>
-        </Alert>
-      )}
-
       {!isVerified && (
-        <Card className="border-2 mt-8">
+        <Card className="border-2">
           <CardHeader>
-            <CardTitle className="font-heading text-2xl">Verifizierungs-Checkliste</CardTitle>
+            <CardTitle className="font-heading text-xl">Verifizierungs-Checkliste</CardTitle>
             <CardDescription className="font-body text-base">
               {completedItems} von {checklist.length} Schritten abgeschlossen
               {inReviewItems > 0 && ` • ${inReviewItems} in Prüfung`}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="mb-6">
+            <div>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
                   className="bg-gradient-to-r from-primary-blue to-primary-green h-3 rounded-full transition-all duration-500"
@@ -641,7 +508,7 @@ export default function ExpertDashboard() {
 
       {isVerified && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Card className="border-2">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 font-heading text-lg">
@@ -679,101 +546,13 @@ export default function ExpertDashboard() {
             </Card>
           </div>
 
-          {pendingRequests.length > 0 && (
-            <Card className="border-2 mt-8">
-              <CardHeader>
-                <CardTitle className="font-heading text-xl">Ausstehende Buchungsanfragen</CardTitle>
-                <CardDescription className="font-body">
-                  {pendingRequests.length} {pendingRequests.length === 1 ? 'Anfrage wartet' : 'Anfragen warten'} auf deine Bestätigung
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {pendingRequests.slice(0, 3).map((request) => (
-                    <div
-                      key={request.id}
-                      className="p-4 border-2 rounded-lg" style={{ borderColor: '#BADE4F' }}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            {request.client && (
-                              <Avatar className="w-10 h-10">
-                                <AvatarImage src={request.client.avatar_url} />
-                                <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white">
-                                  {request.client.full_name.split(' ').map(n => n[0]).join('')}
-                                </AvatarFallback>
-                              </Avatar>
-                            )}
-                            <div>
-                              <p className="font-heading font-semibold text-text-dark">
-                                {request.client?.full_name || 'Unbekannt'}
-                              </p>
-                              <p className="text-sm text-gray-600 font-body">
-                                {request.offer.title}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-600 mt-2">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-4 h-4" />
-                              {format(parseISO(request.start_time), 'dd. MMMM yyyy', { locale: de })}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-4 h-4" />
-                              {format(parseISO(request.start_time), 'HH:mm', { locale: de })} - {format(parseISO(request.end_time), 'HH:mm', { locale: de })}
-                            </div>
-                            <div className="font-heading font-semibold text-text-dark">
-                              €{request.total_price.toFixed(2)}
-                            </div>
-                          </div>
-                          {request.notes && (
-                            <p className="text-sm text-gray-600 mt-2 font-body">{request.notes}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        <Button
-                          onClick={() => handleConfirmRequest(request.id)}
-                          disabled={actionLoading === request.id}
-                          className="flex-1 bg-primary-green text-text-dark hover:bg-primary-green/80 font-body"
-                        >
-                          <Check className="w-4 h-4 mr-2" />
-                          {actionLoading === request.id ? 'Wird bestätigt...' : 'Annehmen'}
-                        </Button>
-                        <Button
-                          onClick={() => handleRejectRequest(request.id)}
-                          disabled={actionLoading === request.id}
-                          variant="outline"
-                          className="flex-1 border-gray-300 text-gray-600 hover:bg-gray-100 font-body"
-                        >
-                          <X className="w-4 h-4 mr-2" />
-                          Ablehnen
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {pendingRequests.length > 3 && (
-                  <div className="mt-4 text-center">
-                    <Link href="/app/termine?tab=requested">
-                      <Button variant="outline" className="font-body">
-                        Alle {pendingRequests.length} Anfragen anzeigen
-                      </Button>
-                    </Link>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="mt-8">
+          <div>
             <AppointmentCalendar role="expert" />
           </div>
 
           {/* Recent Reviews */}
           {recentReviews.length > 0 && (
-            <Card className="border-2 mt-8">
+            <Card className="border-2">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
@@ -799,7 +578,7 @@ export default function ExpertDashboard() {
                             <Avatar className="w-10 h-10">
                               <AvatarImage src={review.client.avatar_url} />
                               <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white">
-                                {review.client.full_name.split(' ').map(n => n[0]).join('')}
+                                {review.client.full_name.split(' ').map((n: string) => n[0]).join('')}
                               </AvatarFallback>
                             </Avatar>
                           )}

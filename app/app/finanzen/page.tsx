@@ -149,7 +149,7 @@ export default function FinancesPage() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="p-3 sm:p-4 lg:p-5 space-y-4">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-blue"></div>
         </div>
@@ -158,12 +158,12 @@ export default function FinancesPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-4xl font-heading font-bold text-text-dark mb-2">
+    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
           Finanzen
         </h1>
-        <p className="text-gray-600 font-body">
+        <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
           Übersicht über deine Einnahmen und Transaktionen
         </p>
       </div>

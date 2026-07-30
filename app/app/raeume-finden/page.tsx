@@ -232,7 +232,7 @@ export default function FindRoomsPage() {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="p-3 sm:p-4 lg:p-5 space-y-4">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-blue"></div>
         </div>
@@ -241,12 +241,12 @@ export default function FindRoomsPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-4xl font-heading font-bold text-text-dark mb-2">
+    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
           Räume finden
         </h1>
-        <p className="text-gray-600 font-body">
+        <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
           {linkedAppointment
             ? `Raum für Session "${linkedAppointment.expert_offers?.title || 'Session'}" buchen`
             : 'Buche professionelle Räume für deine In-Person-Sessions'
@@ -269,7 +269,7 @@ export default function FindRoomsPage() {
         </Alert>
       )}
 
-      <div className="mb-6">
+      <div>
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <Input
@@ -534,7 +534,7 @@ export default function FindRoomsPage() {
               <div className="w-20 h-20 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-6">
                 <CheckCircle2 className="w-10 h-10 text-success-text" />
               </div>
-              <h2 className="font-heading text-3xl font-bold text-text-dark mb-4">
+              <h2 className="font-heading text-2xl font-bold text-text-dark mb-4">
                 Buchung erfolgreich!
               </h2>
               <p className="text-gray-600 font-body mb-8">

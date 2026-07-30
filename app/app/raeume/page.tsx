@@ -19,7 +19,7 @@ export default function ProviderRoomsPage() {
   }, [router]);
 
   return (
-    <div className="p-8">
+    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
       <Card className="max-w-md mx-auto border-2 shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl font-heading text-center text-text-dark">

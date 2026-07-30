@@ -22,18 +22,21 @@ interface ExpertShowcaseProps {
 export function ExpertShowcase({ experts }: ExpertShowcaseProps) {
   if (experts.length === 0) {
     return (
-      <section className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="py-12 sm:py-14 lg:py-16 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-5 lg:px-6">
           <div className="text-center">
-            <h2 className="font-heading text-4xl md:text-5xl font-bold text-text-dark mb-4">
+            <h2 className="font-heading text-2xl sm:text-3xl font-bold text-text-dark mb-2">
               Unsere Top-Expert:innen
             </h2>
-            <p className="text-xl text-gray-600 font-body max-w-3xl mx-auto mb-8">
+            <p className="text-sm sm:text-base text-gray-600 font-body max-w-2xl mx-auto mb-5">
               Bald findest du hier unsere verifizierten Expert:innen.
             </p>
-            <Link href="/signup/client">
-              <Button size="lg" className="bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 transition-opacity">
-                Benachrichtigung erhalten
+            <Link href="/app/experten">
+              <Button
+                size="lg"
+                className="bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 transition-opacity text-sm sm:text-base"
+              >
+                Expert:innen entdecken
               </Button>
             </Link>
           </div>
@@ -43,14 +46,15 @@ export function ExpertShowcase({ experts }: ExpertShowcaseProps) {
   }
 
   return (
-    <section className="py-24 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="font-heading text-4xl md:text-5xl font-bold text-text-dark mb-4">
+    <section className="py-12 sm:py-14 lg:py-16 bg-white">
+      <div className="max-w-6xl mx-auto px-4 sm:px-5 lg:px-6">
+        <div className="text-center mb-8 sm:mb-10">
+          <h2 className="font-heading text-2xl sm:text-3xl font-bold text-text-dark mb-2">
             Unsere Top-Expert:innen
           </h2>
-          <p className="text-xl text-gray-600 font-body max-w-3xl mx-auto">
-            Entdecke qualifizierte Fachpersonen, die bereits hunderte Kund:innen auf ihrem Gesundheitsweg begleiten.
+          <p className="text-sm sm:text-base text-gray-600 font-body max-w-2xl mx-auto">
+            Entdecke qualifizierte Fachpersonen, die bereits hunderte Kund:innen auf ihrem
+            Gesundheitsweg begleiten.
           </p>
         </div>
 
@@ -59,65 +63,76 @@ export function ExpertShowcase({ experts }: ExpertShowcaseProps) {
             align: 'start',
             loop: true,
           }}
-          className="w-full max-w-6xl mx-auto mb-12"
+          className="w-full max-w-5xl mx-auto mb-8"
         >
-          <CarouselContent className="-ml-2 md:-ml-4">
+          <CarouselContent className="-ml-2 md:-ml-3">
             {experts.map((expert) => (
-              <CarouselItem key={expert.id} className="pl-2 md:pl-4 md:basis-1/2 lg:basis-1/3">
-                <Card className="border-2 hover:border-primary-blue transition-all hover:shadow-xl group h-full">
-                  <CardHeader className="text-center p-6">
-                    <div className="flex justify-center mb-4">
+              <CarouselItem key={expert.id} className="pl-2 md:pl-3 md:basis-1/2 lg:basis-1/3">
+                <Card className="border-2 hover:border-primary-blue transition-all group h-full">
+                  <CardHeader className="text-center p-4 sm:p-5">
+                    <div className="flex justify-center mb-3">
                       <div className="relative">
-                        <Avatar className="w-28 h-28 border-4 border-white shadow-lg">
-                          <AvatarImage src={expert.avatar_url || 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg'} alt={expert.full_name} />
-                          <AvatarFallback className="text-2xl font-bold bg-gradient-to-br from-primary-blue to-primary-green text-white">
+                        <Avatar className="w-20 h-20 border-2 border-white shadow-md">
+                          <AvatarImage
+                            src={
+                              expert.avatar_url ||
+                              'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg'
+                            }
+                            alt={expert.full_name}
+                          />
+                          <AvatarFallback className="text-lg font-bold bg-gradient-to-br from-primary-blue to-primary-green text-white">
                             {expert.full_name.split(' ')[0][0]}
                           </AvatarFallback>
                         </Avatar>
                         {expert.is_verified && (
-                          <div className="absolute -bottom-1 -right-1 bg-primary-blue rounded-full p-1.5 shadow-md">
-                            <BadgeCheck className="w-5 h-5 text-white" />
+                          <div className="absolute -bottom-0.5 -right-0.5 bg-primary-blue rounded-full p-1 shadow-md">
+                            <BadgeCheck className="w-3.5 h-3.5 text-white" />
                           </div>
                         )}
                       </div>
                     </div>
 
-                    <CardTitle className="font-heading text-2xl text-text-dark mb-2">
+                    <CardTitle className="font-heading text-lg text-text-dark mb-1">
                       {expert.full_name.split(' ')[0]}
                     </CardTitle>
 
-                    <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-2">
-                      <MapPin className="w-4 h-4" />
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500 mb-1.5">
+                      <MapPin className="w-3.5 h-3.5" />
                       <span>{expert.city || 'Deutschland'}</span>
                     </div>
 
-                    <div className="flex items-center justify-center gap-1 mb-4">
-                      <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                      <span className="font-semibold text-lg text-gray-900">{expert.rating.toFixed(1)}</span>
-                      <span className="text-sm text-gray-500">({expert.total_reviews} Bewertungen)</span>
+                    <div className="flex items-center justify-center gap-1 mb-3">
+                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                      <span className="font-semibold text-sm text-gray-900">
+                        {expert.rating.toFixed(1)}
+                      </span>
+                      <span className="text-xs text-gray-500">({expert.total_reviews})</span>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 justify-center mb-4">
+                    <div className="flex flex-wrap gap-1.5 justify-center mb-3">
                       {expert.specializations.slice(0, 2).map((spec, index) => (
-                        <Badge key={index} className="bg-info-bg text-info-text hover:bg-info-bg/80 text-xs px-3 py-1">
+                        <Badge
+                          key={index}
+                          className="bg-info-bg text-info-text hover:bg-info-bg/80 text-[11px] px-2 py-0.5"
+                        >
                           {spec}
                         </Badge>
                       ))}
                       {expert.specializations.length > 2 && (
-                        <Badge variant="secondary" className="text-xs px-3 py-1">
+                        <Badge variant="secondary" className="text-[11px] px-2 py-0.5">
                           +{expert.specializations.length - 2}
                         </Badge>
                       )}
                     </div>
 
-                    <div className="text-center mb-6 p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg">
-                      <p className="text-sm text-gray-600 font-body mb-1">ab</p>
-                      <p className="text-3xl font-bold text-primary-blue">{expert.hourly_rate}€</p>
-                      <p className="text-sm text-gray-600 font-body">pro Stunde</p>
+                    <div className="text-center mb-4 p-3 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg">
+                      <p className="text-xs text-gray-500 font-body mb-0.5">ab</p>
+                      <p className="text-xl font-bold text-primary-blue">{expert.hourly_rate}€</p>
+                      <p className="text-xs text-gray-500 font-body">pro Stunde</p>
                     </div>
 
                     <Link href={`/app/experten/${expert.id}`}>
-                      <Button className="w-full bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 transition-opacity shadow-lg">
+                      <Button className="w-full bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 transition-opacity text-sm">
                         Profil ansehen
                       </Button>
                     </Link>
@@ -126,13 +141,17 @@ export function ExpertShowcase({ experts }: ExpertShowcaseProps) {
               </CarouselItem>
             ))}
           </CarouselContent>
-          <CarouselPrevious className="hidden md:flex -left-12" />
-          <CarouselNext className="hidden md:flex -right-12" />
+          <CarouselPrevious className="hidden md:flex -left-10" />
+          <CarouselNext className="hidden md:flex -right-10" />
         </Carousel>
 
         <div className="text-center">
           <Link href="/app/experten">
-            <Button size="lg" variant="outline" className="border-2 border-primary-blue text-primary-blue hover:bg-primary-blue hover:text-white transition-colors">
+            <Button
+              size="lg"
+              variant="outline"
+              className="border-2 border-primary-blue text-primary-blue hover:bg-primary-blue hover:text-white transition-colors text-sm sm:text-base"
+            >
               Alle Expert:innen entdecken
             </Button>
           </Link>

@@ -12,12 +12,15 @@ export const mockExperts: Expert[] = [
     rating: 4.8,
     total_reviews: 124,
     is_verified: true,
+    address: 'Leopoldstraße 42',
+    postal_code: '80802',
     city: 'München',
     country: 'Deutschland',
     email: 'sarah.mueller@example.com',
     phone: '+49 89 12345678',
     certifications: ['Staatlich anerkannte Physiotherapeutin', 'Manuelle Therapie'],
     years_experience: 8,
+    availability_status: 'available',
   },
   {
     id: '2',
@@ -30,10 +33,13 @@ export const mockExperts: Expert[] = [
     rating: 4.9,
     total_reviews: 156,
     is_verified: true,
+    address: 'Friedrichstraße 88',
+    postal_code: '10117',
     city: 'Berlin',
     country: 'Deutschland',
     certifications: ['A-Lizenz Personal Trainer', 'Ernährungsberater B-Lizenz'],
     years_experience: 6,
+    availability_status: 'busy',
   },
   {
     id: '3',
@@ -46,10 +52,13 @@ export const mockExperts: Expert[] = [
     rating: 4.7,
     total_reviews: 89,
     is_verified: true,
+    address: 'Schanzenstraße 12',
+    postal_code: '20357',
     city: 'Hamburg',
     country: 'Deutschland',
     certifications: ['200h Yoga Teacher Training', 'Mindfulness Coach'],
     years_experience: 5,
+    availability_status: 'available',
   },
   {
     id: '4',
@@ -62,10 +71,13 @@ export const mockExperts: Expert[] = [
     rating: 4.8,
     total_reviews: 201,
     is_verified: true,
+    address: 'Zeil 45',
+    postal_code: '60313',
     city: 'Frankfurt',
     country: 'Deutschland',
     certifications: ['Sportphysiotherapie', 'Manuelle Lymphdrainage'],
     years_experience: 10,
+    availability_status: 'busy',
   },
   {
     id: '5',
@@ -78,10 +90,13 @@ export const mockExperts: Expert[] = [
     rating: 4.6,
     total_reviews: 67,
     is_verified: true,
+    address: 'Schildergasse 18',
+    postal_code: '50667',
     city: 'Köln',
     country: 'Deutschland',
     certifications: ['Ernährungsberaterin BSc', 'Health Coach'],
     years_experience: 4,
+    availability_status: 'available',
   },
   {
     id: '6',
@@ -94,10 +109,13 @@ export const mockExperts: Expert[] = [
     rating: 4.9,
     total_reviews: 178,
     is_verified: true,
+    address: 'Königstraße 30',
+    postal_code: '70173',
     city: 'Stuttgart',
     country: 'Deutschland',
     certifications: ['Massagetherapeut', 'Faszientherapeut'],
     years_experience: 7,
+    availability_status: 'available',
   },
   {
     id: '7',
@@ -110,10 +128,13 @@ export const mockExperts: Expert[] = [
     rating: 4.8,
     total_reviews: 143,
     is_verified: true,
+    address: 'Maximilianstraße 15',
+    postal_code: '80539',
     city: 'München',
     country: 'Deutschland',
     certifications: ['Systemischer Coach', 'NLP Master'],
     years_experience: 9,
+    availability_status: 'busy',
   },
   {
     id: '8',
@@ -126,10 +147,13 @@ export const mockExperts: Expert[] = [
     rating: 4.7,
     total_reviews: 112,
     is_verified: true,
+    address: 'Königsallee 60',
+    postal_code: '40212',
     city: 'Düsseldorf',
     country: 'Deutschland',
     certifications: ['Physiotherapeut', 'Rückenschule'],
     years_experience: 6,
+    availability_status: 'unavailable',
   },
 ];
 
@@ -209,50 +233,77 @@ export const mockExpertOwnOffers: ExpertOffer[] = [
 // Client appointments (viewed from client side) - using Appointment type but with expert field
 export const mockClientAppointments: any[] = [
   {
-    id: 'apt-client-1',
+    id: 'apt-client-upcoming-1',
+    expert_id: '1',
     expert: {
+      id: '1',
       full_name: 'Sarah Müller',
       avatar_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
     },
     offer: {
       title: 'Erstberatung & Analyse',
       format: 'Präsenz',
+      description: 'Umfassende Bestandsaufnahme und individueller Therapieplan.',
     },
-    start_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(), // Tomorrow
+    start_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
     end_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
     status: 'confirmed',
-    total_price: 85.00,
+    total_price: 85.0,
     notes: 'Bitte bringen Sie bequeme Kleidung mit.',
   },
   {
-    id: 'apt-client-2',
+    id: 'apt-client-upcoming-2',
+    expert_id: '2',
     expert: {
+      id: '2',
       full_name: 'Michael Schmidt',
       avatar_url: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
     },
     offer: {
       title: 'Personal Training Session',
       format: 'online',
+      description: 'Individuelles Krafttraining mit Fokus auf deine Ziele.',
     },
-    start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days from now
+    start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
     end_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-    status: 'pending',
-    total_price: 75.00,
+    status: 'confirmed',
+    total_price: 75.0,
   },
   {
-    id: 'apt-client-3',
+    id: 'apt-client-upcoming-3',
+    expert_id: '3',
     expert: {
+      id: '3',
       full_name: 'Julia Weber',
       avatar_url: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg',
     },
     offer: {
       title: 'Yoga & Meditation Session',
       format: 'Präsenz',
+      description: 'Entspannung und Achtsamkeit für Körper und Geist.',
     },
-    start_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+    start_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     end_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
     status: 'confirmed',
-    total_price: 65.00,
+    total_price: 65.0,
+  },
+  {
+    id: 'apt-client-upcoming-4',
+    expert_id: '4',
+    expert: {
+      id: '4',
+      full_name: 'Thomas Fischer',
+      avatar_url: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg',
+    },
+    offer: {
+      title: 'Sportphysiotherapie',
+      format: 'Präsenz',
+      description: 'Behandlung und Prävention sportbedingter Beschwerden.',
+    },
+    start_time: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+    end_time: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    status: 'confirmed',
+    total_price: 90.0,
   },
 ];
 
@@ -288,7 +339,7 @@ export const mockExpertAppointments: any[] = [
     },
     start_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days from now
     end_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 45 * 60 * 1000).toISOString(),
-    status: 'pending',
+    status: 'confirmed',
     total_price: 70.00,
   },
   {
@@ -309,10 +360,221 @@ export const mockExpertAppointments: any[] = [
   },
 ];
 
-// Client booking requests (includes requested and confirmed)
+// Client bookings (direct confirmed bookings)
 export const mockClientBookingRequests: any[] = [
   {
     id: 'req-client-1',
+    expert_id: 'mock-expert-1',
+    expert: {
+      full_name: 'Sarah Müller',
+      avatar_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
+    },
+    offer: {
+      title: 'Erstberatung & Analyse',
+      format: 'Präsenz',
+      duration_minutes: 60,
+    },
+    start_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+    end_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    status: 'confirmed',
+    total_price: 85.00,
+    notes: 'Bitte bringen Sie bequeme Kleidung mit.',
+  },
+  {
+    id: 'req-client-2',
+    expert_id: 'mock-expert-2',
+    expert: {
+      full_name: 'Michael Schmidt',
+      avatar_url: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
+    },
+    offer: {
+      title: 'Personal Training Session',
+      format: 'online',
+      duration_minutes: 60,
+    },
+    start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    end_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    status: 'confirmed',
+    total_price: 75.00,
+  },
+  {
+    id: 'req-client-3',
+    expert_id: 'mock-expert-3',
+    expert: {
+      full_name: 'Julia Weber',
+      avatar_url: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg',
+    },
+    offer: {
+      title: 'Yoga & Meditation Session',
+      format: 'Präsenz',
+      duration_minutes: 90,
+    },
+    start_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    end_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
+    status: 'confirmed',
+    total_price: 65.00,
+  },
+];
+
+/** Mock weekly availability used for client reschedule/booking demos */
+export const mockExpertAvailabilityByExpertId: Record<string, Array<{
+  id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  is_available: boolean;
+}>> = {
+  'mock-expert-1': [
+    { id: 'av-1-1', day_of_week: 1, start_time: '09:00', end_time: '17:00', is_available: true },
+    { id: 'av-1-2', day_of_week: 3, start_time: '09:00', end_time: '17:00', is_available: true },
+    { id: 'av-1-3', day_of_week: 5, start_time: '10:00', end_time: '16:00', is_available: true },
+  ],
+  'mock-expert-2': [
+    { id: 'av-2-1', day_of_week: 2, start_time: '10:00', end_time: '18:00', is_available: true },
+    { id: 'av-2-2', day_of_week: 4, start_time: '10:00', end_time: '18:00', is_available: true },
+  ],
+  'mock-expert-3': [
+    { id: 'av-3-1', day_of_week: 6, start_time: '08:00', end_time: '14:00', is_available: true },
+    { id: 'av-3-2', day_of_week: 0, start_time: '09:00', end_time: '13:00', is_available: true },
+  ],
+};
+
+/** Client reviews shown on expert public profiles */
+export const mockExpertReviews: Array<{
+  id: string;
+  appointment_id: string;
+  expert_profile_id: string;
+  client_id: string;
+  rating: number;
+  title: string;
+  review_text: string;
+  helpful_count: number;
+  created_at: string;
+  client: { full_name: string; avatar_url?: string };
+  appointment?: {
+    start_time: string;
+    end_time: string;
+    offer?: { title: string; format?: string };
+  };
+}> = [
+  {
+    id: 'expert-review-1',
+    appointment_id: 'apt-past-1',
+    expert_profile_id: '1',
+    client_id: 'client-1',
+    rating: 5,
+    title: 'Sehr professionell und einfühlsam',
+    review_text:
+      'Die Sitzung war genau das, was ich gebraucht habe. Sehr professionell und einfühlsam. Ich fühle mich deutlich besser.',
+    helpful_count: 8,
+    created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
+    client: {
+      full_name: 'Max Mustermann',
+      avatar_url: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg',
+    },
+    appointment: {
+      start_time: new Date(Date.now() - 10 * 86400000).toISOString(),
+      end_time: new Date(Date.now() - 10 * 86400000 + 60 * 60 * 1000).toISOString(),
+      offer: { title: 'Erstberatung & Analyse', format: 'Präsenz' },
+    },
+  },
+  {
+    id: 'expert-review-2',
+    appointment_id: 'apt-past-2',
+    expert_profile_id: '1',
+    client_id: 'client-2',
+    rating: 5,
+    title: 'Hervorragende Behandlung',
+    review_text:
+      'Die Expertin hat sich viel Zeit genommen und alle meine Fragen beantwortet. Die Behandlung war sehr effektiv.',
+    helpful_count: 5,
+    created_at: new Date(Date.now() - 12 * 86400000).toISOString(),
+    client: {
+      full_name: 'Anna Schmidt',
+      avatar_url: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg',
+    },
+    appointment: {
+      start_time: new Date(Date.now() - 15 * 86400000).toISOString(),
+      end_time: new Date(Date.now() - 15 * 86400000 + 45 * 60 * 1000).toISOString(),
+      offer: { title: 'Manuelle Therapie', format: 'Präsenz' },
+    },
+  },
+  {
+    id: 'expert-review-3',
+    appointment_id: 'apt-past-3',
+    expert_profile_id: '1',
+    client_id: 'client-3',
+    rating: 4,
+    title: 'Gute Erfahrung',
+    review_text: 'Gute Sitzung, sehr kompetent. Würde wieder buchen.',
+    helpful_count: 2,
+    created_at: new Date(Date.now() - 20 * 86400000).toISOString(),
+    client: {
+      full_name: 'Tom Weber',
+      avatar_url: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
+    },
+    appointment: {
+      start_time: new Date(Date.now() - 25 * 86400000).toISOString(),
+      end_time: new Date(Date.now() - 25 * 86400000 + 60 * 60 * 1000).toISOString(),
+      offer: { title: 'Erstberatung & Analyse', format: 'Präsenz' },
+    },
+  },
+  {
+    id: 'expert-review-4',
+    appointment_id: 'apt-past-4',
+    expert_profile_id: '2',
+    client_id: 'client-4',
+    rating: 5,
+    title: 'Top Personal Training',
+    review_text:
+      'Motivierend, strukturiert und mit klaren Fortschritten. Kann Michael nur weiterempfehlen.',
+    helpful_count: 6,
+    created_at: new Date(Date.now() - 8 * 86400000).toISOString(),
+    client: {
+      full_name: 'Lisa König',
+      avatar_url: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg',
+    },
+    appointment: {
+      start_time: new Date(Date.now() - 14 * 86400000).toISOString(),
+      end_time: new Date(Date.now() - 14 * 86400000 + 60 * 60 * 1000).toISOString(),
+      offer: { title: 'Personal Training Session', format: 'Präsenz' },
+    },
+  },
+  {
+    id: 'expert-review-5',
+    appointment_id: 'apt-past-5',
+    expert_profile_id: '2',
+    client_id: 'client-5',
+    rating: 5,
+    title: 'Sehr gute Betreuung',
+    review_text: 'Individuelles Training mit Fokus auf Technik. Fühle mich deutlich stärker.',
+    helpful_count: 3,
+    created_at: new Date(Date.now() - 18 * 86400000).toISOString(),
+    client: {
+      full_name: 'Jonas Berger',
+      avatar_url: 'https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg',
+    },
+    appointment: {
+      start_time: new Date(Date.now() - 22 * 86400000).toISOString(),
+      end_time: new Date(Date.now() - 22 * 86400000 + 60 * 60 * 1000).toISOString(),
+      offer: { title: 'Personal Training Session', format: 'Präsenz' },
+    },
+  },
+];
+
+/** Completed sessions awaiting a client review */
+export const mockPendingReviewAppointments: Array<{
+  id: string;
+  expert_id: string;
+  start_time: string;
+  end_time: string;
+  total_price: number;
+  expert: { full_name: string; avatar_url: string };
+  offer: { title: string; format: string };
+}> = [
+  {
+    id: 'req-client-review-1',
+    expert_id: 'mock-expert-1',
     expert: {
       full_name: 'Sarah Müller',
       avatar_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
@@ -321,14 +583,13 @@ export const mockClientBookingRequests: any[] = [
       title: 'Erstberatung & Analyse',
       format: 'Präsenz',
     },
-    start_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-    end_time: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-    status: 'requested',
-    total_price: 85.00,
-    notes: 'Bitte bringen Sie bequeme Kleidung mit.',
+    start_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    end_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    total_price: 85.0,
   },
   {
-    id: 'req-client-2',
+    id: 'req-client-review-2',
+    expert_id: 'mock-expert-2',
     expert: {
       full_name: 'Michael Schmidt',
       avatar_url: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
@@ -337,29 +598,14 @@ export const mockClientBookingRequests: any[] = [
       title: 'Personal Training Session',
       format: 'online',
     },
-    start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-    end_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-    status: 'confirmed',
-    total_price: 75.00,
-    is_newly_accepted: true, // Highlighted as newly accepted
-  },
-  {
-    id: 'req-client-3',
-    expert: {
-      full_name: 'Julia Weber',
-      avatar_url: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg',
-    },
-    offer: {
-      title: 'Yoga & Meditation Session',
-      format: 'Präsenz',
-    },
-    start_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    end_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
-    status: 'confirmed',
-    total_price: 65.00,
-    is_newly_accepted: false, // Already accepted, not new
+    start_time: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    end_time: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    total_price: 75.0,
   },
 ];
+
+/** Appointment ids that already have a submitted review (mutable in mock sessions) */
+export const mockSubmittedReviewAppointmentIds = new Set<string>();
 
 // Legacy export for backward compatibility
 export const mockAppointments: Appointment[] = mockClientAppointments;
@@ -420,6 +666,7 @@ export const mockProfile: UserProfile = {
   role: 'client',
   avatar_url: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg',
   phone: '+49 170 1234567',
+  created_at: new Date(Date.now() - 180 * 86400000).toISOString(),
 };
 
 export const mockPlatformReviews: PlatformReview[] = [
@@ -499,5 +746,217 @@ export const mockPlatformReviews: PlatformReview[] = [
     review_text: 'Die Plattform hat meine Erwartungen übertroffen. Besonders beeindruckt bin ich von der Marketing-Unterstützung und den Analytics-Tools. Ich kann genau sehen, wie sich mein Profil entwickelt und wo ich noch optimieren kann.',
     created_at: new Date(Date.now() - 120 * 86400000).toISOString(),
     helpful_count: 19,
+  },
+];
+
+export type MockBookingNotification = {
+  id: string;
+  user_id: string;
+  booking_type: 'appointment' | 'room_booking';
+  booking_id: string;
+  notification_type: string;
+  title: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+};
+
+/** Mutable mock inbox so mark-as-read works in-session */
+export const mockNotifications: MockBookingNotification[] = [
+  {
+    id: 'notif-review-1',
+    user_id: 'any',
+    booking_type: 'appointment',
+    booking_id: 'req-client-review-1',
+    notification_type: 'review_request',
+    title: 'Bewertung abgeben',
+    message:
+      'Wie war deine Session mit Sarah Müller („Erstberatung & Analyse“)? Teile kurz deine Erfahrung.',
+    is_read: false,
+    created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'notif-1',
+    user_id: 'any',
+    booking_type: 'appointment',
+    booking_id: 'apt-1',
+    notification_type: 'booking_created',
+    title: 'Termin gebucht',
+    message: 'Dein Termin „Personal Training Session“ mit Michael Schmidt ist gebucht.',
+    is_read: false,
+    created_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'notif-2',
+    user_id: 'any',
+    booking_type: 'appointment',
+    booking_id: 'apt-2',
+    notification_type: 'reminder',
+    title: 'Terminerinnerung',
+    message: 'Dein Termin mit Sarah Müller findet morgen um 11:00 Uhr statt.',
+    is_read: false,
+    created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'notif-3',
+    user_id: 'any',
+    booking_type: 'appointment',
+    booking_id: 'apt-3',
+    notification_type: 'payment_received',
+    title: 'Zahlung erhalten',
+    message: 'Deine Zahlung für „Erstberatung & Analyse“ wurde erfolgreich verarbeitet.',
+    is_read: false,
+    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'notif-4',
+    user_id: 'any',
+    booking_type: 'appointment',
+    booking_id: 'apt-4',
+    notification_type: 'booking_created',
+    title: 'Termin gebucht',
+    message: 'Dein Termin „Yoga & Meditation“ mit Julia Weber ist gebucht.',
+    is_read: true,
+    created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'notif-5',
+    user_id: 'any',
+    booking_type: 'appointment',
+    booking_id: 'apt-5',
+    notification_type: 'chat_message',
+    title: 'Neue Nachricht',
+    message: 'Sarah Müller hat dir eine Nachricht geschrieben.',
+    is_read: false,
+    created_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+export type MockChatThread = {
+  id: string;
+  appointment_id: string;
+  client_id: string;
+  expert_id: string;
+  created_at: string;
+  updated_at: string;
+  partner: {
+    full_name: string;
+    avatar_url: string;
+  };
+  offer_title: string;
+  last_message: string;
+  unread_count: number;
+};
+
+export type MockChatMessage = {
+  id: string;
+  thread_id: string;
+  sender_id: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+  sender?: {
+    full_name: string;
+    avatar_url?: string;
+  };
+};
+
+export const mockChatThreads: MockChatThread[] = [
+  {
+    id: 'thread-1',
+    appointment_id: 'apt-client-upcoming-1',
+    client_id: 'client',
+    expert_id: '1',
+    created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    partner: {
+      full_name: 'Sarah Müller',
+      avatar_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
+    },
+    offer_title: 'Erstberatung & Analyse',
+    last_message: 'Gerne, wie kann ich helfen?',
+    unread_count: 1,
+  },
+  {
+    id: 'thread-2',
+    appointment_id: 'apt-client-upcoming-2',
+    client_id: 'client',
+    expert_id: '2',
+    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    partner: {
+      full_name: 'Michael Schmidt',
+      avatar_url: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
+    },
+    offer_title: 'Personal Training Session',
+    last_message: 'Super, danke für den Hinweis – bis bald!',
+    unread_count: 0,
+  },
+];
+
+/** Mutable mock messages keyed by thread id */
+export const mockChatMessagesByThread: Record<string, MockChatMessage[]> = {
+  'thread-1': [
+    {
+      id: 'msg-1-1',
+      thread_id: 'thread-1',
+      sender_id: 'client',
+      message: 'Hallo! Hast du noch einen Moment für eine Frage zur Erstberatung am Freitag?',
+      is_read: true,
+      created_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+      sender: { full_name: 'Du' },
+    },
+    {
+      id: 'msg-1-2',
+      thread_id: 'thread-1',
+      sender_id: 'partner',
+      message: 'Gerne, wie kann ich helfen?',
+      is_read: false,
+      created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+      sender: { full_name: 'Sarah Müller' },
+    },
+  ],
+  'thread-2': [
+    {
+      id: 'msg-2-1',
+      thread_id: 'thread-2',
+      sender_id: 'partner',
+      message: 'Hi! Für unser Personal Training bring bitte Sportkleidung mit.',
+      is_read: true,
+      created_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+      sender: { full_name: 'Michael Schmidt' },
+    },
+    {
+      id: 'msg-2-2',
+      thread_id: 'thread-2',
+      sender_id: 'client',
+      message: 'Super, danke für den Hinweis – bis bald!',
+      is_read: true,
+      created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+      sender: { full_name: 'Du' },
+    },
+  ],
+};
+
+export type MockPersonalCalendarEvent = {
+  id: string;
+  user_id: string;
+  title: string;
+  notes: string;
+  start_time: string;
+  end_time: string;
+  created_at: string;
+};
+
+/** Mutable so create/delete work in mock sessions */
+export const mockPersonalCalendarEvents: MockPersonalCalendarEvent[] = [
+  {
+    id: 'personal-1',
+    user_id: 'any',
+    title: 'Arzttermin',
+    notes: 'Hausarzt Kontrolle',
+    start_time: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+    end_time: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000).toISOString(),
+    created_at: new Date().toISOString(),
   },
 ];

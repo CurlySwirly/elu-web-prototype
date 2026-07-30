@@ -22,6 +22,35 @@ import {
 class MockAuthService implements IAuthService {
   private currentUser: AuthUser | null = null;
   private listeners: Array<(user: AuthUser | null) => void> = [];
+  private static STORAGE_KEY = 'elu-mock-auth-user';
+
+  constructor() {
+    this.currentUser = this.readStoredUser();
+  }
+
+  private readStoredUser(): AuthUser | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = window.sessionStorage.getItem(MockAuthService.STORAGE_KEY);
+      return raw ? (JSON.parse(raw) as AuthUser) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private persistUser(user: AuthUser | null) {
+    this.currentUser = user;
+    if (typeof window === 'undefined') return;
+    try {
+      if (user) {
+        window.sessionStorage.setItem(MockAuthService.STORAGE_KEY, JSON.stringify(user));
+      } else {
+        window.sessionStorage.removeItem(MockAuthService.STORAGE_KEY);
+      }
+    } catch {
+      // ignore storage errors in private mode
+    }
+  }
 
   async signIn(data: SignInData): Promise<AuthUser> {
     await this.delay(500);
@@ -41,12 +70,12 @@ class MockAuthService implements IAuthService {
     }
 
     const user: AuthUser = {
-      id: `mock-user-${role}-${Date.now()}`,
+      id: `mock-user-${role}`,
       email: data.email,
       role,
     };
 
-    this.currentUser = user;
+    this.persistUser(user);
     this.notifyListeners();
     return user;
   }
@@ -55,24 +84,27 @@ class MockAuthService implements IAuthService {
     await this.delay(500);
 
     const user: AuthUser = {
-      id: `mock-user-${Date.now()}`,
+      id: `mock-user-${data.role}`,
       email: data.email,
       role: data.role,
     };
 
-    this.currentUser = user;
+    this.persistUser(user);
     this.notifyListeners();
     return user;
   }
 
   async signOut(): Promise<void> {
     await this.delay(300);
-    this.currentUser = null;
+    this.persistUser(null);
     this.notifyListeners();
   }
 
   async getCurrentUser(): Promise<AuthUser | null> {
     await this.delay(100);
+    if (!this.currentUser) {
+      this.currentUser = this.readStoredUser();
+    }
     return this.currentUser;
   }
 

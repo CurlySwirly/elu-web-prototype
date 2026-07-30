@@ -47,7 +47,7 @@ export default function ClientSignupPage() {
             Kund:in werden
           </CardTitle>
           <CardDescription className="text-center font-body text-gray-600">
-            Registriere dich kostenlos und finde deine perfekten Expert:innen
+            Registriere dich kostenlos – oder finde zuerst Expert:innen und lege dein Profil bei der Buchung an
           </CardDescription>
         </CardHeader>
         <CardContent>

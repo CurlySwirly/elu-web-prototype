@@ -207,7 +207,7 @@ export default function CompleteProfilePage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-light px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-bg-light p-3 sm:p-4 lg:p-5">
       <Card className="w-full max-w-2xl shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl font-heading text-text-dark">Profil vervollständigen</CardTitle>

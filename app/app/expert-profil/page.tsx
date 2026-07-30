@@ -53,12 +53,12 @@ export default function ExpertProfilePage() {
   }, [userId]);
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-4xl font-heading font-bold text-text-dark mb-2">
+    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
           Expert:innen-Profil
         </h1>
-        <p className="text-gray-600 font-body">
+        <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
           Verwalte dein öffentliches Profil
         </p>
       </div>

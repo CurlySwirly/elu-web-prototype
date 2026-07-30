@@ -107,7 +107,7 @@ export async function createAppointment(data: {
       end_time: data.end_time,
       total_price: data.total_price,
       notes: data.notes || '',
-      status: 'requested',
+      status: 'confirmed',
       payment_status: 'unpaid'
     })
     .select()
@@ -137,7 +137,8 @@ export async function markAppointmentAsPaid(
 }
 
 /**
- * Expert confirms appointment
+ * Expert confirms appointment (legacy: only for old `requested` bookings)
+ * New bookings are created as `confirmed` directly.
  */
 export async function confirmAppointment(
   appointmentId: string
@@ -328,6 +329,17 @@ export async function getMyRoomBookings(): Promise<{ data: RoomBooking[] | null;
  * Get notifications for current user
  */
 export async function getMyNotifications(): Promise<{ data: BookingNotification[] | null; error: any }> {
+  const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+  if (backendMode === 'mock') {
+    const { mockNotifications } = await import('@/lib/backend/mock/data');
+    return {
+      data: mockNotifications
+        .slice()
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) as BookingNotification[],
+      error: null,
+    };
+  }
+
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
@@ -350,6 +362,14 @@ export async function getMyNotifications(): Promise<{ data: BookingNotification[
 export async function markNotificationAsRead(
   notificationId: string
 ): Promise<{ success: boolean; error?: any }> {
+  const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+  if (backendMode === 'mock') {
+    const { mockNotifications } = await import('@/lib/backend/mock/data');
+    const item = mockNotifications.find((n) => n.id === notificationId);
+    if (item) item.is_read = true;
+    return { success: true };
+  }
+
   const { error } = await supabase
     .from('booking_notifications')
     .update({ is_read: true })
@@ -381,13 +401,18 @@ export async function checkRoomAvailability(
 }
 
 /**
- * Calculate cancellation window (24 hours)
+ * Cancellation window for client refunds (48 hours before start)
+ */
+export const CANCELLATION_REFUND_HOURS = 48;
+
+/**
+ * Calculate cancellation window (48 hours)
  */
 export function isWithinCancellationWindow(startTime: string): boolean {
   const start = new Date(startTime);
   const now = new Date();
   const hoursUntilStart = (start.getTime() - now.getTime()) / (1000 * 60 * 60);
-  return hoursUntilStart >= 24;
+  return hoursUntilStart >= CANCELLATION_REFUND_HOURS;
 }
 
 /**
@@ -404,7 +429,7 @@ export function getCancellationInfo(
   const start = new Date(startTime);
   const now = new Date();
   const hoursUntilStart = (start.getTime() - now.getTime()) / (1000 * 60 * 60);
-  const canCancelWithRefund = hoursUntilStart >= 24;
+  const canCancelWithRefund = hoursUntilStart >= CANCELLATION_REFUND_HOURS;
 
   let message = '';
   if (canCancelWithRefund) {

@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Clock, CheckCircle2, AlertCircle, Calendar } from 'lucide-react';
+import { CheckCircle2, Calendar } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import Link from 'next/link';
@@ -26,7 +26,6 @@ interface BookingRequest {
     title: string;
     format: string;
   };
-  is_newly_accepted?: boolean;
 }
 
 export default function BookingRequests() {
@@ -43,10 +42,9 @@ export default function BookingRequests() {
       const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
       
       if (backendMode === 'mock') {
-        // Use mock data
         await new Promise(resolve => setTimeout(resolve, 300));
         const { mockClientBookingRequests } = await import('@/lib/backend/mock/data');
-        setRequests(mockClientBookingRequests);
+        setRequests(mockClientBookingRequests.filter((r: BookingRequest) => r.status === 'confirmed'));
         setLoading(false);
         return;
       }
@@ -79,7 +77,7 @@ export default function BookingRequests() {
             )
           `)
           .eq('client_id', profile.id)
-          .in('status', ['requested', 'confirmed'])
+          .eq('status', 'confirmed')
           .order('start_time', { ascending: true });
 
         if (error) throw error;
@@ -111,7 +109,7 @@ export default function BookingRequests() {
         }));
       }
     } catch (err: any) {
-      console.error('Error loading booking requests:', err);
+      console.error('Error loading bookings:', err);
     } finally {
       setLoading(false);
     }
@@ -121,31 +119,11 @@ export default function BookingRequests() {
     loadRequests();
   }, [loadRequests]);
 
-  const getStatusBadge = (status: string, isNewlyAccepted?: boolean) => {
-    if (status === 'confirmed') {
-      return (
-        <Badge className="bg-info-bg text-info-text border-none font-body">
-          {isNewlyAccepted && <CheckCircle2 className="w-3 h-3 mr-1" />}
-          Bestätigt
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="outline" className="font-body">
-        <Clock className="w-3 h-3 mr-1" />
-        Ausstehend
-      </Badge>
-    );
-  };
-
-  const requestedCount = requests.filter(r => r.status === 'requested').length;
-  const confirmedCount = requests.filter(r => r.status === 'confirmed').length;
-
   if (loading) {
     return (
       <Card className="border-2">
         <CardHeader>
-          <CardTitle className="font-heading text-xl">Buchungsanfragen</CardTitle>
+          <CardTitle className="font-heading text-xl">Meine Termine</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="animate-pulse space-y-3">
@@ -162,14 +140,14 @@ export default function BookingRequests() {
     return (
       <Card className="border-2">
         <CardHeader>
-          <CardTitle className="font-heading text-xl">Buchungsanfragen</CardTitle>
+          <CardTitle className="font-heading text-xl">Meine Termine</CardTitle>
           <CardDescription className="font-body">
-            Keine offenen Buchungsanfragen
+            Keine kommenden Termine
           </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-gray-500 font-body text-sm text-center py-4">
-            Du hast noch keine Buchungsanfragen gestellt.
+            Du hast noch keine Termine gebucht.
           </p>
         </CardContent>
       </Card>
@@ -181,11 +159,9 @@ export default function BookingRequests() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="font-heading text-xl">Buchungsanfragen</CardTitle>
+            <CardTitle className="font-heading text-xl">Meine Termine</CardTitle>
             <CardDescription className="font-body">
-              {requestedCount > 0 && `${requestedCount} ausstehend`}
-              {requestedCount > 0 && confirmedCount > 0 && ' • '}
-              {confirmedCount > 0 && `${confirmedCount} bestätigt`}
+              {requests.length} {requests.length === 1 ? 'gebuchter Termin' : 'gebuchte Termine'}
             </CardDescription>
           </div>
           <Link href="/app/termine">
@@ -200,13 +176,7 @@ export default function BookingRequests() {
           {requests.slice(0, 5).map((request) => (
             <div
               key={request.id}
-              className={`p-4 rounded-lg border-2 bg-white transition-colors ${
-                request.status === 'confirmed' && request.is_newly_accepted
-                  ? 'border-primary-green'
-                  : request.status === 'confirmed'
-                  ? 'border-info-text/30'
-                  : 'border-gray-200'
-              }`}
+              className="p-4 rounded-lg border-2 bg-white border-info-text/30"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3 flex-1">
@@ -221,7 +191,10 @@ export default function BookingRequests() {
                       <p className="font-heading font-semibold text-sm text-text-dark truncate">
                         {request.offer.title}
                       </p>
-                      {getStatusBadge(request.status, request.is_newly_accepted)}
+                      <Badge className="bg-info-bg text-info-text border-none font-body">
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        Gebucht
+                      </Badge>
                     </div>
                     <p className="text-xs text-gray-600 font-body mb-2">
                       mit {request.expert.full_name}
@@ -241,14 +214,6 @@ export default function BookingRequests() {
                   </p>
                 </div>
               </div>
-              {request.status === 'confirmed' && request.is_newly_accepted && (
-                <div className="mt-3 pt-3 border-t border-primary-green/30">
-                  <div className="flex items-center gap-2 text-xs text-text-dark font-body">
-                    <CheckCircle2 className="w-3 h-3 text-primary-green" />
-                    <span>Neu bestätigt! Die Expert:in hat deine Anfrage angenommen.</span>
-                  </div>
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -256,7 +221,7 @@ export default function BookingRequests() {
           <div className="mt-4 pt-4 border-t">
             <Link href="/app/termine">
               <p className="text-sm text-primary-blue hover:underline font-body text-center">
-                Alle {requests.length} Anfragen anzeigen →
+                Alle {requests.length} Termine anzeigen →
               </p>
             </Link>
           </div>
@@ -265,4 +230,3 @@ export default function BookingRequests() {
     </Card>
   );
 }
-

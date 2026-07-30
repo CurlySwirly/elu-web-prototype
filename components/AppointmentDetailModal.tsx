@@ -17,9 +17,11 @@ import {
   Euro,
   Building2,
   AlertCircle,
-  Info
+  Info,
+  CalendarClock,
+  Trash2,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO, isBefore } from 'date-fns';
 import { de } from 'date-fns/locale';
 
 interface AppointmentDetailModalProps {
@@ -27,6 +29,8 @@ interface AppointmentDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   userRole: 'client' | 'expert';
+  onReschedule?: (appointmentId: string) => void;
+  onCancel?: (appointmentId: string) => void;
 }
 
 interface AppointmentDetail {
@@ -46,6 +50,9 @@ interface AppointmentDetail {
   expert?: {
     full_name: string;
     avatar_url: string;
+    address?: string;
+    postal_code?: string;
+    city?: string;
   };
   offer: {
     title: string;
@@ -58,6 +65,7 @@ interface AppointmentDetail {
       name: string;
       address?: string;
       city?: string;
+      postal_code?: string;
     };
     provider: {
       business_name: string;
@@ -65,11 +73,27 @@ interface AppointmentDetail {
   };
 }
 
+function isOnlineFormat(format?: string) {
+  const normalized = (format || '').trim().toLowerCase();
+  return normalized === 'online';
+}
+
+function formatAddressParts(parts: {
+  address?: string;
+  postal_code?: string;
+  city?: string;
+}) {
+  const cityLine = [parts.postal_code, parts.city].filter(Boolean).join(' ');
+  return [parts.address, cityLine].filter(Boolean).join(', ');
+}
+
 export default function AppointmentDetailModal({
   appointmentId,
   isOpen,
   onClose,
-  userRole
+  userRole,
+  onReschedule,
+  onCancel,
 }: AppointmentDetailModalProps) {
   const [appointment, setAppointment] = useState<AppointmentDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -82,6 +106,90 @@ export default function AppointmentDetailModal({
     setError('');
 
     try {
+      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+
+      if (backendMode === 'mock') {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const {
+          mockClientAppointments,
+          mockExpertAppointments,
+          mockClientBookingRequests,
+          mockExperts,
+        } = await import('@/lib/backend/mock/data');
+
+        const found =
+          mockClientAppointments.find((a) => a.id === appointmentId) ||
+          mockExpertAppointments.find((a) => a.id === appointmentId) ||
+          mockClientBookingRequests.find((a) => a.id === appointmentId);
+
+        if (!found) {
+          setAppointment(null);
+          setError('Termin nicht gefunden');
+          return;
+        }
+
+        const mockExpert = mockExperts.find(
+          (expert) =>
+            expert.id === found.expert_id ||
+            expert.id === found.expert?.id ||
+            expert.full_name === found.expert?.full_name
+        );
+
+        setAppointment({
+          id: found.id,
+          start_time: found.start_time,
+          end_time: found.end_time,
+          status: found.status,
+          total_price: found.total_price,
+          notes: found.notes,
+          client: found.client
+            ? {
+                full_name: found.client.full_name || '',
+                avatar_url: found.client.avatar_url || '',
+                phone: found.client.phone || '',
+                email: found.client.email || '',
+              }
+            : undefined,
+          expert: found.expert
+            ? {
+                full_name: found.expert.full_name || mockExpert?.full_name || '',
+                avatar_url: found.expert.avatar_url || mockExpert?.avatar_url || '',
+                address: found.expert.address || mockExpert?.address || '',
+                postal_code: found.expert.postal_code || mockExpert?.postal_code || '',
+                city: found.expert.city || mockExpert?.city || '',
+              }
+            : mockExpert
+              ? {
+                  full_name: mockExpert.full_name,
+                  avatar_url: mockExpert.avatar_url || '',
+                  address: mockExpert.address || '',
+                  postal_code: mockExpert.postal_code || '',
+                  city: mockExpert.city || '',
+                }
+              : undefined,
+          offer: {
+            title: found.offer?.title || '',
+            format: found.offer?.format || '',
+            description: found.offer?.description || '',
+          },
+          room_booking: found.room_booking
+            ? {
+                id: found.room_booking.id,
+                room: {
+                  name: found.room_booking.room?.name || '',
+                  address: found.room_booking.room?.address || '',
+                  city: found.room_booking.room?.city || '',
+                  postal_code: found.room_booking.room?.postal_code || '',
+                },
+                provider: {
+                  business_name: found.room_booking.provider?.business_name || '',
+                },
+              }
+            : undefined,
+        });
+        return;
+      }
+
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -99,6 +207,9 @@ export default function AppointmentDetailModal({
             email
           ),
           expert_profiles:expert_id (
+            address,
+            postal_code,
+            city,
             profiles:user_id (
               full_name,
               avatar_url
@@ -114,7 +225,8 @@ export default function AppointmentDetailModal({
             rooms:room_id (
               name,
               address,
-              city
+              city,
+              postal_code
             ),
             provider_profiles:room_provider_id (
               business_name
@@ -167,6 +279,9 @@ export default function AppointmentDetailModal({
           expert: {
             full_name: expertProfile?.full_name || '',
             avatar_url: expertProfile?.avatar_url || '',
+            address: expertProfiles?.address || '',
+            postal_code: expertProfiles?.postal_code || '',
+            city: expertProfiles?.city || '',
           },
           offer: {
             title: (Array.isArray(data.expert_offers) ? data.expert_offers[0] : data.expert_offers)?.title || '',
@@ -179,15 +294,19 @@ export default function AppointmentDetailModal({
               name: room?.name || '',
               address: room?.address || '',
               city: room?.city || '',
+              postal_code: room?.postal_code || '',
             },
             provider: {
               business_name: provider?.business_name || '',
             }
           } : undefined
         });
+      } else {
+        setAppointment(null);
+        setError('Termin nicht gefunden');
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Fetch error');
     } finally {
       setLoading(false);
     }
@@ -198,23 +317,6 @@ export default function AppointmentDetailModal({
       loadAppointmentDetails();
     }
   }, [appointmentId, isOpen, loadAppointmentDetails]);
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return <Badge className="bg-success-bg text-success-text">Bestätigt</Badge>;
-      case 'requested':
-      case 'pending':
-        return <Badge className="bg-yellow-100 text-yellow-800">Ausstehend</Badge>;
-      case 'completed':
-        return <Badge className="bg-blue-100 text-blue-800">Abgeschlossen</Badge>;
-      case 'cancelled_by_client':
-      case 'cancelled_by_expert':
-        return <Badge className="bg-error-bg text-error-text">Storniert</Badge>;
-      default:
-        return <Badge className="bg-gray-100 text-gray-800">{status}</Badge>;
-    }
-  };
 
   if (loading) {
     return (
@@ -243,24 +345,28 @@ export default function AppointmentDetailModal({
     );
   }
 
+  const sessionIsOnline = isOnlineFormat(appointment.offer.format);
+  const roomAddress = appointment.room_booking
+    ? formatAddressParts(appointment.room_booking.room)
+    : '';
+  const expertAddress = appointment.expert
+    ? formatAddressParts(appointment.expert)
+    : '';
+  const sessionAddress = roomAddress || expertAddress;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-start justify-between">
-            <div>
-              <DialogTitle className="font-heading text-2xl text-text-dark mb-2">
-                {appointment.offer.title}
-              </DialogTitle>
-              <DialogDescription className="font-body">
-                {userRole === 'expert'
-                  ? `Gebucht von ${appointment.client?.full_name || 'Unbekannt'}`
-                  : `mit ${appointment.expert?.full_name || 'Unbekannt'}`
-                }
-              </DialogDescription>
-            </div>
-            {getStatusBadge(appointment.status)}
-          </div>
+          <DialogTitle className="font-heading text-2xl text-text-dark mb-2">
+            {appointment.offer.title}
+          </DialogTitle>
+          <DialogDescription className="font-body">
+            {userRole === 'expert'
+              ? `Gebucht von ${appointment.client?.full_name || 'Unbekannt'}`
+              : `mit ${appointment.expert?.full_name || 'Unbekannt'}`
+            }
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
@@ -291,7 +397,7 @@ export default function AppointmentDetailModal({
 
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-info-bg flex items-center justify-center">
-                {appointment.offer.format === 'online' ? (
+                {sessionIsOnline ? (
                   <Video className="w-5 h-5 text-info-text" />
                 ) : (
                   <MapPin className="w-5 h-5 text-info-text" />
@@ -300,7 +406,7 @@ export default function AppointmentDetailModal({
               <div>
                 <p className="text-sm text-gray-600 font-body">Format</p>
                 <p className="font-semibold font-body">
-                  {appointment.offer.format === 'online' ? 'Online' : 'Vor Ort'}
+                  {sessionIsOnline ? 'Online' : 'Vor Ort'}
                 </p>
               </div>
             </div>
@@ -317,6 +423,24 @@ export default function AppointmentDetailModal({
               </div>
             </div>
           </div>
+
+          {userRole === 'client' && !sessionIsOnline && sessionAddress && (
+            <>
+              <Separator />
+              <div>
+                <h4 className="font-heading font-semibold text-text-dark mb-2 flex items-center gap-2">
+                  <MapPin className="w-5 h-5" />
+                  Adresse
+                </h4>
+                {appointment.room_booking?.room.name ? (
+                  <p className="font-semibold font-body text-text-dark mb-1">
+                    {appointment.room_booking.room.name}
+                  </p>
+                ) : null}
+                <p className="text-gray-700 font-body">{sessionAddress}</p>
+              </div>
+            </>
+          )}
 
           {appointment.notes && (
             <>
@@ -370,10 +494,10 @@ export default function AppointmentDetailModal({
                         <p className="text-sm text-gray-600 font-body mb-1">
                           {appointment.room_booking.provider.business_name}
                         </p>
-                        {appointment.room_booking.room.address && (
+                        {roomAddress && (
                           <p className="text-sm text-gray-600 font-body flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
-                            {appointment.room_booking.room.address}, {appointment.room_booking.room.city}
+                            {roomAddress}
                           </p>
                         )}
                       </div>
@@ -403,6 +527,35 @@ export default function AppointmentDetailModal({
               </div>
             </>
           )}
+
+          {userRole === 'client' &&
+            appointment.status === 'confirmed' &&
+            (onReschedule || onCancel) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {onReschedule && isBefore(new Date(), parseISO(appointment.start_time)) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="font-body h-10 w-full rounded-lg"
+                    onClick={() => onReschedule(appointment.id)}
+                  >
+                    <CalendarClock className="w-4 h-4 mr-2 text-primary-blue" />
+                    Termin verschieben
+                  </Button>
+                )}
+                {onCancel && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="font-body h-10 w-full rounded-lg text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => onCancel(appointment.id)}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Termin stornieren
+                  </Button>
+                )}
+              </div>
+            )}
         </div>
       </DialogContent>
     </Dialog>

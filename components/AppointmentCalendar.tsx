@@ -233,7 +233,7 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
     if (status === 'confirmed') {
       return (
         <Badge className="bg-info-bg text-info-text border-none text-xs font-body">
-          Bestätigt
+          Gebucht
         </Badge>
       );
     }
@@ -304,7 +304,7 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-primary-green/30 border-2 border-primary-green"></div>
-                <span>Neu bestätigt</span>
+                <span>Neu gebucht</span>
               </div>
             </div>
           </div>

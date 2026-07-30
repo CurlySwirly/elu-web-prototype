@@ -13,7 +13,7 @@ export const cancellationService = {
     const now = new Date();
     const hoursUntil = (appointmentTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-    return hoursUntil >= 24;
+    return hoursUntil >= 48;
   },
 
   calculateRefund(totalPrice: number, startTime: string): number {
@@ -75,7 +75,7 @@ export const cancellationService = {
       refundAmount,
       message: refundEligible
         ? `Stornierung erfolgreich. Rückerstattung: €${refundAmount.toFixed(2)}`
-        : 'Stornierung erfolgreich. Keine Rückerstattung möglich (weniger als 24h vor Termin)',
+        : 'Stornierung erfolgreich. Da weniger als 48 Stunden vor dem Termin storniert wurde, wird der Betrag nicht erstattet.',
     };
   },
 
@@ -134,7 +134,7 @@ export const cancellationService = {
       refundAmount,
       message: refundEligible
         ? `Stornierung erfolgreich. Rückerstattung: €${refundAmount.toFixed(2)}`
-        : 'Stornierung erfolgreich. Keine Rückerstattung möglich (weniger als 24h vor Buchung)',
+        : 'Stornierung erfolgreich. Da weniger als 48 Stunden vor dem Termin storniert wurde, wird der Betrag nicht erstattet.',
     };
   },
 
