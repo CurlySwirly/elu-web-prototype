@@ -367,17 +367,17 @@ export function useAppointmentManageFlow({
         const startTime = appointment ? parseISO(appointment.start_time) : new Date();
         const hoursUntilStart = (startTime.getTime() - Date.now()) / (1000 * 60 * 60);
         const servicePrice = appointment?.total_price || 0;
-        const refundBase =
-          actor === 'client'
-            ? getClientPriceBreakdown(servicePrice).clientTotal
-            : servicePrice;
-        const refundAmount = hoursUntilStart >= 48 ? refundBase : 0;
+        const clientTotal = getClientPriceBreakdown(servicePrice).clientTotal;
+        // Expert cancel: client always gets a full refund. Client cancel: only ≥48h.
+        const refundAmount = isExpert
+          ? clientTotal
+          : hoursUntilStart >= 48
+            ? clientTotal
+            : 0;
 
         if (isExpert) {
           setActionMessage(
-            refundAmount > 0
-              ? `Termin abgesagt. Die Kund:in erhält €${refundAmount.toFixed(2)} zurück.`
-              : 'Termin abgesagt. Da die Absage weniger als 48 Stunden vor dem Termin erfolgte, wird der Betrag nicht erstattet.'
+            `Termin abgesagt. Die Kund:in erhält €${refundAmount.toFixed(2)} zurück.`
           );
         } else {
           setActionMessage(
@@ -401,10 +401,12 @@ export function useAppointmentManageFlow({
       }
 
       if (isExpert) {
-        setActionMessage(
+        const refundShown =
           result.refund_amount && result.refund_amount > 0
-            ? `Termin abgesagt. Die Kund:in erhält €${result.refund_amount.toFixed(2)} zurück.`
-            : 'Termin abgesagt. Da die Absage weniger als 48 Stunden vor dem Termin erfolgte, wird der Betrag nicht erstattet.'
+            ? result.refund_amount
+            : getClientPriceBreakdown(appointment?.total_price || 0).clientTotal;
+        setActionMessage(
+          `Termin abgesagt. Die Kund:in erhält €${refundShown.toFixed(2)} zurück.`
         );
       } else {
         setActionMessage(
@@ -865,23 +867,12 @@ export function useAppointmentManageFlow({
                 (1000 * 60 * 60);
               const refundEligible = hoursUntilStart >= 48;
 
+              // Expert cancel: client always gets a full refund (no 48h penalty).
               if (actor === 'expert') {
-                if (refundEligible) {
-                  return (
-                    <Alert className="border-primary-green/40 bg-primary-green/15">
-                      <AlertDescription className="text-text-dark font-body text-sm text-left">
-                        Du sagst rechtzeitig ab (mindestens 48 Stunden vorher) – der Betrag wird der
-                        Kund:in vollständig erstattet.
-                      </AlertDescription>
-                    </Alert>
-                  );
-                }
                 return (
-                  <Alert className="border-amber-300 bg-amber-50">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <AlertDescription className="text-amber-900 font-body text-sm text-left">
-                      Achtung: Der Termin liegt in weniger als 48 Stunden. Bei Absage wird der Betrag
-                      der Kund:in nicht zurückerstattet.
+                  <Alert className="border-primary-green/40 bg-primary-green/15">
+                    <AlertDescription className="text-text-dark font-body text-sm text-left">
+                      Bei Absage durch dich erhält die Kund:in den vollen Betrag zurück.
                     </AlertDescription>
                   </Alert>
                 );

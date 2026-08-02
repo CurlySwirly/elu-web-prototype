@@ -494,8 +494,9 @@ export default function AppointmentDetailModal({
   const showCancel =
     Boolean(onCancel) &&
     isCancellableStatus &&
-    (userRole === 'expert' || startsInFuture) &&
-    !isPastSession;
+    (userRole === 'expert'
+      ? true
+      : startsInFuture && !isPastSession);
   const showReschedule =
     Boolean(onReschedule) &&
     userRole === 'client' &&
