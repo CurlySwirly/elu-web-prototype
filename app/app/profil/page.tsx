@@ -1,5 +1,6 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -145,7 +146,7 @@ export default function ProfilePage() {
     }
 
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       let next: ProfileFields = { ...EMPTY_PROFILE };
 
       if (backendMode === 'mock') {
@@ -223,7 +224,7 @@ export default function ProfilePage() {
 
     setLoadingBookings(true);
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
 
       if (backendMode === 'mock') {
         await new Promise((resolve) => setTimeout(resolve, 250));
@@ -349,7 +350,7 @@ export default function ProfilePage() {
   const persistAvatarUrl = async (nextUrl: string) => {
     if (!user?.id) return;
 
-    const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+    const backendMode = getBackendMode();
     if (backendMode === 'mock') {
       const { mockProfile } = await import('@/lib/backend/mock/data');
       mockProfile.avatar_url = nextUrl;
@@ -387,7 +388,7 @@ export default function ProfilePage() {
     setDraft((d) => ({ ...d, avatarUrl: previewUrl }));
 
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       if (backendMode === 'mock') {
         await persistAvatarUrl(previewUrl);
         toast({
@@ -444,7 +445,7 @@ export default function ProfilePage() {
     setSaving(true);
 
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       const fullName = [draft.firstName, draft.lastName].filter(Boolean).join(' ').trim();
 
       if (backendMode === 'mock') {
@@ -522,7 +523,7 @@ export default function ProfilePage() {
 
     setSaving(true);
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
 
       if (backendMode === 'mock') {
         await new Promise((resolve) => setTimeout(resolve, 400));

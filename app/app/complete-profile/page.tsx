@@ -1,5 +1,6 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -54,7 +55,15 @@ export default function CompleteProfilePage() {
   const [offerDescription, setOfferDescription] = useState('');
   const [offerDuration, setOfferDuration] = useState('');
   const [offerPrice, setOfferPrice] = useState('');
-  const [offerFormat, setOfferFormat] = useState('online');
+  const [offerFormat, setOfferFormat] = useState('');
+  const [offerAddress, setOfferAddress] = useState('');
+  const [offerPostalCode, setOfferPostalCode] = useState('');
+  const [offerCity, setOfferCity] = useState('');
+  const [profileAddress, setProfileAddress] = useState({
+    address: '',
+    postal_code: '',
+    city: '',
+  });
 
   // Payment fields
   const [paymentMethod, setPaymentMethod] = useState('bank_transfer');
@@ -64,7 +73,7 @@ export default function CompleteProfilePage() {
   useEffect(() => {
     const fetchExpertProfile = async () => {
       // Check if we're in mock mode
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       
       if (backendMode === 'mock') {
         // In mock mode, create a mock expert profile ID
@@ -76,12 +85,17 @@ export default function CompleteProfilePage() {
       try {
         const { data } = await supabase
           .from('expert_profiles')
-          .select('id, profile_completion_status')
+          .select('id, profile_completion_status, address, postal_code, city')
           .eq('user_id', userId)
           .maybeSingle();
 
         if (data) {
           setExpertProfileId(data.id);
+          setProfileAddress({
+            address: data.address || '',
+            postal_code: data.postal_code || '',
+            city: data.city || '',
+          });
           if (data.profile_completion_status === 'profile_complete') {
             router.push('/app');
           }
@@ -109,9 +123,18 @@ export default function CompleteProfilePage() {
       setError('Bitte fülle alle Pflichtfelder aus');
       return;
     }
-    if (step === 2 && (!offerTitle || !offerPrice || !offerDuration)) {
-      setError('Bitte fülle alle Pflichtfelder aus');
-      return;
+    if (step === 2) {
+      if (!offerTitle || !offerPrice || !offerDuration || !offerFormat) {
+        setError('Bitte fülle alle Pflichtfelder aus (inkl. Format)');
+        return;
+      }
+      if (
+        offerFormat === 'in-person' &&
+        (!offerAddress.trim() || !offerPostalCode.trim() || !offerCity.trim())
+      ) {
+        setError('Für Vor-Ort-Angebote bitte Straße, PLZ und Ort angeben');
+        return;
+      }
     }
     if (step === 3 && (!iban || !accountHolder)) {
       setError('Bitte fülle alle Pflichtfelder aus');
@@ -132,7 +155,7 @@ export default function CompleteProfilePage() {
 
     try {
       // Check if we're in mock mode
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       
       if (backendMode === 'mock') {
         // In mock mode, just simulate success and redirect
@@ -161,6 +184,7 @@ export default function CompleteProfilePage() {
       if (profileError) throw profileError;
 
       // Create offer
+      const isInPerson = offerFormat === 'in-person';
       const { error: offerError } = await supabase
         .from('expert_offers')
         .insert({
@@ -171,6 +195,9 @@ export default function CompleteProfilePage() {
           duration_minutes: parseInt(offerDuration),
           price: parseFloat(offerPrice),
           is_active: true,
+          location_address: isInPerson ? offerAddress.trim() : '',
+          location_postal_code: isInPerson ? offerPostalCode.trim() : '',
+          location_city: isInPerson ? offerCity.trim() : '',
         });
 
       if (offerError) throw offerError;
@@ -358,13 +385,18 @@ export default function CompleteProfilePage() {
               </div>
 
               <div>
-                <Label className="font-heading text-text-dark">Format</Label>
+                <Label className="font-heading text-text-dark">Format *</Label>
                 <div className="flex gap-4 mt-2">
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="online"
                       checked={offerFormat === 'online'}
-                      onCheckedChange={() => setOfferFormat('online')}
+                      onCheckedChange={() => {
+                        setOfferFormat('online');
+                        setOfferAddress('');
+                        setOfferPostalCode('');
+                        setOfferCity('');
+                      }}
                     />
                     <Label htmlFor="online" className="cursor-pointer font-normal font-body">
                       Online
@@ -374,7 +406,12 @@ export default function CompleteProfilePage() {
                     <Checkbox
                       id="in-person"
                       checked={offerFormat === 'in-person'}
-                      onCheckedChange={() => setOfferFormat('in-person')}
+                      onCheckedChange={() => {
+                        setOfferFormat('in-person');
+                        setOfferAddress((prev) => prev || profileAddress.address);
+                        setOfferPostalCode((prev) => prev || profileAddress.postal_code);
+                        setOfferCity((prev) => prev || profileAddress.city);
+                      }}
                     />
                     <Label htmlFor="in-person" className="cursor-pointer font-normal font-body">
                       Vor Ort
@@ -382,6 +419,55 @@ export default function CompleteProfilePage() {
                   </div>
                 </div>
               </div>
+
+              {offerFormat === 'in-person' && (
+                <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+                  <div>
+                    <Label className="font-heading text-text-dark">Adresse *</Label>
+                    <p className="text-xs text-gray-500 font-body mt-0.5">
+                      Wird in den Buchungsdetails angezeigt
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="offerAddress" className="font-body">
+                      Straße und Hausnummer *
+                    </Label>
+                    <Input
+                      id="offerAddress"
+                      placeholder="z.B. Leopoldstraße 42"
+                      value={offerAddress}
+                      onChange={(e) => setOfferAddress(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="offerPostalCode" className="font-body">
+                        PLZ *
+                      </Label>
+                      <Input
+                        id="offerPostalCode"
+                        placeholder="80802"
+                        value={offerPostalCode}
+                        onChange={(e) => setOfferPostalCode(e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="offerCity" className="font-body">
+                        Ort *
+                      </Label>
+                      <Input
+                        id="offerCity"
+                        placeholder="München"
+                        value={offerCity}
+                        onChange={(e) => setOfferCity(e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

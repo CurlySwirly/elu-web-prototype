@@ -1,5 +1,6 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -34,6 +35,7 @@ import { cn } from '@/lib/utils';
 interface Appointment extends ManageableAppointment {
   notes?: string;
   client?: {
+    id?: string;
     full_name: string;
     avatar_url: string;
     phone?: string;
@@ -64,7 +66,38 @@ export default function AppointmentsPage() {
 
   const loadAppointments = useCallback(async () => {
     try {
+      const backendMode = getBackendMode();
+
       if (role === 'expert') {
+        if (backendMode === 'mock') {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          const { mockExpertAppointments } = await import('@/lib/backend/mock/data');
+          setAppointments(
+            mockExpertAppointments.map((apt) => ({
+              id: apt.id,
+              expert_id: apt.expert_id || 'mock-expert-1',
+              start_time: apt.start_time,
+              end_time: apt.end_time,
+              status: apt.status,
+              total_price: apt.total_price,
+              notes: apt.notes,
+              client: {
+                id: apt.client?.id || apt.client_id || `client-${apt.id}`,
+                full_name: apt.client?.full_name || '',
+                avatar_url: apt.client?.avatar_url || '',
+                phone: apt.client?.phone || '',
+              },
+              offer: {
+                title: apt.offer?.title || '',
+                format: apt.offer?.format || '',
+                duration_minutes: apt.offer?.duration_minutes,
+              },
+            }))
+          );
+          setLoading(false);
+          return;
+        }
+
         const { data: expertProfile } = await supabase
           .from('expert_profiles')
           .select('id')
@@ -76,12 +109,14 @@ export default function AppointmentsPage() {
             .from('appointments')
             .select(`
               id,
+              client_id,
               start_time,
               end_time,
               status,
               total_price,
               notes,
               profiles:client_id (
+                id,
                 full_name,
                 avatar_url,
                 phone
@@ -106,6 +141,7 @@ export default function AppointmentsPage() {
             total_price: apt.total_price,
             notes: apt.notes,
             client: {
+              id: apt.profiles?.id || apt.client_id,
               full_name: apt.profiles?.full_name || '',
               avatar_url: apt.profiles?.avatar_url || '',
               phone: apt.profiles?.phone || '',
@@ -118,8 +154,6 @@ export default function AppointmentsPage() {
           })));
         }
       } else {
-        const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-        
         if (backendMode === 'mock') {
           await new Promise((resolve) => setTimeout(resolve, 300));
           const { mockClientAppointments } = await import('@/lib/backend/mock/data');
@@ -273,12 +307,22 @@ export default function AppointmentsPage() {
   };
 
   const handleStartChat = async (appointment: Appointment) => {
-    if (!userId || !appointment.expert?.id || role !== 'client') return;
+    if (!userId) return;
+    if (role === 'client' && !appointment.expert?.id) return;
+    if (role === 'expert' && !appointment.client) return;
 
     setChatLoadingId(appointment.id);
     setError('');
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
+      const clientId =
+        role === 'client'
+          ? userId
+          : appointment.client?.id || `client-${appointment.id}`;
+      const expertId =
+        role === 'expert'
+          ? appointment.expert_id || userId
+          : appointment.expert!.id;
 
       if (backendMode === 'mock') {
         const { mockChatThreads, mockChatMessagesByThread } = await import(
@@ -286,31 +330,46 @@ export default function AppointmentsPage() {
         );
         let thread = mockChatThreads.find(
           (t) =>
-            t.appointment_id === appointment.id || t.expert_id === appointment.expert?.id
+            t.appointment_id === appointment.id ||
+            (role === 'expert'
+              ? t.client_id === clientId
+              : t.expert_id === expertId)
         );
         if (!thread) {
           thread = {
             id: `thread-${appointment.id}`,
             appointment_id: appointment.id,
-            client_id: userId,
-            expert_id: appointment.expert.id,
+            client_id: clientId,
+            expert_id: expertId,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            partner: {
-              full_name: appointment.expert.full_name,
-              avatar_url: appointment.expert.avatar_url,
+            client: {
+              full_name: appointment.client?.full_name || 'Klient:in',
+              avatar_url: appointment.client?.avatar_url || '',
+            },
+            expert: {
+              full_name: appointment.expert?.full_name || 'Expert:in',
+              avatar_url: appointment.expert?.avatar_url || '',
             },
             offer_title: appointment.offer.title,
             last_message: '',
-            unread_count: 0,
+            unread_count_client: 0,
+            unread_count_expert: 0,
           };
           mockChatThreads.unshift(thread);
           mockChatMessagesByThread[thread.id] = [];
         } else {
-          thread.partner = {
-            full_name: appointment.expert.full_name,
-            avatar_url: appointment.expert.avatar_url,
-          };
+          if (role === 'expert' && appointment.client) {
+            thread.client = {
+              full_name: appointment.client.full_name,
+              avatar_url: appointment.client.avatar_url,
+            };
+          } else if (role === 'client' && appointment.expert) {
+            thread.expert = {
+              full_name: appointment.expert.full_name,
+              avatar_url: appointment.expert.avatar_url,
+            };
+          }
           thread.offer_title = appointment.offer.title;
         }
         router.push(`/app/nachrichten?thread=${thread.id}`);
@@ -319,8 +378,8 @@ export default function AppointmentsPage() {
 
       const thread = await chatService.getOrCreateThread(
         appointment.id,
-        userId,
-        appointment.expert.id
+        clientId,
+        expertId
       );
       router.push(`/app/nachrichten?thread=${thread.id}`);
     } catch (err: any) {
@@ -345,8 +404,9 @@ export default function AppointmentsPage() {
     isFlowOpen,
   } = useAppointmentManageFlow({
     appointments,
+    actor: role === 'expert' ? 'expert' : 'client',
     onCancelled: async (appointmentId) => {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       if (backendMode === 'mock') {
         setAppointments((prev) => prev.filter((apt) => apt.id !== appointmentId));
         return;
@@ -428,7 +488,10 @@ export default function AppointmentsPage() {
       <div
         className={cn(
           'mt-3 grid gap-2',
-          role === 'client' && appointment.expert?.id ? 'grid-cols-2' : 'grid-cols-1'
+          (role === 'client' && appointment.expert?.id) ||
+            (role === 'expert' && appointment.client)
+            ? 'grid-cols-2'
+            : 'grid-cols-1'
         )}
       >
         <Button
@@ -440,7 +503,8 @@ export default function AppointmentsPage() {
           <Eye className="w-3.5 h-3.5 mr-1.5 shrink-0" />
           Details anzeigen
         </Button>
-        {role === 'client' && appointment.expert?.id && (
+        {((role === 'client' && appointment.expert?.id) ||
+          (role === 'expert' && appointment.client)) && (
           <Button
             onClick={() => handleStartChat(appointment)}
             disabled={chatLoadingId === appointment.id}
@@ -700,10 +764,10 @@ export default function AppointmentsPage() {
             : undefined
         }
         onCancel={
-          role === 'client'
+          role === 'client' || role === 'expert'
             ? (id) => {
                 setIsDetailModalOpen(false);
-                openCancel(id);
+                queueMicrotask(() => openCancel(id));
               }
             : undefined
         }

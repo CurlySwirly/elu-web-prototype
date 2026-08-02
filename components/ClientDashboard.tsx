@@ -1,10 +1,12 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { firstNameFrom } from '@/lib/utils/name';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -82,7 +84,7 @@ type DashboardAppointment = ManageableAppointment & {
 };
 
 export default function ClientDashboard() {
-  const { userId } = useAuth();
+  const { user, userId } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [appointments, setAppointments] = useState<DashboardAppointment[]>([]);
@@ -108,27 +110,37 @@ export default function ClientDashboard() {
   const [eventStart, setEventStart] = useState('10:00');
   const [eventEnd, setEventEnd] = useState('11:00');
   const [eventNotes, setEventNotes] = useState('');
-  const [greetingName, setGreetingName] = useState('');
-  const loadData = useCallback(async () => {
-    if (!userId) return;
+  const [greetingName, setGreetingName] = useState(() => firstNameFrom(user?.fullName));
 
-    try {
-      setLoading(true);
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-
-      const resolveGreetingName = (fullName?: string | null) => {
-        try {
+  const resolveGreetingName = useCallback(
+    (fullName?: string | null) => {
+      try {
+        if (userId) {
           const raw = localStorage.getItem(`elu-client-profile-extras:${userId}`);
           if (raw) {
             const extras = JSON.parse(raw) as { firstName?: string; title?: string };
             if (extras.firstName?.trim()) return extras.firstName.trim();
           }
-        } catch {
-          /* ignore */
         }
-        const first = (fullName || '').trim().split(/\s+/)[0];
-        return first || '';
-      };
+      } catch {
+        /* ignore */
+      }
+      return firstNameFrom(fullName || user?.fullName);
+    },
+    [user?.fullName, userId]
+  );
+
+  useEffect(() => {
+    const fromAuth = firstNameFrom(user?.fullName);
+    if (fromAuth) setGreetingName(fromAuth);
+  }, [user?.fullName]);
+
+  const loadData = useCallback(async () => {
+    if (!userId) return;
+
+    try {
+      setLoading(true);
+      const backendMode = getBackendMode();
 
       if (backendMode === 'mock') {
         await new Promise((resolve) => setTimeout(resolve, 250));
@@ -158,7 +170,7 @@ export default function ClientDashboard() {
           .select('full_name')
           .eq('id', userId)
           .maybeSingle();
-        setGreetingName(resolveGreetingName(profileRow?.full_name));
+        setGreetingName(resolveGreetingName(profileRow?.full_name || user?.fullName));
 
         const { data, error } = await supabase
           .from('appointments')
@@ -236,7 +248,9 @@ export default function ClientDashboard() {
       if (backendMode === 'mock') {
         const { mockChatThreads } = await import('@/lib/backend/mock/data');
         setUnreadMessagesCount(
-          mockChatThreads.reduce((sum, t) => sum + (t.unread_count || 0), 0)
+          mockChatThreads
+            .filter((t) => t.client_id === 'mock-user-client' || t.client_id === userId)
+            .reduce((sum, t) => sum + (t.unread_count_client || 0), 0)
         );
       } else {
         const unread = await chatService.getUnreadCount(userId, false);
@@ -247,7 +261,7 @@ export default function ClientDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, user?.fullName, resolveGreetingName]);
 
   useEffect(() => {
     loadData();
@@ -362,7 +376,7 @@ export default function ClientDashboard() {
   } = useAppointmentManageFlow({
     appointments,
     onCancelled: async (appointmentId) => {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       if (backendMode === 'mock') {
         setAppointments((prev) => prev.filter((apt) => apt.id !== appointmentId));
         return;
@@ -487,7 +501,7 @@ export default function ClientDashboard() {
           <Card className="border-0 shadow-none">
             <CardHeader className="pb-1.5 pt-3.5 px-4">
               <CardTitle className="flex items-center gap-2 font-heading text-base text-gray-600">
-                <CalendarIcon className="w-5 h-5 text-primary-green" />
+                <CalendarIcon className="w-5 h-5 text-primary-blue" />
                 Kommende Termine
               </CardTitle>
             </CardHeader>
@@ -840,12 +854,12 @@ export default function ClientDashboard() {
 
             <div className="flex items-center gap-5 text-xs text-gray-600 font-body border-t border-gray-100 pt-3">
               <div className="flex items-center gap-2">
-                <div className="w-3.5 h-3.5 rounded-sm bg-info-bg border border-primary-blue/40" />
-                <span>Termin</span>
-              </div>
-              <div className="flex items-center gap-2">
                 <div className="w-3.5 h-3.5 rounded-sm border-2 border-primary-blue bg-white" />
                 <span>Heute</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3.5 h-3.5 rounded-sm bg-info-bg border border-primary-blue/40" />
+                <span>Termin</span>
               </div>
             </div>
 

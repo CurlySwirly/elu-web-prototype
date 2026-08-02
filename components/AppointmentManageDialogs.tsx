@@ -1,5 +1,6 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -30,7 +31,7 @@ import { format, isBefore, parseISO, startOfDay, startOfToday } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
-import { cancelAppointmentByClient } from '@/lib/services/booking';
+import { cancelAppointmentByClient, cancelAppointmentByExpert } from '@/lib/services/booking';
 import {
   getAvailableTimeSlotsForDate,
   hasAvailabilityOnDate,
@@ -50,6 +51,10 @@ export type ManageableAppointment = {
     full_name: string;
     avatar_url: string;
   };
+  client?: {
+    full_name: string;
+    avatar_url: string;
+  };
   offer: {
     title: string;
     format: string;
@@ -65,6 +70,8 @@ export type AppointmentManageSuccessAction = {
 
 export type UseAppointmentManageFlowOptions = {
   appointments: ManageableAppointment[];
+  /** Who is cancelling — defaults to client */
+  actor?: 'client' | 'expert';
   onCancelled?: (appointmentId: string) => void | Promise<void>;
   onRescheduleSuccessClose?: () => void;
   successAction?: AppointmentManageSuccessAction;
@@ -72,6 +79,7 @@ export type UseAppointmentManageFlowOptions = {
 
 export function useAppointmentManageFlow({
   appointments,
+  actor = 'client',
   onCancelled,
   onRescheduleSuccessClose,
   successAction = { label: 'Schließen' },
@@ -164,7 +172,7 @@ export function useAppointmentManageFlow({
 
     setLoadingAvailability(true);
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
 
       if (backendMode === 'mock') {
         const { mockExpertAvailabilityByExpertId } = await import(
@@ -348,9 +356,10 @@ export function useAppointmentManageFlow({
     setActionLoading(true);
     setActionError('');
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       const appointment = appointments.find((apt) => apt.id === selectedAppointmentId);
       const cancelledId = selectedAppointmentId;
+      const isExpert = actor === 'expert';
 
       if (backendMode === 'mock') {
         await new Promise((resolve) => setTimeout(resolve, 600));
@@ -358,11 +367,19 @@ export function useAppointmentManageFlow({
         const hoursUntilStart = (startTime.getTime() - Date.now()) / (1000 * 60 * 60);
         const refundAmount = hoursUntilStart >= 48 ? appointment?.total_price || 0 : 0;
 
-        setActionMessage(
-          refundAmount > 0
-            ? `Termin storniert. Du erhältst €${refundAmount.toFixed(2)} zurück.`
-            : 'Termin storniert. Da die Stornierung weniger als 48 Stunden vor dem Termin erfolgte, wird der Betrag nicht erstattet.'
-        );
+        if (isExpert) {
+          setActionMessage(
+            refundAmount > 0
+              ? `Termin abgesagt. Die Kund:in erhält €${refundAmount.toFixed(2)} zurück.`
+              : 'Termin abgesagt. Da die Absage weniger als 48 Stunden vor dem Termin erfolgte, wird der Betrag nicht erstattet.'
+          );
+        } else {
+          setActionMessage(
+            refundAmount > 0
+              ? `Termin storniert. Du erhältst €${refundAmount.toFixed(2)} zurück.`
+              : 'Termin storniert. Da die Stornierung weniger als 48 Stunden vor dem Termin erfolgte, wird der Betrag nicht erstattet.'
+          );
+        }
         setIsCancelOpen(false);
         setSelectedAppointmentId(null);
         await onCancelled?.(cancelledId);
@@ -370,22 +387,32 @@ export function useAppointmentManageFlow({
         return;
       }
 
-      const result = await cancelAppointmentByClient(cancelledId, '');
+      const result = isExpert
+        ? await cancelAppointmentByExpert(cancelledId, '')
+        : await cancelAppointmentByClient(cancelledId, '');
       if (!result.success) {
-        throw new Error(result.error || 'Fehler bei der Stornierung');
+        throw new Error(result.error || 'Fehler bei der Absage');
       }
 
-      setActionMessage(
-        result.refund_amount && result.refund_amount > 0
-          ? `Termin storniert. Du erhältst €${result.refund_amount.toFixed(2)} zurück.`
-          : 'Termin storniert. Da die Stornierung weniger als 48 Stunden vor dem Termin erfolgte, wird der Betrag nicht erstattet.'
-      );
+      if (isExpert) {
+        setActionMessage(
+          result.refund_amount && result.refund_amount > 0
+            ? `Termin abgesagt. Die Kund:in erhält €${result.refund_amount.toFixed(2)} zurück.`
+            : 'Termin abgesagt. Da die Absage weniger als 48 Stunden vor dem Termin erfolgte, wird der Betrag nicht erstattet.'
+        );
+      } else {
+        setActionMessage(
+          result.refund_amount && result.refund_amount > 0
+            ? `Termin storniert. Du erhältst €${result.refund_amount.toFixed(2)} zurück.`
+            : 'Termin storniert. Da die Stornierung weniger als 48 Stunden vor dem Termin erfolgte, wird der Betrag nicht erstattet.'
+        );
+      }
       setIsCancelOpen(false);
       setSelectedAppointmentId(null);
       await onCancelled?.(cancelledId);
       setTimeout(() => setActionMessage(''), 5000);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Fehler bei der Stornierung';
+      const message = err instanceof Error ? err.message : 'Fehler bei der Absage';
       setActionError(message);
     } finally {
       setActionLoading(false);
@@ -738,10 +765,12 @@ export function useAppointmentManageFlow({
             </div>
             <DialogHeader className="space-y-2">
               <DialogTitle className="font-heading text-xl sm:text-2xl font-bold text-text-dark text-center">
-                Termin wirklich stornieren?
+                {actor === 'expert' ? 'Termin wirklich absagen?' : 'Termin wirklich stornieren?'}
               </DialogTitle>
               <DialogDescription className="font-body text-gray-500 text-center max-w-sm mx-auto text-sm">
-                Möchtest du diesen Termin wirklich stornieren? Diese Aktion kann nicht rückgängig gemacht werden.
+                {actor === 'expert'
+                  ? 'Möchtest du diesen Termin wirklich absagen? Die Kund:in wird benachrichtigt. Diese Aktion kann nicht rückgängig gemacht werden.'
+                  : 'Möchtest du diesen Termin wirklich stornieren? Diese Aktion kann nicht rückgängig gemacht werden.'}
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -751,11 +780,23 @@ export function useAppointmentManageFlow({
               <div className="flex items-start gap-3">
                 <Avatar className="w-11 h-11 shrink-0">
                   <AvatarImage
-                    src={selectedAppointment.expert?.avatar_url}
-                    alt={selectedAppointment.expert?.full_name}
+                    src={
+                      actor === 'expert'
+                        ? selectedAppointment.client?.avatar_url
+                        : selectedAppointment.expert?.avatar_url
+                    }
+                    alt={
+                      actor === 'expert'
+                        ? selectedAppointment.client?.full_name
+                        : selectedAppointment.expert?.full_name
+                    }
                   />
                   <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white text-xs font-heading">
-                    {(selectedAppointment.expert?.full_name || '?')
+                    {(
+                      (actor === 'expert'
+                        ? selectedAppointment.client?.full_name
+                        : selectedAppointment.expert?.full_name) || '?'
+                    )
                       .split(' ')
                       .map((n) => n[0])
                       .join('')}
@@ -764,9 +805,16 @@ export function useAppointmentManageFlow({
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2 sm:gap-3">
-                    <p className="font-heading font-semibold text-text-dark leading-snug truncate">
-                      {selectedAppointment.offer.title}
-                    </p>
+                    <div className="min-w-0">
+                      <p className="font-heading font-semibold text-text-dark leading-snug truncate">
+                        {selectedAppointment.offer.title}
+                      </p>
+                      {actor === 'expert' && selectedAppointment.client?.full_name ? (
+                        <p className="text-xs text-gray-500 font-body mt-0.5 truncate">
+                          {selectedAppointment.client.full_name}
+                        </p>
+                      ) : null}
+                    </div>
                     <p className="font-heading font-bold text-text-dark shrink-0 text-sm sm:text-base">
                       €{Number(selectedAppointment.total_price).toFixed(2)}
                     </p>
@@ -801,6 +849,28 @@ export function useAppointmentManageFlow({
                 (1000 * 60 * 60);
               const refundEligible = hoursUntilStart >= 48;
 
+              if (actor === 'expert') {
+                if (refundEligible) {
+                  return (
+                    <Alert className="border-primary-green/40 bg-primary-green/15">
+                      <AlertDescription className="text-text-dark font-body text-sm text-left">
+                        Du sagst rechtzeitig ab (mindestens 48 Stunden vorher) – der Betrag wird der
+                        Kund:in vollständig erstattet.
+                      </AlertDescription>
+                    </Alert>
+                  );
+                }
+                return (
+                  <Alert className="border-amber-300 bg-amber-50">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-900 font-body text-sm text-left">
+                      Achtung: Der Termin liegt in weniger als 48 Stunden. Bei Absage wird der Betrag
+                      der Kund:in nicht zurückerstattet.
+                    </AlertDescription>
+                  </Alert>
+                );
+              }
+
               if (refundEligible) {
                 return (
                   <Alert className="border-primary-green/40 bg-primary-green/15">
@@ -825,29 +895,45 @@ export function useAppointmentManageFlow({
             <p className="text-sm text-red-600 font-body text-center">{actionError}</p>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <Button
-              variant="outline"
-              onClick={async () => {
-                const appointmentId = selectedAppointmentId;
-                setIsCancelOpen(false);
-                setActionError('');
-                if (appointmentId) {
-                  await openReschedule(appointmentId);
-                }
-              }}
-              className="font-body border-2 rounded-xl py-5 sm:py-6 text-text-dark hover:bg-gray-50 order-2 sm:order-1 text-sm"
-            >
-              <CalendarClock className="w-4 h-4 mr-2 shrink-0" />
-              Termin verschieben
-            </Button>
+          <div
+            className={cn(
+              'grid gap-3 pt-1',
+              actor === 'expert' ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'
+            )}
+          >
+            {actor === 'client' && (
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  const appointmentId = selectedAppointmentId;
+                  setIsCancelOpen(false);
+                  setActionError('');
+                  if (appointmentId) {
+                    await openReschedule(appointmentId);
+                  }
+                }}
+                className="font-body border-2 rounded-xl py-5 sm:py-6 text-text-dark hover:bg-gray-50 order-2 sm:order-1 text-sm"
+              >
+                <CalendarClock className="w-4 h-4 mr-2 shrink-0" />
+                Termin verschieben
+              </Button>
+            )}
             <Button
               onClick={handleSubmitCancel}
               disabled={actionLoading}
-              className="font-body rounded-xl py-5 sm:py-6 bg-red-500 hover:bg-red-600 text-white order-1 sm:order-2 text-sm"
+              className={cn(
+                'font-body rounded-xl py-5 sm:py-6 bg-red-500 hover:bg-red-600 text-white text-sm',
+                actor === 'client' && 'order-1 sm:order-2'
+              )}
             >
               <Trash2 className="w-4 h-4 mr-2 shrink-0" />
-              {actionLoading ? 'Wird storniert…' : 'Termin stornieren'}
+              {actionLoading
+                ? actor === 'expert'
+                  ? 'Wird abgesagt…'
+                  : 'Wird storniert…'
+                : actor === 'expert'
+                  ? 'Termin absagen'
+                  : 'Termin stornieren'}
             </Button>
           </div>
         </DialogContent>

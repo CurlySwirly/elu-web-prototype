@@ -6,14 +6,20 @@ import ExpertDashboard from '@/components/ExpertDashboard';
 import ClientDashboard from '@/components/ClientDashboard';
 
 function DashboardContent() {
-  const { role } = useAuth();
+  const { role, loading } = useAuth();
 
-  if (role === 'client') {
-    return <ClientDashboard />;
+  if (loading) {
+    return (
+      <div className="p-3 sm:p-4 lg:p-5 font-body text-gray-500">Wird geladen…</div>
+    );
   }
 
   if (role === 'expert') {
     return <ExpertDashboard />;
+  }
+
+  if (role === 'client') {
+    return <ClientDashboard />;
   }
 
   return null;

@@ -1,5 +1,6 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -39,7 +40,7 @@ export default function BookingRequests() {
     try {
       setLoading(true);
       
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       
       if (backendMode === 'mock') {
         await new Promise(resolve => setTimeout(resolve, 300));

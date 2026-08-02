@@ -1,12 +1,19 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { firstNameFrom } from '@/lib/utils/name';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import {
   Calendar,
   TrendingUp,
@@ -20,8 +27,9 @@ import {
   Briefcase,
   CalendarClock,
   CreditCard,
-  ShieldCheck,
-  Star
+  Star,
+  ArrowRight,
+  ChevronDown,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import AppointmentCalendar from './AppointmentCalendar';
@@ -29,6 +37,7 @@ import { reviewService } from '@/lib/services/review';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
 
 interface ExpertProfile {
   id: string;
@@ -56,20 +65,106 @@ export default function ExpertDashboard() {
   const { user } = useAuth();
   const [expertProfile, setExpertProfile] = useState<ExpertProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [greetingName, setGreetingName] = useState(() => firstNameFrom(user?.fullName));
   const [stats, setStats] = useState({
     weeklyAppointments: 0,
-    activeClients: 0,
+    newBookings: 0,
     monthlyRevenue: 0
   });
   const [recentReviews, setRecentReviews] = useState<any[]>([]);
+  const [showVerifiedToast, setShowVerifiedToast] = useState(false);
+  const [reviewsOpen, setReviewsOpen] = useState(true);
+
+  useEffect(() => {
+    const fromAuth = firstNameFrom(user?.fullName);
+    if (fromAuth) setGreetingName(fromAuth);
+  }, [user?.fullName]);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('elu-mock-just-verified') === '1') {
+        setShowVerifiedToast(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const dismissVerifiedToast = () => {
+    setShowVerifiedToast(false);
+    try {
+      sessionStorage.removeItem('elu-mock-just-verified');
+    } catch {
+      /* ignore */
+    }
+  };
 
   const fetchExpertData = useCallback(async () => {
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       
       if (backendMode === 'mock') {
-        // Use mock verified expert profile
         await new Promise(resolve => setTimeout(resolve, 300));
+        const {
+          mockExperts,
+          mockExpertAppointments,
+          mockOnboardingExpertProfile,
+          MOCK_ONBOARDING_EXPERT_USER_ID,
+        } = await import('@/lib/backend/mock/data');
+
+        const isOnboardingDemo = user?.id === MOCK_ONBOARDING_EXPERT_USER_ID;
+
+        if (isOnboardingDemo) {
+          let checklistOverrides: Partial<typeof mockOnboardingExpertProfile> = {};
+          try {
+            const raw = sessionStorage.getItem('elu-mock-expert-checklist');
+            if (raw) checklistOverrides = JSON.parse(raw);
+          } catch {
+            /* ignore */
+          }
+
+          setGreetingName(
+            firstNameFrom(
+              checklistOverrides.full_name ||
+                mockOnboardingExpertProfile.full_name ||
+                user?.fullName
+            )
+          );
+          setExpertProfile({
+            id: mockOnboardingExpertProfile.id,
+            verification_status:
+              checklistOverrides.verification_status ||
+              mockOnboardingExpertProfile.verification_status,
+            checklist_stammdaten_completed:
+              checklistOverrides.checklist_stammdaten_completed ??
+              mockOnboardingExpertProfile.checklist_stammdaten_completed,
+            checklist_qualifications_uploaded:
+              checklistOverrides.checklist_qualifications_uploaded ??
+              mockOnboardingExpertProfile.checklist_qualifications_uploaded,
+            checklist_offers_created:
+              checklistOverrides.checklist_offers_created ??
+              mockOnboardingExpertProfile.checklist_offers_created,
+            checklist_availability_set:
+              checklistOverrides.checklist_availability_set ??
+              mockOnboardingExpertProfile.checklist_availability_set,
+            checklist_stripe_connected:
+              checklistOverrides.checklist_stripe_connected ??
+              mockOnboardingExpertProfile.checklist_stripe_connected,
+            qualification_verified:
+              checklistOverrides.qualification_verified ??
+              mockOnboardingExpertProfile.qualification_verified,
+            bio: checklistOverrides.bio ?? mockOnboardingExpertProfile.bio,
+            profile_image_url:
+              checklistOverrides.profile_image_url ??
+              mockOnboardingExpertProfile.profile_image_url,
+          });
+          setStats({ weeklyAppointments: 0, newBookings: 0, monthlyRevenue: 0 });
+          setRecentReviews([]);
+          setLoading(false);
+          return;
+        }
+
+        setGreetingName(firstNameFrom(mockExperts[0]?.full_name || user?.fullName));
         setExpertProfile({
           id: 'mock-expert-1',
           verification_status: 'verified',
@@ -84,32 +179,40 @@ export default function ExpertDashboard() {
         });
         
         // Calculate mock stats from mock appointments
-        const { mockExpertAppointments } = await import('@/lib/backend/mock/data');
         const now = new Date();
         const weekStart = new Date(now);
         weekStart.setDate(now.getDate() - now.getDay() + 1); // Monday
+        weekStart.setHours(0, 0, 0, 0);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekStart.getDate() + 7);
         
         const weeklyAppointments = mockExpertAppointments.filter(apt => {
           const aptDate = new Date(apt.start_time);
-          return aptDate >= weekStart && aptDate < weekEnd;
+          return (
+            aptDate >= weekStart &&
+            aptDate < weekEnd &&
+            (apt.status === 'confirmed' || apt.status === 'completed')
+          );
         }).length;
-        
-        const uniqueClients = new Set(mockExpertAppointments.map(apt => apt.client?.full_name)).size;
+
+        const newBookings = mockExpertAppointments.filter((apt) => apt.is_new_booking).length;
         
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
         const monthlyRevenue = mockExpertAppointments
           .filter(apt => {
             const aptDate = new Date(apt.start_time);
-            return aptDate >= monthStart && aptDate <= monthEnd && apt.status === 'confirmed';
+            return (
+              aptDate >= monthStart &&
+              aptDate <= monthEnd &&
+              (apt.status === 'confirmed' || apt.status === 'completed')
+            );
           })
           .reduce((sum, apt) => sum + (apt.total_price || 0), 0);
         
         setStats({
           weeklyAppointments,
-          activeClients: uniqueClients,
+          newBookings,
           monthlyRevenue,
         });
         
@@ -197,6 +300,13 @@ export default function ExpertDashboard() {
         .eq('user_id', user?.id)
         .maybeSingle();
 
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user?.id)
+        .maybeSingle();
+      setGreetingName(firstNameFrom(userProfile?.full_name || user?.fullName));
+
       if (profile) {
         setExpertProfile(profile);
         
@@ -218,7 +328,9 @@ export default function ExpertDashboard() {
             return aptDate >= weekStart && aptDate < weekEnd;
           }).length;
           
-          const uniqueClients = new Set(appointments.map(apt => apt.client_id)).size;
+          const newBookings = appointments.filter(
+            (apt) => apt.status === 'confirmed' || apt.status === 'requested'
+          ).length;
           
           const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
           const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -231,7 +343,7 @@ export default function ExpertDashboard() {
           
           setStats({
             weeklyAppointments,
-            activeClients: uniqueClients,
+            newBookings,
             monthlyRevenue,
           });
         }
@@ -249,7 +361,7 @@ export default function ExpertDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, user?.fullName]);
 
   useEffect(() => {
     if (user?.id) {
@@ -324,41 +436,59 @@ export default function ExpertDashboard() {
 
   const verificationStatus = expertProfile?.verification_status || 'not_verified_incomplete';
   const isVerified = verificationStatus === 'verified';
-  const isPendingReview = verificationStatus === 'not_verified_pending_review';
-  const isIncomplete = verificationStatus === 'not_verified_incomplete';
+  const isPendingReview =
+    verificationStatus === 'not_verified_pending_review' ||
+    (verificationStatus === 'pending' &&
+      !!expertProfile?.checklist_qualifications_uploaded &&
+      !expertProfile?.qualification_verified);
+  const isIncomplete =
+    !isVerified &&
+    !isPendingReview &&
+    (verificationStatus === 'not_verified_incomplete' ||
+      verificationStatus === 'pending' ||
+      verificationStatus === 'rejected');
+  const isProfileOnline = isVerified;
 
   const getStatusBadge = () => {
-    if (isVerified) {
+    if (isProfileOnline) {
       return (
-        <Badge className="text-text-dark text-base px-4 py-2" style={{ backgroundColor: '#E2E8FB', borderColor: '#6D8EEC', borderWidth: '1px' }}>
-          <ShieldCheck className="w-4 h-4 mr-2" style={{ color: '#6D8EEC' }} />
-          <span style={{ color: '#6D8EEC' }}>Verified Expert</span>
-        </Badge>
-      );
-    }
-    if (isPendingReview) {
-      return (
-        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-base px-4 py-2">
-          <Clock className="w-4 h-4 mr-2" />
-          Qualifikation in Prüfung
+        <Badge
+          className="text-text-dark text-sm px-3 py-1.5 font-body"
+          style={{ backgroundColor: '#E2E8FB', borderColor: '#6D8EEC', borderWidth: '1px' }}
+        >
+          <CheckCircle2 className="w-4 h-4 mr-1.5" style={{ color: '#6D8EEC' }} />
+          <span style={{ color: '#6D8EEC' }}>Profil: online</span>
         </Badge>
       );
     }
     return (
-      <Badge variant="outline" className="text-gray-600 text-base px-4 py-2">
-        <Circle className="w-4 h-4 mr-2" />
-        Profil unvollständig
+      <Badge variant="outline" className="text-gray-600 text-sm px-3 py-1.5 font-body border-gray-300">
+        <Circle className="w-4 h-4 mr-1.5" />
+        Profil: offline
       </Badge>
     );
   };
 
   const getAlertMessage = () => {
     if (isVerified) {
+      if (!showVerifiedToast) return null;
       return (
         <Alert className="border-2" style={{ backgroundColor: '#E2E8FB', borderColor: '#6D8EEC' }}>
           <CheckCircle2 className="h-5 w-5" style={{ color: '#6D8EEC' }} />
-          <AlertDescription className="ml-2 text-text-dark">
-            <strong className="font-semibold">Du bist verifiziert!</strong> Dein Profil ist jetzt sichtbar und buchbar. Klient:innen können dich finden und Termine vereinbaren.
+          <AlertDescription className="ml-2 text-text-dark flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <span>
+              <strong className="font-semibold">Du bist verifiziert!</strong> Dein Profil ist jetzt
+              sichtbar und buchbar.
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="font-body shrink-0 bg-white"
+              onClick={dismissVerifiedToast}
+            >
+              Schließen
+            </Button>
           </AlertDescription>
         </Alert>
       );
@@ -385,40 +515,56 @@ export default function ExpertDashboard() {
 
   return (
     <div className="p-3 sm:p-4 lg:p-5 space-y-4 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
-            Expert:innen Dashboard
-          </h1>
-          <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
-            Verwalte deine Angebote, Termine und Finanzen
-          </p>
+      <section className="relative overflow-hidden rounded-2xl border-2 border-primary-blue/15 bg-white">
+        <div className="absolute inset-0 bg-gradient-to-br from-info-bg/80 via-white to-primary-green/15" />
+        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-primary-blue/10 blur-2xl" />
+        <div className="absolute -bottom-20 -left-10 h-48 w-48 rounded-full bg-primary-green/20 blur-2xl" />
+
+        <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 sm:p-6 md:p-7">
+          <div className="max-w-xl space-y-2">
+            <h1 className="font-heading text-xl sm:text-2xl md:text-3xl font-bold text-text-dark leading-tight">
+              Willkommen
+              {greetingName ? (
+                <>
+                  ,{' '}
+                  <span className="bg-gradient-to-r from-primary-blue to-primary-green bg-clip-text text-transparent">
+                    {greetingName}
+                  </span>
+                </>
+              ) : null}
+              !
+            </h1>
+            <p className="font-body text-gray-600 text-sm leading-relaxed">
+              Verwalte deine Angebote, Termine und Finanzen.
+            </p>
+          </div>
+
+          <div className="shrink-0">{getStatusBadge()}</div>
         </div>
-        {getStatusBadge()}
-      </div>
+      </section>
 
       {getAlertMessage()}
 
       {!isVerified && (
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="font-heading text-xl">Verifizierungs-Checkliste</CardTitle>
-            <CardDescription className="font-body text-base">
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="px-4 sm:px-5 pt-4 pb-2 space-y-1">
+            <CardTitle className="font-heading text-base sm:text-lg">
+              Verifizierungs-Checkliste
+            </CardTitle>
+            <CardDescription className="font-body text-xs sm:text-sm">
               {completedItems} von {checklist.length} Schritten abgeschlossen
-              {inReviewItems > 0 && ` • ${inReviewItems} in Prüfung`}
+              {inReviewItems > 0 && ` · ${inReviewItems} in Prüfung`}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div
-                  className="bg-gradient-to-r from-primary-blue to-primary-green h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${(completedItems / checklist.length) * 100}%` }}
-                ></div>
-              </div>
+          <CardContent className="px-4 sm:px-5 pb-4 space-y-3">
+            <div className="w-full bg-gray-100 rounded-full h-1.5">
+              <div
+                className="bg-gradient-to-r from-primary-blue to-primary-green h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${(completedItems / checklist.length) * 100}%` }}
+              />
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-2">
               {checklist.map((item) => {
                 const Icon = item.icon;
                 const isComplete = item.status === 'completed';
@@ -427,54 +573,59 @@ export default function ExpertDashboard() {
                 return (
                   <div
                     key={item.key}
-                    className={`flex items-start gap-4 p-4 rounded-lg border-2 transition-all ${
+                    className={`flex items-start gap-2.5 p-2.5 sm:p-3 rounded-lg border transition-colors ${
                       isComplete
-                        ? 'bg-primary-green/10 border-primary-green'
+                        ? 'bg-primary-green/10 border-primary-green/40'
                         : isInReview
-                        ? 'bg-yellow-50 border-yellow-200'
-                        : 'bg-white border-gray-200 hover:border-primary-blue'
+                          ? 'bg-yellow-50 border-yellow-200'
+                          : 'bg-white border-gray-200 hover:border-primary-blue/50'
                     }`}
                   >
-                    <div className={`mt-1 ${
-                      isComplete
-                        ? 'text-primary-green'
-                        : isInReview
-                        ? 'text-yellow-600'
-                        : 'text-gray-400'
-                    }`}>
+                    <div
+                      className={`mt-0.5 shrink-0 ${
+                        isComplete
+                          ? 'text-primary-green'
+                          : isInReview
+                            ? 'text-yellow-600'
+                            : 'text-gray-400'
+                      }`}
+                    >
                       {isComplete ? (
-                        <CheckCircle2 className="w-6 h-6" />
+                        <CheckCircle2 className="w-4 h-4" />
                       ) : isInReview ? (
-                        <Clock className="w-6 h-6" />
+                        <Clock className="w-4 h-4" />
                       ) : (
-                        <Circle className="w-6 h-6" />
+                        <Circle className="w-4 h-4" />
                       )}
                     </div>
 
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <h3 className="font-heading font-semibold text-lg text-text-dark mb-1">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-heading font-semibold text-sm text-text-dark">
                             {item.title}
                           </h3>
-                          <p className="text-gray-600 font-body text-sm mb-3">
+                          <p className="text-gray-500 font-body text-xs mt-0.5 leading-relaxed">
                             {item.description}
                           </p>
                           {isInReview && (
-                            <p className="text-xs text-yellow-700 font-semibold">
-                              ⏳ Dokument hochgeladen – warte auf Admin-Freigabe
+                            <p className="text-[11px] text-yellow-700 font-medium mt-1">
+                              Dokument hochgeladen – warte auf Freigabe
                             </p>
                           )}
                         </div>
-                        <Icon className="w-8 h-8 text-primary-blue flex-shrink-0" />
+                        <Icon className="w-4 h-4 text-primary-blue shrink-0 mt-0.5" />
                       </div>
 
                       {!isInReview && (
-                        <Link href={item.link}>
+                        <Link href={item.link} className="inline-block mt-2">
                           <Button
                             variant={isComplete ? 'outline' : 'default'}
                             size="sm"
-                            className={isComplete ? '' : 'bg-primary-blue hover:bg-primary-blue/90'}
+                            className={cn(
+                              'h-7 text-xs font-body px-2.5',
+                              isComplete ? '' : 'bg-primary-blue hover:bg-primary-blue/90'
+                            )}
                           >
                             {isComplete ? 'Bearbeiten' : 'Jetzt ausfüllen'}
                           </Button>
@@ -487,16 +638,16 @@ export default function ExpertDashboard() {
             </div>
 
             {isPendingReview && (
-              <div className="mt-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Clock className="w-6 h-6 text-yellow-600 flex-shrink-0" />
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start gap-2.5">
+                  <Clock className="w-4 h-4 text-yellow-600 shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-heading font-semibold text-yellow-900 mb-1">
-                      Checkliste vollständig!
+                    <h4 className="font-heading font-semibold text-sm text-yellow-900">
+                      Checkliste vollständig
                     </h4>
-                    <p className="text-sm text-yellow-700 font-body">
-                      Alle Schritte sind abgeschlossen. Deine Qualifikationen werden gerade von unserem Team geprüft.
-                      Du erhältst eine E-Mail, sobald dein Profil freigegeben ist.
+                    <p className="text-xs text-yellow-700 font-body mt-0.5 leading-relaxed">
+                      Alle Schritte sind abgeschlossen. Deine Qualifikationen werden geprüft – du
+                      erhältst eine E-Mail nach Freigabe.
                     </p>
                   </div>
                 </div>
@@ -509,134 +660,173 @@ export default function ExpertDashboard() {
       {isVerified && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Card className="border-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 font-heading text-lg">
-                  <Calendar className="w-5 h-5 text-primary-blue" />
-                  Termine diese Woche
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-heading font-bold text-text-dark">{stats.weeklyAppointments}</p>
-              </CardContent>
-            </Card>
+            <Link
+              href="/app/kalender"
+              className="relative block rounded-xl border-2 bg-white transition-colors outline-none hover:border-primary-blue focus-visible:ring-2 focus-visible:ring-primary-blue"
+            >
+              <Card className="border-0 shadow-none">
+                <CardHeader className="pb-1.5 pt-3.5 px-4">
+                  <CardTitle className="flex items-center gap-2 font-heading text-base text-gray-600">
+                    <Calendar className="w-5 h-5 text-primary-blue" />
+                    Termine diese Woche
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3.5">
+                  <p className="text-3xl font-heading font-bold text-text-dark">
+                    {stats.weeklyAppointments}
+                  </p>
+                </CardContent>
+              </Card>
+              <ArrowRight className="absolute bottom-3.5 right-3.5 w-4 h-4 text-primary-blue" aria-hidden />
+            </Link>
 
-            <Card className="border-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 font-heading text-lg">
-                  <Users className="w-5 h-5 text-primary-blue" />
-                  Aktive Kund:innen
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-heading font-bold text-text-dark">{stats.activeClients}</p>
-              </CardContent>
-            </Card>
+            <Link
+              href="/app/termine"
+              className="relative block rounded-xl border-2 bg-white transition-colors outline-none hover:border-primary-blue focus-visible:ring-2 focus-visible:ring-primary-blue"
+            >
+              <Card className="border-0 shadow-none">
+                <CardHeader className="pb-1.5 pt-3.5 px-4">
+                  <CardTitle className="flex items-center gap-2 font-heading text-base text-gray-600">
+                    <Users className="w-5 h-5 text-primary-blue" />
+                    Neue Buchungen
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3.5">
+                  <p className="text-3xl font-heading font-bold text-text-dark">
+                    {stats.newBookings}
+                  </p>
+                </CardContent>
+              </Card>
+              <ArrowRight className="absolute bottom-3.5 right-3.5 w-4 h-4 text-primary-blue" aria-hidden />
+            </Link>
 
-            <Card className="border-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 font-heading text-lg">
-                  <TrendingUp className="w-5 h-5 text-primary-blue" />
-                  Umsatz diesen Monat
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-heading font-bold text-text-dark">€{stats.monthlyRevenue.toFixed(2)}</p>
-              </CardContent>
-            </Card>
+            <Link
+              href="/app/finanzen"
+              className="relative block rounded-xl border-2 bg-white transition-colors outline-none hover:border-primary-blue focus-visible:ring-2 focus-visible:ring-primary-blue"
+            >
+              <Card className="border-0 shadow-none">
+                <CardHeader className="pb-1.5 pt-3.5 px-4">
+                  <CardTitle className="flex items-center gap-2 font-heading text-base text-gray-600">
+                    <TrendingUp className="w-5 h-5 text-primary-blue" />
+                    Umsatz diesen Monat
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-3.5">
+                  <p className="text-3xl font-heading font-bold text-text-dark">
+                    €{stats.monthlyRevenue.toFixed(2)}
+                  </p>
+                </CardContent>
+              </Card>
+              <ArrowRight className="absolute bottom-3.5 right-3.5 w-4 h-4 text-primary-blue" aria-hidden />
+            </Link>
           </div>
 
           <div>
             <AppointmentCalendar role="expert" />
           </div>
 
-          {/* Recent Reviews */}
+          {/* Recent Reviews – same layout as client-facing expert profile */}
           {recentReviews.length > 0 && (
-            <Card className="border-2">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="font-heading text-xl">Aktuelle Bewertungen</CardTitle>
-                    <CardDescription className="font-body">
-                      Die letzten {recentReviews.length} Bewertungen von Kund:innen
-                    </CardDescription>
-                  </div>
-                  <Link href="/app/expert-profil#reviews">
-                    <Button variant="outline" size="sm" className="font-body">
-                      Alle Bewertungen
-                    </Button>
-                  </Link>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentReviews.map((review) => (
-                    <div key={review.id} className="p-4 border-2 rounded-lg bg-white">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          {review.client && (
-                            <Avatar className="w-10 h-10">
-                              <AvatarImage src={review.client.avatar_url} />
-                              <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white">
-                                {review.client.full_name.split(' ').map((n: string) => n[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                          )}
-                          <div>
-                            <p className="font-heading font-semibold text-text-dark">
-                              {review.client?.full_name || 'Anonym'}
-                            </p>
-                            <div className="flex items-center gap-1">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star
-                                  key={star}
-                                  className={`w-4 h-4 ${
-                                    star <= review.rating
-                                      ? 'fill-yellow-400 text-yellow-400'
-                                      : 'text-gray-300'
-                                  }`}
-                                />
-                              ))}
-                              <span className="text-sm text-gray-600 ml-2 font-body">
-                                {format(parseISO(review.created_at), 'dd. MMM yyyy', { locale: de })}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      {review.appointment && (
-                        <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                          <p className="text-sm font-heading font-semibold text-text-dark mb-1">
-                            Session: {review.appointment.offer?.title || 'Unbekanntes Angebot'}
-                          </p>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-4 h-4" />
-                              {format(parseISO(review.appointment.start_time), 'dd. MMMM yyyy', { locale: de })}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-4 h-4" />
-                              {format(parseISO(review.appointment.start_time), 'HH:mm', { locale: de })} - {format(parseISO(review.appointment.end_time), 'HH:mm', { locale: de })}
-                            </div>
-                            {review.appointment.offer?.format && (
-                              <Badge variant="outline" className="text-xs">
-                                {review.appointment.offer.format}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      <h4 className="font-heading font-semibold text-lg text-text-dark mb-2 mt-3">
-                        {review.title}
-                      </h4>
-                      <p className="text-gray-700 font-body leading-relaxed">
-                        {review.review_text}
+            <Collapsible open={reviewsOpen} onOpenChange={setReviewsOpen}>
+              <Card className="border-2 overflow-hidden">
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-4 text-left hover:bg-gray-50/80 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-heading text-lg sm:text-xl font-semibold text-text-dark">
+                        Aktuelle Bewertungen
+                      </p>
+                      <p className="text-sm text-gray-500 font-body mt-0.5">
+                        Die letzten {recentReviews.length} Bewertungen von Kund:innen
                       </p>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    <ChevronDown
+                      className={cn(
+                        'w-5 h-5 text-gray-500 shrink-0 transition-transform duration-200',
+                        reviewsOpen && 'rotate-180'
+                      )}
+                    />
+                  </button>
+                </CollapsibleTrigger>
+
+                <CollapsibleContent>
+                  <CardContent className="px-4 sm:px-5 pb-4 sm:pb-5 pt-0 border-t border-gray-100">
+                    <div className="space-y-3 pt-4">
+                      {recentReviews.map((review) => (
+                        <div
+                          key={review.id}
+                          className="rounded-xl border border-gray-100 bg-gray-50/60 p-4"
+                        >
+                          <div className="flex items-start gap-3 sm:gap-4">
+                            <div className="flex flex-col items-center w-[4.5rem] shrink-0">
+                              <Avatar className="w-11 h-11">
+                                <AvatarImage
+                                  src={review.client?.avatar_url}
+                                  alt={review.client?.full_name}
+                                />
+                                <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white font-heading text-xs">
+                                  {(review.client?.full_name || 'A')
+                                    .split(' ')
+                                    .map((n: string) => n[0])
+                                    .join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <p className="font-heading font-semibold text-text-dark text-xs text-center mt-2 leading-snug line-clamp-2 w-full">
+                                {review.client?.full_name || 'Anonym'}
+                              </p>
+                            </div>
+
+                            <div className="min-w-0 flex-1 flex flex-col gap-2">
+                              <div className="flex items-start justify-between gap-3">
+                                {review.title ? (
+                                  <p className="font-heading font-semibold text-text-dark text-sm leading-snug min-w-0">
+                                    {review.title}
+                                  </p>
+                                ) : (
+                                  <span className="min-w-0" />
+                                )}
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <Star
+                                      key={star}
+                                      className={`w-3.5 h-3.5 ${
+                                        star <= review.rating
+                                          ? 'fill-yellow-400 text-yellow-400'
+                                          : 'text-gray-300'
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-600 font-body leading-relaxed">
+                                {review.review_text}
+                              </p>
+
+                              <div className="mt-auto flex items-end justify-between gap-3 pt-1">
+                                {review.appointment?.offer?.title ? (
+                                  <p className="text-xs text-gray-500 font-body min-w-0 truncate">
+                                    Session: {review.appointment.offer.title}
+                                  </p>
+                                ) : (
+                                  <span />
+                                )}
+                                <span className="text-xs text-gray-500 font-body shrink-0">
+                                  {format(parseISO(review.created_at), 'dd. MMM yyyy', {
+                                    locale: de,
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
           )}
 
           <Card className="border-2 mt-6">

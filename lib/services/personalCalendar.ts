@@ -1,3 +1,4 @@
+import { getBackendMode } from '@/lib/backend/mode';
 import { supabase } from '@/lib/supabase';
 
 export interface PersonalCalendarEvent {
@@ -14,7 +15,7 @@ export async function getMyPersonalEvents(): Promise<{
   data: PersonalCalendarEvent[] | null;
   error: any;
 }> {
-  const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+  const backendMode = getBackendMode();
   if (backendMode === 'mock') {
     const { mockPersonalCalendarEvents } = await import('@/lib/backend/mock/data');
     return {
@@ -45,7 +46,7 @@ export async function createPersonalEvent(input: {
   start_time: string;
   end_time: string;
 }): Promise<{ data: PersonalCalendarEvent | null; error: any }> {
-  const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+  const backendMode = getBackendMode();
   if (backendMode === 'mock') {
     const { mockPersonalCalendarEvents } = await import('@/lib/backend/mock/data');
     const event: PersonalCalendarEvent = {
@@ -84,7 +85,7 @@ export async function createPersonalEvent(input: {
 export async function deletePersonalEvent(
   eventId: string
 ): Promise<{ success: boolean; error?: any }> {
-  const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+  const backendMode = getBackendMode();
   if (backendMode === 'mock') {
     const { mockPersonalCalendarEvents } = await import('@/lib/backend/mock/data');
     const index = mockPersonalCalendarEvents.findIndex((e) => e.id === eventId);

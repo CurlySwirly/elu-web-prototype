@@ -1,5 +1,6 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
@@ -25,6 +26,11 @@ import {
   type CalendarEventInput,
 } from '@/lib/utils/calendar-export';
 import { chatService } from '@/lib/services/chat';
+import {
+  formatLocationParts,
+  formatOfferLocation,
+  isOnlineOfferFormat,
+} from '@/lib/utils/offer-location';
 
 interface ExpertProfile {
   full_name: string;
@@ -87,7 +93,7 @@ export default function BookingPage() {
 
   const loadBookingData = useCallback(async () => {
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
 
       const [expertData, offersData] = await Promise.all([
         fetchExpertById(expertId),
@@ -155,7 +161,7 @@ export default function BookingPage() {
     setSubmitting(true);
 
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
 
       if (isGuest && createAccount) {
         await signUp(guestEmail.trim(), guestPassword, guestName.trim(), 'client');
@@ -226,10 +232,14 @@ export default function BookingPage() {
     const [hours, minutes] = selectedTime.split(':').map(Number);
     const start = setMinutes(setHours(selectedDate, hours), minutes);
     const end = addMinutes(start, offer.duration_minutes);
-    const isOnline = offer.format === 'online' || offer.format === 'Online';
-    const addressLine = [expert.address, [expert.postal_code, expert.city].filter(Boolean).join(' ')]
-      .filter(Boolean)
-      .join(', ');
+    const isOnline = isOnlineOfferFormat(offer.format);
+    const addressLine =
+      formatOfferLocation(offer) ||
+      formatLocationParts({
+        address: expert.address,
+        postal_code: expert.postal_code,
+        city: expert.city,
+      });
     return {
       title: `${offer.title} mit ${expert.full_name}`,
       description: [
@@ -276,7 +286,7 @@ export default function BookingPage() {
 
     setChatLoading(true);
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       const appointmentId = bookedAppointmentId || `apt-booked-${expertId}`;
 
       if (backendMode === 'mock') {
@@ -294,13 +304,19 @@ export default function BookingPage() {
             expert_id: expertId,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            partner: {
+            client: {
+              full_name: 'Max Mustermann',
+              avatar_url:
+                'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg',
+            },
+            expert: {
               full_name: expert.full_name,
               avatar_url: expert.avatar_url,
             },
             offer_title: offer?.title || '',
             last_message: '',
-            unread_count: 0,
+            unread_count_client: 0,
+            unread_count_expert: 0,
           };
           mockChatThreads.unshift(thread);
           mockChatMessagesByThread[thread.id] = [];
@@ -476,18 +492,26 @@ export default function BookingPage() {
                   <div className="flex justify-between items-center gap-3 text-sm">
                     <span className="font-body text-gray-500">Format</span>
                     <Badge className="bg-info-bg text-info-text border-none font-body text-[11px] flex items-center gap-1">
-                      {offer.format === 'online' ? <Video className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
-                      {offer.format === 'online' ? 'Online' : 'Vor Ort'}
+                      {isOnlineOfferFormat(offer.format) ? (
+                        <Video className="w-3 h-3" />
+                      ) : (
+                        <MapPin className="w-3 h-3" />
+                      )}
+                      {isOnlineOfferFormat(offer.format) ? 'Online' : 'Vor Ort'}
                     </Badge>
                   </div>
                   <div className="flex justify-between gap-3 text-sm">
                     <span className="font-body text-gray-500 shrink-0">Adresse</span>
                     <span className="font-body font-semibold text-text-dark text-right">
-                      {offer.format === 'online' || offer.format === 'Online'
+                      {isOnlineOfferFormat(offer.format)
                         ? 'Online'
-                        : [expert.address, [expert.postal_code, expert.city].filter(Boolean).join(' ')]
-                            .filter(Boolean)
-                            .join(', ') || 'Adresse folgt'}
+                        : formatOfferLocation(offer) ||
+                          formatLocationParts({
+                            address: expert.address,
+                            postal_code: expert.postal_code,
+                            city: expert.city,
+                          }) ||
+                          'Adresse folgt'}
                     </span>
                   </div>
                   {notes && (

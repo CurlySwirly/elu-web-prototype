@@ -1,5 +1,6 @@
 'use client';
 
+import { isMockBackend } from '@/lib/backend/mode';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { chatService, type ChatMessage } from '@/lib/services/chat';
+import { AppPageHeader, AppPageShell } from '@/components/AppPageHeader';
 
 type ThreadListItem = {
   id: string;
@@ -23,7 +25,42 @@ type ThreadListItem = {
 };
 
 function isMockMode() {
-  return (process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase') === 'mock';
+  return isMockBackend();
+}
+
+async function loadMockThreads(userId: string | null, isExpert: boolean): Promise<ThreadListItem[]> {
+  const { mockChatThreads, mockChatMessagesByThread } = await import(
+    '@/lib/backend/mock/data'
+  );
+  const visible = mockChatThreads.filter((t) =>
+    isExpert
+      ? t.expert_id === '1' ||
+        t.expert_id === 'mock-user-expert' ||
+        t.expert_id === userId
+      : t.client_id === 'mock-user-client' || t.client_id === userId
+  );
+  return visible
+    .map((t) => {
+      const msgs = mockChatMessagesByThread[t.id] || [];
+      const last = msgs[msgs.length - 1];
+      const partner = isExpert ? t.client : t.expert;
+      return {
+        id: t.id,
+        partnerName: partner?.full_name || (isExpert ? 'Klient:in' : 'Expert:in'),
+        partnerAvatar: partner?.avatar_url || '',
+        offerTitle: t.offer_title,
+        lastMessage: last?.message || t.last_message || '',
+        updatedAt: last?.created_at || t.updated_at,
+        unreadCount: isExpert ? t.unread_count_expert : t.unread_count_client,
+      };
+    })
+    .sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+}
+
+function isMockThreadId(threadId: string) {
+  return threadId.startsWith('thread-');
 }
 
 function initials(name: string) {
@@ -90,14 +127,17 @@ export default function NachrichtenPage() {
       setLoadingMessages(true);
       setDraft('');
       try {
-        if (isMockMode()) {
+        if (isMockMode() || isMockThreadId(threadId)) {
           const { mockChatMessagesByThread, mockChatThreads } = await import(
             '@/lib/backend/mock/data'
           );
           if (generation !== loadGenerationRef.current) return;
           setMessages([...(mockChatMessagesByThread[threadId] || [])] as ChatMessage[]);
           const thread = mockChatThreads.find((t) => t.id === threadId);
-          if (thread) thread.unread_count = 0;
+          if (thread) {
+            if (isExpert) thread.unread_count_expert = 0;
+            else thread.unread_count_client = 0;
+          }
           setThreads((prev) =>
             prev.map((t) => (t.id === threadId ? { ...t, unreadCount: 0 } : t))
           );
@@ -120,7 +160,7 @@ export default function NachrichtenPage() {
         }
       }
     },
-    [userId]
+    [userId, isExpert]
   );
 
   const loadThreads = useCallback(async () => {
@@ -128,49 +168,42 @@ export default function NachrichtenPage() {
     setLoading(true);
     try {
       if (isMockMode()) {
-        const { mockChatThreads, mockChatMessagesByThread } = await import(
-          '@/lib/backend/mock/data'
-        );
-        setThreads(
-          mockChatThreads.map((t) => {
-            const msgs = mockChatMessagesByThread[t.id] || [];
-            const last = msgs[msgs.length - 1];
-            return {
-              id: t.id,
-              partnerName: t.partner.full_name,
-              partnerAvatar: t.partner.avatar_url,
-              offerTitle: t.offer_title,
-              lastMessage: last?.message || t.last_message || '',
-              updatedAt: last?.created_at || t.updated_at,
-              unreadCount: t.unread_count,
-            };
-          })
-        );
+        setThreads(await loadMockThreads(userId, isExpert));
         return;
       }
 
       const data = await chatService.getThreadsByUser(userId, isExpert);
 
-      setThreads(
-        (data || []).map((thread: any) => {
-          const partner = isExpert
-            ? thread.client_profile
-            : thread.expert_profile || thread.client_profile;
-          const offerTitle = thread.appointments?.expert_offers?.title || 'Termin';
-          return {
-            id: thread.id,
-            partnerName: partner?.full_name || (isExpert ? 'Kund:in' : 'Expert:in'),
-            partnerAvatar: partner?.avatar_url || '',
-            offerTitle,
-            lastMessage: '',
-            updatedAt: thread.updated_at,
-            unreadCount: 0,
-          };
-        })
-      );
+      const mapped = (data || []).map((thread: any) => {
+        const partner = isExpert
+          ? thread.client_profile
+          : thread.expert_profile || thread.client_profile;
+        const offerTitle = thread.appointments?.expert_offers?.title || 'Termin';
+        return {
+          id: thread.id,
+          partnerName: partner?.full_name || (isExpert ? 'Kund:in' : 'Expert:in'),
+          partnerAvatar: partner?.avatar_url || '',
+          offerTitle,
+          lastMessage: '',
+          updatedAt: thread.updated_at,
+          unreadCount: 0,
+        };
+      });
+
+      // Demo fallback: show rich mock inbox when the DB has no threads yet
+      if (mapped.length === 0) {
+        setThreads(await loadMockThreads(userId, isExpert));
+        return;
+      }
+
+      setThreads(mapped);
     } catch (err) {
       console.error('Failed to load chat threads', err);
-      setThreads([]);
+      try {
+        setThreads(await loadMockThreads(userId, isExpert));
+      } catch {
+        setThreads([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -214,7 +247,7 @@ export default function NachrichtenPage() {
 
     setSending(true);
     try {
-      if (isMockMode()) {
+      if (isMockMode() || isMockThreadId(activeThreadId)) {
         const { mockChatMessagesByThread, mockChatThreads } = await import(
           '@/lib/backend/mock/data'
         );
@@ -274,21 +307,24 @@ export default function NachrichtenPage() {
     }
   };
 
-  const isMine = (msg: ChatMessage) =>
-    msg.sender_id === userId || msg.sender_id === 'client' || msg.sender?.full_name === 'Du';
+  const isMine = (msg: ChatMessage) => {
+    if (msg.sender_id === userId) return true;
+    if (isExpert) {
+      return msg.sender_id === '1' || msg.sender_id === 'mock-user-expert';
+    }
+    return msg.sender_id === 'mock-user-client';
+  };
 
   return (
-    <div className="p-3 sm:p-4 lg:p-5 h-[calc(100vh-4rem)] flex flex-col space-y-4">
-      <div className="shrink-0">
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
-          Nachrichten
-        </h1>
-        <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
-          {isExpert
+    <AppPageShell className="h-[calc(100vh-4rem)] flex flex-col">
+      <AppPageHeader
+        title="Nachrichten"
+        description={
+          isExpert
             ? 'Hier siehst du deine Nachrichten von Kund:innen'
-            : 'Hier siehst du deine Nachrichten von Expert:innen'}
-        </p>
-      </div>
+            : 'Hier siehst du deine Nachrichten von Expert:innen'
+        }
+      />
 
       <div className="flex-1 min-h-0 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden grid grid-cols-1 md:grid-cols-[minmax(280px,380px)_1fr]">
         {/* Chat list – left */}
@@ -475,6 +511,6 @@ export default function NachrichtenPage() {
           )}
         </div>
       </div>
-    </div>
+    </AppPageShell>
   );
 }

@@ -1,3 +1,4 @@
+import { getBackendMode } from '@/lib/backend/mode';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -329,11 +330,32 @@ export async function getMyRoomBookings(): Promise<{ data: RoomBooking[] | null;
  * Get notifications for current user
  */
 export async function getMyNotifications(): Promise<{ data: BookingNotification[] | null; error: any }> {
-  const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+  const backendMode = getBackendMode();
   if (backendMode === 'mock') {
     const { mockNotifications } = await import('@/lib/backend/mock/data');
+    let currentUserId = 'mock-user-client';
+    try {
+      const raw = typeof window !== 'undefined'
+        ? window.sessionStorage.getItem('elu-mock-auth-user')
+        : null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as { id?: string };
+        if (parsed?.id) currentUserId = parsed.id;
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const filtered = mockNotifications.filter(
+      (n) =>
+        n.user_id === currentUserId ||
+        n.user_id === 'any' ||
+        // legacy client id variants
+        (currentUserId.startsWith('mock-user-client') && n.user_id === 'mock-user-client')
+    );
+
     return {
-      data: mockNotifications
+      data: filtered
         .slice()
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) as BookingNotification[],
       error: null,
@@ -362,7 +384,7 @@ export async function getMyNotifications(): Promise<{ data: BookingNotification[
 export async function markNotificationAsRead(
   notificationId: string
 ): Promise<{ success: boolean; error?: any }> {
-  const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+  const backendMode = getBackendMode();
   if (backendMode === 'mock') {
     const { mockNotifications } = await import('@/lib/backend/mock/data');
     const item = mockNotifications.find((n) => n.id === notificationId);

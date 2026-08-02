@@ -13,8 +13,7 @@ const DESKTOP_NAV_STORAGE_KEY = 'elu-desktop-nav-collapsed';
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loading, role, userId } = useAuth();
-  const [profileCheckLoading, setProfileCheckLoading] = useState(true);
+  const { user, loading } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [desktopNavCollapsed, setDesktopNavCollapsed] = useState(false);
   const guestAllowed = isGuestBrowsePath(pathname);
@@ -39,50 +38,20 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading) return;
-
-    if (!user) {
-      setProfileCheckLoading(false);
-      if (!guestAllowed) {
-        router.push('/login');
-      }
-      return;
+    if (!user && !guestAllowed) {
+      router.push('/login');
     }
-
-    const checkExpertProfile = async () => {
-      if (role === 'expert' && pathname !== '/app/complete-profile') {
-        const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-
-        if (backendMode === 'mock') {
-          setProfileCheckLoading(false);
-          return;
-        }
-
-        try {
-          const { supabase } = await import('@/lib/supabase');
-          const { data } = await supabase
-            .from('expert_profiles')
-            .select('is_profile_complete, profile_completion_status')
-            .eq('user_id', userId)
-            .maybeSingle();
-
-          if (data && !data.is_profile_complete) {
-            router.push('/app/complete-profile');
-          }
-        } catch (error) {
-          console.error('Error checking expert profile:', error);
-        }
-      }
-      setProfileCheckLoading(false);
-    };
-
-    checkExpertProfile();
-  }, [user, loading, role, userId, router, pathname, guestAllowed]);
+  }, [user, loading, router, guestAllowed]);
 
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
 
-  if (loading || (user && profileCheckLoading)) {
+  // While auth resolves, still allow guest browse routes; otherwise keep a short shell spinner.
+  if (loading) {
+    if (guestAllowed) {
+      return <GuestBrowseShell>{children}</GuestBrowseShell>;
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-light">
         <div className="text-center">
@@ -97,7 +66,14 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     if (guestAllowed) {
       return <GuestBrowseShell>{children}</GuestBrowseShell>;
     }
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg-light">
+        <div className="text-center px-4">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-blue" />
+          <p className="mt-4 text-gray-600 font-body">Weiterleitung zur Anmeldung…</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -111,7 +87,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
       <div
         className={cn(
           'min-h-screen flex flex-col transition-[margin] duration-200 ease-in-out',
-          desktopNavCollapsed ? 'lg:ml-[72px]' : 'lg:ml-64'
+          desktopNavCollapsed ? 'lg:ml-14' : 'lg:ml-52'
         )}
       >
         <AppHeader

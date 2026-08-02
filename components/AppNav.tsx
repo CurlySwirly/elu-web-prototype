@@ -72,8 +72,8 @@ export function AppNav({
     collapsed?: boolean;
   }) => (
     <>
-      <div className="flex-1 overflow-y-auto py-4">
-        <div className={cn('space-y-1', collapsed ? 'px-2' : 'px-3')}>
+      <div className="flex-1 overflow-y-auto py-3">
+        <div className={cn('space-y-0.5', collapsed ? 'px-1.5' : 'px-2.5')}>
           {links.map((link) => {
             const Icon = link.icon;
             const isActive =
@@ -87,36 +87,36 @@ export function AppNav({
                 onClick={onNavigate}
                 title={collapsed ? link.label : undefined}
                 className={cn(
-                  'flex items-center rounded-lg transition-colors font-body',
-                  collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2',
+                  'flex items-center rounded-md transition-colors font-body text-sm',
+                  collapsed ? 'justify-center px-1.5 py-2' : 'gap-2 px-2.5 py-1.5',
                   isActive
                     ? 'bg-gradient-to-r from-primary-blue to-primary-green text-white'
                     : 'text-gray-700 hover:bg-info-bg hover:text-info-text'
                 )}
               >
-                <Icon className="w-5 h-5 shrink-0" />
-                {!collapsed && <span>{link.label}</span>}
+                <Icon className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="leading-tight">{link.label}</span>}
               </Link>
             );
           })}
         </div>
       </div>
 
-      <div className={cn('border-t border-gray-200 space-y-2', collapsed ? 'p-2' : 'p-4')}>
+      <div className={cn('border-t border-gray-200 space-y-1.5', collapsed ? 'p-1.5' : 'p-2.5')}>
         <Link
           href={settingsHref}
           onClick={onNavigate}
           title={collapsed ? 'Einstellungen' : undefined}
           className={cn(
-            'flex items-center rounded-lg transition-colors font-body',
-            collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2',
+            'flex items-center rounded-md transition-colors font-body text-sm',
+            collapsed ? 'justify-center px-1.5 py-2' : 'gap-2 px-2.5 py-1.5',
             settingsActive
               ? 'bg-gradient-to-r from-primary-blue to-primary-green text-white'
               : 'text-gray-700 hover:bg-info-bg hover:text-info-text'
           )}
         >
-          <Settings className="w-5 h-5 shrink-0" />
-          {!collapsed && <span>Einstellungen</span>}
+          <Settings className="w-4 h-4 shrink-0" />
+          {!collapsed && <span className="leading-tight">Einstellungen</span>}
         </Link>
         <Button
           onClick={() => {
@@ -124,10 +124,11 @@ export function AppNav({
             signOut();
           }}
           variant="outline"
+          size="sm"
           title={collapsed ? 'Abmelden' : undefined}
-          className={cn('font-body', collapsed ? 'w-full px-0' : 'w-full')}
+          className={cn('font-body text-sm h-8', collapsed ? 'w-full px-0' : 'w-full')}
         >
-          {collapsed ? <LogOut className="w-4 h-4" /> : 'Abmelden'}
+          {collapsed ? <LogOut className="w-3.5 h-3.5" /> : 'Abmelden'}
         </Button>
       </div>
     </>
@@ -139,17 +140,17 @@ export function AppNav({
       <nav
         className={cn(
           'fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-gray-200 bg-white transition-[width] duration-200 ease-in-out lg:flex',
-          desktopCollapsed ? 'w-[72px]' : 'w-64'
+          desktopCollapsed ? 'w-14' : 'w-52'
         )}
       >
         <div
           className={cn(
             'border-b border-gray-200 flex items-center',
-            desktopCollapsed ? 'p-3 justify-center' : 'p-4 pl-6 justify-between gap-2'
+            desktopCollapsed ? 'p-2 justify-center' : 'px-3 py-3 justify-between gap-2'
           )}
         >
           {!desktopCollapsed && (
-            <Link href="/app" className="text-2xl font-heading font-bold text-text-dark truncate">
+            <Link href="/app" className="text-xl font-heading font-bold text-text-dark truncate">
               elu
             </Link>
           )}
@@ -157,15 +158,15 @@ export function AppNav({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-9 w-9 rounded-full shrink-0"
+            className="h-8 w-8 rounded-full shrink-0"
             onClick={() => onDesktopCollapsedChange?.(!desktopCollapsed)}
             aria-label={desktopCollapsed ? 'Menü ausklappen' : 'Menü einklappen'}
             title={desktopCollapsed ? 'Menü ausklappen' : 'Menü einklappen'}
           >
             {desktopCollapsed ? (
-              <ChevronRight className="h-5 w-5 text-text-dark" />
+              <ChevronRight className="h-4 w-4 text-text-dark" />
             ) : (
-              <ChevronLeft className="h-5 w-5 text-text-dark" />
+              <ChevronLeft className="h-4 w-4 text-text-dark" />
             )}
           </Button>
         </div>
@@ -174,21 +175,21 @@ export function AppNav({
 
       {/* Mobile drawer */}
       <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
-        <SheetContent side="left" className="w-[280px] p-0 flex flex-col [&>button]:hidden">
-          <SheetHeader className="p-6 border-b border-gray-200 text-left">
+        <SheetContent side="left" className="w-[240px] p-0 flex flex-col [&>button]:hidden">
+          <SheetHeader className="px-4 py-3 border-b border-gray-200 text-left">
             <div className="flex items-center justify-between gap-3 pr-1">
-              <SheetTitle className="font-heading text-2xl font-bold text-text-dark">
+              <SheetTitle className="font-heading text-xl font-bold text-text-dark">
                 elu
               </SheetTitle>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 rounded-full shrink-0"
+                className="h-8 w-8 rounded-full shrink-0"
                 onClick={() => onMobileOpenChange?.(false)}
                 aria-label="Menü schließen"
               >
-                <X className="h-5 w-5 text-text-dark" />
+                <X className="h-4 w-4 text-text-dark" />
               </Button>
             </div>
           </SheetHeader>

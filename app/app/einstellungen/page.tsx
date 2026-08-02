@@ -23,6 +23,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AppPageHeader, AppPageShell } from '@/components/AppPageHeader';
 
 type SettingsState = {
   emailNotifications: boolean;
@@ -113,32 +114,28 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
-          Einstellungen
-        </h1>
-        <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
-          Verwalte deine Account-Einstellungen
-        </p>
-      </div>
+    <AppPageShell>
+      <AppPageHeader
+        title="Einstellungen"
+        description="Verwalte deine Account-Einstellungen"
+      />
 
-      <Card className="border-2 max-w-3xl">
-        <CardContent className="pt-2 pb-2 px-0 sm:px-0">
+      <Card className="border border-gray-200 shadow-sm max-w-3xl">
+        <CardContent className="pt-1 pb-1 px-0 sm:px-0">
           <Accordion type="multiple" className="w-full">
-            <AccordionItem value="email" className="border-gray-100 px-4 sm:px-6">
-              <AccordionTrigger className="hover:no-underline py-5 text-left items-start sm:items-center gap-3">
+            <AccordionItem value="email" className="border-gray-100 px-4 sm:px-5">
+              <AccordionTrigger className="hover:no-underline py-4 text-left items-start sm:items-center gap-3">
                 <div className="min-w-0 pr-2">
-                  <p className="font-heading font-semibold text-text-dark">
+                  <p className="font-heading font-semibold text-sm sm:text-base text-text-dark">
                     E-Mail-Benachrichtigungen
                   </p>
-                  <p className="text-sm text-gray-500 font-body font-normal mt-0.5">
+                  <p className="text-xs sm:text-sm text-gray-500 font-body font-normal mt-0.5">
                     Erhalte Updates zu deinen Buchungen
                   </p>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="pb-5">
-                <p className="font-body text-sm text-gray-600 leading-relaxed mb-4">
+              <AccordionContent className="pb-4">
+                <p className="font-body text-xs sm:text-sm text-gray-600 leading-relaxed mb-3">
                   Wir informieren dich per E-Mail über neue Buchungen, Erinnerungen und Änderungen
                   an deinen Terminen. Du kannst Benachrichtigungen jederzeit aktivieren oder
                   deaktivieren – wichtige Hinweise zum Vertrag können davon unabhängig gesendet
@@ -152,17 +149,19 @@ export default function SettingsPage() {
               </AccordionContent>
             </AccordionItem>
 
-            <AccordionItem value="privacy" className="border-gray-100 px-4 sm:px-6">
-              <AccordionTrigger className="hover:no-underline py-5 text-left items-start sm:items-center gap-3">
+            <AccordionItem value="privacy" className="border-gray-100 px-4 sm:px-5">
+              <AccordionTrigger className="hover:no-underline py-4 text-left items-start sm:items-center gap-3">
                 <div className="min-w-0 pr-2">
-                  <p className="font-heading font-semibold text-text-dark">Datenschutz</p>
-                  <p className="text-sm text-gray-500 font-body font-normal mt-0.5">
+                  <p className="font-heading font-semibold text-sm sm:text-base text-text-dark">
+                    Datenschutz
+                  </p>
+                  <p className="text-xs sm:text-sm text-gray-500 font-body font-normal mt-0.5">
                     Verwalte deine Datenschutzeinstellungen
                   </p>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="pb-5">
-                <p className="font-body text-sm text-gray-600 leading-relaxed mb-4">
+              <AccordionContent className="pb-4">
+                <p className="font-body text-xs sm:text-sm text-gray-600 leading-relaxed mb-3">
                   Lege fest, welche Daten zu Analyse- und Marketingzwecken genutzt werden dürfen
                   und wie sichtbar dein Profil für Expert:innen ist. Du kannst diese Auswahl
                   jederzeit anpassen.
@@ -193,10 +192,10 @@ export default function SettingsPage() {
             </AccordionItem>
           </Accordion>
 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-4 border-t border-gray-100">
             <div className="min-w-0">
-              <p className="font-heading font-semibold text-text-dark">Account löschen</p>
-              <p className="text-sm text-gray-500 font-body mt-0.5">
+              <p className="font-heading font-semibold text-sm text-text-dark">Account löschen</p>
+              <p className="text-xs text-gray-500 font-body mt-0.5">
                 Permanente Löschung deines Accounts
               </p>
             </div>
@@ -204,7 +203,7 @@ export default function SettingsPage() {
               type="button"
               variant="outline"
               size="sm"
-              className="font-body shrink-0 self-start sm:self-auto text-red-600 hover:text-red-700 hover:bg-red-50 border-red-300"
+              className="font-body h-8 text-xs shrink-0 self-start sm:self-auto text-error-text hover:bg-error-bg border-error-text/40"
               onClick={() => setDeleteOpen(true)}
             >
               Löschen
@@ -216,17 +215,17 @@ export default function SettingsPage() {
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="font-body w-[calc(100vw-1.5rem)] sm:max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="font-heading text-xl text-text-dark">
+            <DialogTitle className="font-heading text-lg text-text-dark">
               Account wirklich löschen?
             </DialogTitle>
-            <DialogDescription className="font-body text-gray-500">
+            <DialogDescription className="font-body text-sm text-gray-500">
               Diese Aktion kann nicht rückgängig gemacht werden. Alle deine Daten werden dauerhaft
               entfernt.
             </DialogDescription>
           </DialogHeader>
-          <Alert className="border-red-200 bg-red-50">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-700 font-body text-sm">
+          <Alert className="border-error-text bg-error-bg py-2">
+            <AlertCircle className="h-3.5 w-3.5 text-error-text" />
+            <AlertDescription className="text-error-text font-body text-xs">
               Offene Termine sollten vorher storniert werden.
             </AlertDescription>
           </Alert>
@@ -234,7 +233,8 @@ export default function SettingsPage() {
             <Button
               type="button"
               variant="outline"
-              className="font-body"
+              size="sm"
+              className="font-body h-9"
               onClick={() => setDeleteOpen(false)}
               disabled={deleting}
             >
@@ -242,7 +242,8 @@ export default function SettingsPage() {
             </Button>
             <Button
               type="button"
-              className="font-body bg-red-500 hover:bg-red-600 text-white"
+              size="sm"
+              className="font-body h-9 bg-error-text hover:bg-error-text/90 text-white"
               onClick={handleDeleteAccount}
               disabled={deleting}
             >
@@ -251,6 +252,6 @@ export default function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AppPageShell>
   );
 }

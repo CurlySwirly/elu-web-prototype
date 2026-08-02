@@ -1,3 +1,4 @@
+import { isMockBackend } from '@/lib/backend/mode';
 import { supabase } from '@/lib/supabase';
 
 export interface Review {
@@ -41,7 +42,7 @@ export interface PendingReviewAppointment {
 }
 
 function isMockMode() {
-  return (process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase') === 'mock';
+  return isMockBackend();
 }
 
 export const reviewService = {

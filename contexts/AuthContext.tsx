@@ -14,7 +14,7 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<AuthUser>;
   signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -30,45 +30,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    (async () => {
-      const user = await backend.auth.getCurrentUser();
+    let cancelled = false;
 
-      if (user) {
-        setAuthState({
-          user,
-          role: user.role,
-          userId: user.id,
-          loading: false,
-        });
-      } else {
-        setAuthState({
-          user: null,
-          role: null,
-          userId: null,
-          loading: false,
-        });
+    const finish = (user: AuthUser | null) => {
+      if (cancelled) return;
+      setAuthState({
+        user,
+        role: user?.role ?? null,
+        userId: user?.id ?? null,
+        loading: false,
+      });
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      // Never leave the app shell stuck on "Lädt..." if auth hangs
+      setAuthState((prev) => (prev.loading ? { ...prev, loading: false } : prev));
+    }, 4000);
+
+    (async () => {
+      try {
+        const user = await backend.auth.getCurrentUser();
+        window.clearTimeout(timeoutId);
+        finish(user);
+      } catch {
+        window.clearTimeout(timeoutId);
+        finish(null);
       }
     })();
 
     const unsubscribe = backend.auth.onAuthStateChange((user) => {
-      if (user) {
-        setAuthState({
-          user,
-          role: user.role,
-          userId: user.id,
-          loading: false,
-        });
-      } else {
-        setAuthState({
-          user: null,
-          role: null,
-          userId: null,
-          loading: false,
-        });
-      }
+      window.clearTimeout(timeoutId);
+      finish(user);
     });
 
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -79,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userId: user.id,
       loading: false,
     });
+    return user;
   };
 
   const signUp = async (email: string, password: string, fullName: string, role: UserRole) => {

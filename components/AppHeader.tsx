@@ -1,5 +1,6 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -36,9 +37,12 @@ function getNotificationCategory(type: string): NotifFilter {
     t.includes('cancel') ||
     t.includes('refund') ||
     t.includes('payment') ||
+    t.includes('payout') ||
+    t.includes('auszahlung') ||
     t.includes('wichtig') ||
     t.includes('reminder') ||
-    t.includes('review')
+    t.includes('review') ||
+    t.includes('bewertung')
   ) {
     return 'important';
   }
@@ -47,7 +51,7 @@ function getNotificationCategory(type: string): NotifFilter {
 
 function getNotificationVisual(type: string) {
   const t = type.toLowerCase();
-  if (t.includes('review')) {
+  if (t.includes('review') || t.includes('bewertung')) {
     return {
       Icon: Star,
       className: 'bg-primary-blue/15 text-primary-blue',
@@ -61,7 +65,12 @@ function getNotificationVisual(type: string) {
     };
   }
   if (category === 'important') {
-    if (t.includes('payment') || t.includes('paid')) {
+    if (
+      t.includes('payment') ||
+      t.includes('paid') ||
+      t.includes('payout') ||
+      t.includes('auszahlung')
+    ) {
       return {
         Icon: CreditCard,
         className: 'bg-info-bg text-primary-blue',
@@ -121,13 +130,23 @@ export function AppHeader({
   const loadAvatar = useCallback(async () => {
     if (!userId) return;
 
-    const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+    const backendMode = getBackendMode();
     if (backendMode === 'mock') {
-      const { mockExperts, mockProfile } = await import('@/lib/backend/mock/data');
+      const {
+        mockExperts,
+        mockProfile,
+        mockOnboardingExpertProfile,
+        MOCK_ONBOARDING_EXPERT_USER_ID,
+      } = await import('@/lib/backend/mock/data');
       if (role === 'expert') {
-        const expert = mockExperts[0];
-        setAvatarUrl(expert?.avatar_url ?? null);
-        setDisplayName(expert?.full_name ?? 'Expert:in');
+        if (userId === MOCK_ONBOARDING_EXPERT_USER_ID) {
+          setAvatarUrl(mockOnboardingExpertProfile.avatar_url || null);
+          setDisplayName(mockOnboardingExpertProfile.full_name);
+        } else {
+          const expert = mockExperts[0];
+          setAvatarUrl(expert?.avatar_url ?? null);
+          setDisplayName(expert?.full_name ?? 'Expert:in');
+        }
       } else {
         setAvatarUrl(mockProfile.avatar_url ?? null);
         setDisplayName(mockProfile.full_name ?? 'Profil');
@@ -143,7 +162,7 @@ export function AppHeader({
       .maybeSingle();
 
     let url = profile?.avatar_url ?? null;
-    let name = profile?.full_name ?? '';
+    let name = profile?.full_name || user?.fullName || '';
 
     if (role === 'expert') {
       const { data: expert } = await supabase
@@ -158,7 +177,7 @@ export function AppHeader({
 
     setAvatarUrl(url);
     setDisplayName(name || user?.email || 'Profil');
-  }, [userId, role, user?.email]);
+  }, [userId, role, user?.email, user?.fullName]);
 
   useEffect(() => {
     loadNotifications();
@@ -184,9 +203,27 @@ export function AppHeader({
 
   const handleNotificationClick = async (n: BookingNotification) => {
     await handleMarkRead(n.id, n.is_read);
-    if (n.notification_type.toLowerCase().includes('review')) {
-      setOpen(false);
+    setOpen(false);
+
+    const type = n.notification_type.toLowerCase();
+    if (type.includes('review') && role === 'client') {
       router.push(`/app?review=${encodeURIComponent(n.booking_id)}`);
+      return;
+    }
+    if (type.includes('review') && role === 'expert') {
+      router.push('/app');
+      return;
+    }
+    if (type.includes('payment') || type.includes('paid') || type.includes('payout') || type.includes('auszahlung')) {
+      router.push(role === 'expert' ? '/app/finanzen' : '/app/termine');
+      return;
+    }
+    if (type.includes('chat') || type.includes('message') || type.includes('nachricht')) {
+      router.push('/app/nachrichten');
+      return;
+    }
+    if (type.includes('booking') || type.includes('reminder') || type.includes('termin')) {
+      router.push(role === 'expert' ? '/app/termine' : '/app/termine');
     }
   };
 
@@ -200,7 +237,7 @@ export function AppHeader({
     setAvatarUploading(true);
 
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       if (backendMode === 'mock') {
         const { mockExperts, mockProfile } = await import('@/lib/backend/mock/data');
         if (role === 'expert' && mockExperts[0]) {

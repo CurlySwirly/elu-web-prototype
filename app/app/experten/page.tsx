@@ -1,5 +1,6 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { fetchExperts, fetchExpertOffers, Expert } from '@/lib/api';
@@ -48,7 +49,7 @@ export default function ExpertsPage() {
       setExperts(data);
 
       const formatsMap: Record<string, Set<'online' | 'in_person'>> = {};
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
 
       if (backendMode === 'mock') {
         const { mockExpertOffers } = await import('@/lib/backend/mock/data');

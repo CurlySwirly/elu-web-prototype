@@ -46,6 +46,9 @@ export interface ExpertOffer {
   duration_minutes: number;
   price: number;
   is_active?: boolean;
+  location_address?: string;
+  location_postal_code?: string;
+  location_city?: string;
 }
 
 export interface Appointment {
@@ -110,6 +113,8 @@ export interface AuthUser {
   id: string;
   email: string;
   role: 'client' | 'expert' | 'admin';
+  /** Display name from profiles.full_name (used for greetings, header, etc.) */
+  fullName?: string;
 }
 
 export interface SignUpData {

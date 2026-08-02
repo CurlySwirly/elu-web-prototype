@@ -90,16 +90,16 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
-        <Label htmlFor="documents" className="font-body mb-2 block">
+        <Label htmlFor="documents" className="font-body text-sm font-medium mb-1 block">
           Qualifikationsnachweise hochladen
         </Label>
-        <p className="text-sm text-gray-600 font-body mb-3">
-          Lade deine Abschlüsse, Zertifikate und Lizenzen hoch (PDF, JPG, PNG)
+        <p className="text-xs text-gray-500 font-body mb-2">
+          Abschlüsse, Zertifikate und Lizenzen (PDF, JPG, PNG)
         </p>
 
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary-blue transition-colors">
+        <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-primary-blue transition-colors">
           <input
             id="documents"
             type="file"
@@ -109,32 +109,30 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
             className="hidden"
           />
           <label htmlFor="documents" className="cursor-pointer">
-            <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-            <p className="text-sm font-body text-gray-600 mb-2">
-              Klicke hier oder ziehe Dateien hierher
+            <Upload className="w-6 h-6 text-gray-400 mx-auto mb-1.5" />
+            <p className="text-xs font-body text-gray-600 mb-0.5">
+              Klicken oder Dateien hierher ziehen
             </p>
-            <p className="text-xs text-gray-500 font-body">
-              Unterstützt: PDF, JPG, PNG (max. 10MB pro Datei)
-            </p>
+            <p className="text-[11px] text-gray-400 font-body">PDF, JPG, PNG · max. 10MB</p>
           </label>
         </div>
       </div>
 
       {selectedFiles.length > 0 && (
-        <div className="space-y-3">
-          <h4 className="font-body font-semibold text-text-dark">
-            Ausgewählte Dateien ({selectedFiles.length})
+        <div className="space-y-2">
+          <h4 className="font-body font-semibold text-sm text-text-dark">
+            Dateien ({selectedFiles.length})
           </h4>
           {selectedFiles.map((file) => (
-            <div key={file.name} className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1">
-                  <File className="w-5 h-5 text-primary-blue" />
-                  <div className="flex-1">
-                    <p className="text-sm font-body font-semibold text-text-dark">
+            <div key={file.name} className="border border-gray-200 rounded-lg p-2.5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <File className="w-4 h-4 text-primary-blue shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-body font-semibold text-text-dark truncate">
                       {file.name}
                     </p>
-                    <p className="text-xs text-gray-500 font-body">
+                    <p className="text-[11px] text-gray-500 font-body">
                       {(file.size / 1024 / 1024).toFixed(2)} MB
                     </p>
                   </div>
@@ -143,18 +141,20 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
                   variant="ghost"
                   size="sm"
                   onClick={() => handleRemoveFile(file.name)}
-                  className="text-error-text hover:bg-error-bg"
+                  className="text-error-text hover:bg-error-bg h-7 w-7 p-0 shrink-0"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </Button>
               </div>
 
               <div>
-                <Label className="text-xs font-body mb-1 block">Dokumenttyp</Label>
+                <Label className="text-[11px] font-body mb-1 block text-gray-500">
+                  Dokumenttyp
+                </Label>
                 <select
                   value={documentTypes[file.name] || 'certificate'}
                   onChange={(e) => handleDocumentTypeChange(file.name, e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md text-sm font-body"
+                  className="w-full px-2.5 py-1.5 border rounded-md text-xs font-body h-8"
                 >
                   {DOCUMENT_TYPES.map((type) => (
                     <option key={type.value} value={type.value}>
@@ -169,16 +169,16 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
       )}
 
       {error && (
-        <Alert className="border-error-text bg-error-bg">
-          <AlertCircle className="h-4 w-4 text-error-text" />
-          <AlertDescription className="text-error-text font-body">{error}</AlertDescription>
+        <Alert className="border-error-text bg-error-bg py-2">
+          <AlertCircle className="h-3.5 w-3.5 text-error-text" />
+          <AlertDescription className="text-error-text font-body text-xs">{error}</AlertDescription>
         </Alert>
       )}
 
       {success && (
-        <Alert className="border-success-text bg-success-bg">
-          <Check className="h-4 w-4 text-success-text" />
-          <AlertDescription className="text-success-text font-body">{success}</AlertDescription>
+        <Alert className="border-success-text bg-success-bg py-2">
+          <Check className="h-3.5 w-3.5 text-success-text" />
+          <AlertDescription className="text-success-text font-body text-xs">{success}</AlertDescription>
         </Alert>
       )}
 
@@ -186,9 +186,10 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
         <Button
           onClick={handleUpload}
           disabled={uploading}
-          className="w-full bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 font-body"
+          size="sm"
+          className="w-full h-9 text-sm bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 font-body"
         >
-          {uploading ? 'Wird hochgeladen...' : `${selectedFiles.length} Dokument(e) hochladen`}
+          {uploading ? 'Wird hochgeladen…' : `${selectedFiles.length} Dokument(e) hochladen`}
         </Button>
       )}
     </div>

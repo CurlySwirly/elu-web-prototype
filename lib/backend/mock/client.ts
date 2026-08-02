@@ -56,23 +56,38 @@ class MockAuthService implements IAuthService {
     await this.delay(500);
 
     // Development helper: detect role from email pattern
-    // Use these emails to login as different roles:
     // - client@test.com or any email -> client
-    // - expert@test.com -> expert
+    // - expert@test.com -> verified expert
+    // - onboarding@test.com -> onboarding/verification demo expert
     // - admin@test.com -> admin
-    let role: 'client' | 'expert' | 'admin' = 'client';
-    
     const emailLower = data.email.toLowerCase();
-    if (emailLower.includes('expert@') || emailLower.startsWith('expert')) {
-      role = 'expert';
-    } else if (emailLower.includes('admin@') || emailLower.startsWith('admin')) {
+    let role: 'client' | 'expert' | 'admin' = 'client';
+    let id = 'mock-user-client';
+    let fullName = mockProfile.full_name;
+
+    if (emailLower.includes('admin@') || emailLower.startsWith('admin')) {
       role = 'admin';
+      id = 'mock-user-admin';
+      fullName = 'Admin';
+    } else if (
+      emailLower.includes('onboarding@') ||
+      emailLower.includes('expert-onboarding') ||
+      emailLower.startsWith('onboarding')
+    ) {
+      role = 'expert';
+      id = 'mock-user-expert-onboarding';
+      fullName = 'Alex Neubeginn';
+    } else if (emailLower.includes('expert@') || emailLower.startsWith('expert')) {
+      role = 'expert';
+      id = 'mock-user-expert';
+      fullName = mockExperts[0]?.full_name || 'Sarah Müller';
     }
 
     const user: AuthUser = {
-      id: `mock-user-${role}`,
+      id,
       email: data.email,
       role,
+      fullName,
     };
 
     this.persistUser(user);
@@ -83,10 +98,19 @@ class MockAuthService implements IAuthService {
   async signUp(data: SignUpData): Promise<AuthUser> {
     await this.delay(500);
 
+    // New expert signups use the onboarding demo identity (unverified)
+    const id =
+      data.role === 'expert'
+        ? 'mock-user-expert-onboarding'
+        : data.role === 'admin'
+          ? 'mock-user-admin'
+          : 'mock-user-client';
+
     const user: AuthUser = {
-      id: `mock-user-${data.role}`,
+      id,
       email: data.email,
       role: data.role,
+      fullName: data.fullName,
     };
 
     this.persistUser(user);

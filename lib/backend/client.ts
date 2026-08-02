@@ -1,22 +1,7 @@
 import type { IBackendClient } from './types';
+import { getBackendMode, type BackendMode } from './mode';
 
-type BackendMode = 'supabase' | 'mock' | 'custom';
-
-function resolveBackendMode(): BackendMode {
-  const configured = (process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase') as BackendMode;
-  const hasSupabase =
-    Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
-    Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
-  // Avoid build/runtime crashes when Vercel has no Supabase env vars yet
-  if (configured === 'supabase' && !hasSupabase) {
-    return 'mock';
-  }
-
-  return configured;
-}
-
-const BACKEND_MODE = resolveBackendMode();
+const BACKEND_MODE: BackendMode = getBackendMode();
 
 function createBackendClient(): IBackendClient {
   if (BACKEND_MODE === 'mock') {
@@ -41,3 +26,4 @@ function createBackendClient(): IBackendClient {
 }
 
 export const backend = createBackendClient();
+export { getBackendMode, isMockBackend, hasSupabaseCredentials } from './mode';

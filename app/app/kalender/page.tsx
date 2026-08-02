@@ -1,32 +1,51 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar as CalendarIcon, Clock, Plus, Trash2, AlertCircle, User, MapPin, Video, XCircle } from 'lucide-react';
-import { Calendar } from '@/components/ui/calendar';
-import { format, startOfDay, isSameDay, parseISO, addMonths, subMonths, isWithinInterval, isAfter, isBefore, startOfWeek, addDays, endOfWeek, eachDayOfInterval } from 'date-fns';
+import { Calendar as CalendarIcon, Clock, AlertCircle, User, Info, ChevronDown } from 'lucide-react';
+import { format, startOfDay, parseISO, addDays } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { cn } from '@/lib/utils';
 import AppointmentDetailModal from '@/components/AppointmentDetailModal';
+import { useAppointmentManageFlow } from '@/components/AppointmentManageDialogs';
+import {
+  ExpertAppleCalendar,
+  type ExpertCalendarEvent,
+} from '@/components/ExpertAppleCalendar';
+import { WeeklyAvailabilityEditor } from '@/components/WeeklyAvailabilityEditor';
+import { AppPageHeader, AppPageShell } from '@/components/AppPageHeader';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
+import type { CalendarEventInput } from '@/lib/utils/calendar-export';
+import { createPersonalEvent } from '@/lib/services/personalCalendar';
 
 interface Appointment {
   id: string;
+  client_id?: string;
   start_time: string;
   end_time: string;
   status: string;
   total_price: number;
   notes?: string;
+  is_new_booking?: boolean;
   client?: {
+    id?: string;
     full_name: string;
     avatar_url: string;
     phone?: string;
@@ -52,22 +71,6 @@ interface BlockedDay {
   reason: string;
 }
 
-const DAYS_OF_WEEK = [
-  { value: 1, label: 'Montag' },
-  { value: 2, label: 'Dienstag' },
-  { value: 3, label: 'Mittwoch' },
-  { value: 4, label: 'Donnerstag' },
-  { value: 5, label: 'Freitag' },
-  { value: 6, label: 'Samstag' },
-  { value: 0, label: 'Sonntag' },
-];
-
-const TIME_OPTIONS = [
-  '06:00', '07:00', '08:00', '09:00', '10:00', '11:00',
-  '12:00', '13:00', '14:00', '15:00', '16:00', '17:00',
-  '18:00', '19:00', '20:00', '21:00', '22:00'
-];
-
 export default function ExpertCalendarPage() {
   const { userId } = useAuth();
   const [expertProfileId, setExpertProfileId] = useState<string | null>(null);
@@ -77,28 +80,144 @@ export default function ExpertCalendarPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isBlockedDayDialogOpen, setIsBlockedDayDialogOpen] = useState(false);
-  const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [syncEnabled, setSyncEnabled] = useState(false);
+  const [availabilityOpen, setAvailabilityOpen] = useState(true);
+  const [importedEvents, setImportedEvents] = useState<ExpertCalendarEvent[]>([]);
 
-  const [newAvailability, setNewAvailability] = useState({
-    day_of_week: 1,
-    start_time: '09:00',
-    end_time: '17:00',
+  useEffect(() => {
+    try {
+      setSyncEnabled(localStorage.getItem('elu-expert-calendar-sync') === '1');
+      const raw = localStorage.getItem('elu-expert-imported-events');
+      if (raw) {
+        const parsed = JSON.parse(raw) as Array<{
+          id: string;
+          title: string;
+          start: string;
+          end: string;
+          allDay?: boolean;
+        }>;
+        setImportedEvents(
+          parsed.map((e) => ({
+            id: e.id,
+            title: e.title,
+            start: new Date(e.start),
+            end: new Date(e.end),
+            allDay: e.allDay,
+            color: 'purple' as const,
+            synced: true,
+            source: 'external' as const,
+          }))
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persistImported = (next: ExpertCalendarEvent[]) => {
+    setImportedEvents(next);
+    try {
+      localStorage.setItem(
+        'elu-expert-imported-events',
+        JSON.stringify(
+          next.map((e) => ({
+            id: e.id,
+            title: e.title,
+            start: e.start.toISOString(),
+            end: e.end.toISOString(),
+            allDay: e.allDay,
+          }))
+        )
+      );
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleSyncEnabledChange = (enabled: boolean) => {
+    setSyncEnabled(enabled);
+    try {
+      localStorage.setItem('elu-expert-calendar-sync', enabled ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const {
+    openCancel,
+    actionMessage,
+    actionError,
+    dialogs: appointmentManageDialogs,
+  } = useAppointmentManageFlow({
+    appointments,
+    actor: 'expert',
+    onCancelled: async (appointmentId) => {
+      setAppointments((prev) => prev.filter((apt) => apt.id !== appointmentId));
+    },
+    successAction: { label: 'Schließen' },
   });
 
-  const [newBlockedDay, setNewBlockedDay] = useState({
-    start_date: format(new Date(), 'yyyy-MM-dd'),
-    end_date: format(new Date(), 'yyyy-MM-dd'),
-    reason: '',
-  });
+  const getClientKey = (apt: Appointment) =>
+    apt.client_id || apt.client?.id || apt.client?.full_name || apt.id;
+
+  /** First appointment with this client = Neukunde / Erstbuchung */
+  const isNewClientAppointment = (apt: Appointment) => {
+    if (typeof apt.is_new_booking === 'boolean') return apt.is_new_booking;
+
+    const key = getClientKey(apt);
+    const aptStart = parseISO(apt.start_time).getTime();
+    return !appointments.some(
+      (other) =>
+        other.id !== apt.id &&
+        !other.status.startsWith('cancelled') &&
+        getClientKey(other) === key &&
+        parseISO(other.start_time).getTime() < aptStart
+    );
+  };
+
+  const calendarEvents: ExpertCalendarEvent[] = [
+    ...appointments
+      .filter((apt) => !apt.status.startsWith('cancelled'))
+      .map((apt) => {
+        const isNewClient = isNewClientAppointment(apt);
+        return {
+          id: apt.id,
+          title: apt.offer.title || 'Termin',
+          start: parseISO(apt.start_time),
+          end: parseISO(apt.end_time),
+          color: (isNewClient ? 'green' : 'blue') as 'green' | 'blue',
+          source: 'elu' as const,
+          synced: syncEnabled,
+          meta:
+            (apt.offer.format || '').toLowerCase().includes('online') ? 'Online' : 'Vor Ort',
+          hoverLines: [
+            apt.client?.full_name ? `Klient:in: ${apt.client.full_name}` : '',
+            isNewClient ? 'Neukunde · Erstbuchung' : 'Bestandskunde',
+            apt.status === 'completed' ? 'Abgeschlossen' : 'Gebucht',
+            apt.total_price != null ? `€${apt.total_price}` : '',
+          ].filter(Boolean),
+        };
+      }),
+    ...blockedDays.map((block) => ({
+      id: `blocked-${block.id}`,
+      title: block.reason || 'Gesperrt',
+      start: startOfDay(parseISO(block.start_date)),
+      end: startOfDay(addDays(parseISO(block.end_date), 1)),
+      allDay: true,
+      color: 'amber' as const,
+      source: 'elu' as const,
+      hoverLines: ['Gesperrter Zeitraum'],
+    })),
+    ...(syncEnabled ? importedEvents : []),
+  ].filter(
+    (event, index, list) => list.findIndex((other) => other.id === event.id) === index
+  );
 
   const loadExpertData = useCallback(async () => {
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       
       if (backendMode === 'mock') {
         setExpertProfileId(`mock-expert-${userId}`);
@@ -140,19 +259,28 @@ export default function ExpertCalendarPage() {
 
   const loadAppointments = async (profileId: string) => {
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
+      const backendMode = getBackendMode();
       
       if (backendMode === 'mock') {
         await new Promise(resolve => setTimeout(resolve, 300));
         const { mockExpertAppointments } = await import('@/lib/backend/mock/data');
         setAppointments(mockExpertAppointments.map((apt: any) => ({
           id: apt.id,
+          client_id: apt.client?.id || apt.client_id || apt.client?.email || apt.id,
           start_time: apt.start_time,
           end_time: apt.end_time,
           status: apt.status,
           total_price: apt.total_price,
           notes: apt.notes,
-          client: apt.client,
+          is_new_booking: apt.is_new_booking,
+          client: apt.client
+            ? {
+                id: apt.client.id || apt.client.email || apt.client.full_name,
+                full_name: apt.client.full_name,
+                avatar_url: apt.client.avatar_url,
+                phone: apt.client.phone,
+              }
+            : undefined,
           offer: apt.offer,
         })));
         return;
@@ -162,12 +290,14 @@ export default function ExpertCalendarPage() {
         .from('appointments')
         .select(`
           id,
+          client_id,
           start_time,
           end_time,
           status,
           total_price,
           notes,
           profiles:client_id (
+            id,
             full_name,
             avatar_url,
             phone
@@ -182,32 +312,42 @@ export default function ExpertCalendarPage() {
 
       if (error) throw error;
 
-      setAppointments(data.map((apt: any) => ({
-        id: apt.id,
-        start_time: apt.start_time,
-        end_time: apt.end_time,
-        status: apt.status,
-        total_price: apt.total_price,
-        notes: apt.notes,
-        client: {
-          full_name: apt.profiles?.full_name || '',
-          avatar_url: apt.profiles?.avatar_url || '',
-          phone: apt.profiles?.phone || '',
-        },
-        offer: {
-          title: apt.expert_offers?.title || '',
-          format: apt.expert_offers?.format || '',
-        },
-      })));
+      setAppointments(
+        (data || []).map((apt: any) => {
+          const profile = Array.isArray(apt.profiles) ? apt.profiles[0] : apt.profiles;
+          const offer = Array.isArray(apt.expert_offers)
+            ? apt.expert_offers[0]
+            : apt.expert_offers;
+          return {
+            id: apt.id,
+            client_id: apt.client_id || profile?.id,
+            start_time: apt.start_time,
+            end_time: apt.end_time,
+            status: apt.status,
+            total_price: apt.total_price,
+            notes: apt.notes,
+            client: {
+              id: profile?.id || apt.client_id,
+              full_name: profile?.full_name || '',
+              avatar_url: profile?.avatar_url || '',
+              phone: profile?.phone || '',
+            },
+            offer: {
+              title: offer?.title || '',
+              format: offer?.format || '',
+            },
+          };
+        })
+      );
     } catch (err: any) {
       console.error('Error loading appointments:', err);
     }
   };
 
-  const loadAvailability = async (profileId: string) => {
+  const loadAvailability = useCallback(async (profileId: string) => {
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-      
+      const backendMode = getBackendMode();
+
       if (backendMode === 'mock') {
         setAvailability([
           { id: '1', day_of_week: 1, start_time: '09:00', end_time: '17:00', is_available: true },
@@ -228,12 +368,12 @@ export default function ExpertCalendarPage() {
     } catch (err: any) {
       console.error('Error loading availability:', err);
     }
-  };
+  }, []);
 
-  const loadBlockedDays = async (profileId: string) => {
+  const loadBlockedDays = useCallback(async (profileId: string) => {
     try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-      
+      const backendMode = getBackendMode();
+
       if (backendMode === 'mock') {
         setBlockedDays([]);
         return;
@@ -250,928 +390,484 @@ export default function ExpertCalendarPage() {
     } catch (err: any) {
       console.error('Error loading blocked days:', err);
     }
-  };
+  }, []);
 
-  const handleAddBlockedDay = async () => {
-    if (!expertProfileId) return;
-
-    setError('');
-    setSuccess('');
-
-    try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-      
-      if (backendMode === 'mock') {
-        const newId = String(Date.now());
-        setBlockedDays([...blockedDays, {
-          id: newId,
-          start_date: newBlockedDay.start_date,
-          end_date: newBlockedDay.end_date,
-          reason: newBlockedDay.reason,
-        }]);
-        setSuccess('Gesperrter Tag hinzugefügt');
-        setIsBlockedDayDialogOpen(false);
-        setNewBlockedDay({
-          start_date: format(new Date(), 'yyyy-MM-dd'),
-          end_date: format(new Date(), 'yyyy-MM-dd'),
-          reason: '',
-        });
-        setTimeout(() => setSuccess(''), 3000);
-        return;
-      }
-
-      const { error } = await supabase
-        .from('expert_absences')
-        .insert({
-          expert_profile_id: expertProfileId,
-          start_date: newBlockedDay.start_date,
-          end_date: newBlockedDay.end_date,
-          reason: newBlockedDay.reason || null,
-        });
-
-      if (error) throw error;
-
-      setSuccess('Gesperrter Tag hinzugefügt');
-      await loadBlockedDays(expertProfileId);
-      setIsBlockedDayDialogOpen(false);
-      setNewBlockedDay({
-        start_date: format(new Date(), 'yyyy-MM-dd'),
-        end_date: format(new Date(), 'yyyy-MM-dd'),
-        reason: '',
+  const isDateBlocked = useCallback(
+    (date: Date) => {
+      const day = startOfDay(date);
+      return blockedDays.some((blocked) => {
+        const start = startOfDay(parseISO(blocked.start_date));
+        const end = startOfDay(parseISO(blocked.end_date));
+        return day >= start && day <= end;
       });
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
+    },
+    [blockedDays]
+  );
 
-  const handleDeleteBlockedDay = async (blockedDayId: string) => {
-    if (!confirm('Möchtest du diesen gesperrten Tag wirklich löschen?')) return;
+  const handleBlockDay = useCallback(
+    async (date: Date) => {
+      if (!expertProfileId) return;
+      if (isDateBlocked(date)) return;
 
-    try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-      
-      if (backendMode === 'mock') {
-        setBlockedDays(blockedDays.filter(day => day.id !== blockedDayId));
-        setSuccess('Gesperrter Tag gelöscht');
-        setTimeout(() => setSuccess(''), 3000);
-        return;
-      }
+      const dateKey = format(date, 'yyyy-MM-dd');
+      setError('');
+      setSuccess('');
 
-      const { error } = await supabase
-        .from('expert_absences')
-        .delete()
-        .eq('id', blockedDayId);
+      try {
+        const backendMode = getBackendMode();
 
-      if (error) throw error;
+        if (backendMode === 'mock') {
+          setBlockedDays((prev) => [
+            ...prev,
+            {
+              id: String(Date.now()),
+              start_date: dateKey,
+              end_date: dateKey,
+              reason: 'Gesperrt',
+            },
+          ]);
+          setSuccess('Tag gesperrt');
+          setTimeout(() => setSuccess(''), 3000);
+          return;
+        }
 
-      if (expertProfileId) {
-        await loadBlockedDays(expertProfileId);
-      }
-      setSuccess('Gesperrter Tag gelöscht');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  const isDateBlocked = (date: Date) => {
-    return blockedDays.some(blocked => {
-      const start = parseISO(blocked.start_date);
-      const end = parseISO(blocked.end_date);
-      return isWithinInterval(date, { start, end });
-    });
-  };
-
-  const handleAddAvailability = async () => {
-    if (!expertProfileId) return;
-
-    setError('');
-    setSuccess('');
-
-    try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-      
-      if (backendMode === 'mock') {
-        const newId = String(Date.now());
-        setAvailability([...availability, {
-          id: newId,
-          day_of_week: newAvailability.day_of_week,
-          start_time: newAvailability.start_time,
-          end_time: newAvailability.end_time,
-          is_available: true,
-        }]);
-        setSuccess('Verfügbarkeit hinzugefügt');
-        setIsDialogOpen(false);
-        setTimeout(() => setSuccess(''), 3000);
-        return;
-      }
-
-      const { error } = await supabase
-        .from('expert_availability')
-        .insert({
+        const { error } = await supabase.from('expert_absences').insert({
           expert_profile_id: expertProfileId,
-          day_of_week: newAvailability.day_of_week,
-          start_time: newAvailability.start_time,
-          end_time: newAvailability.end_time,
+          start_date: dateKey,
+          end_date: dateKey,
+          reason: 'Gesperrt',
+        });
+
+        if (error) throw error;
+
+        setSuccess('Tag gesperrt');
+        await loadBlockedDays(expertProfileId);
+        setTimeout(() => setSuccess(''), 3000);
+      } catch (err: any) {
+        setError(err.message);
+      }
+    },
+    [expertProfileId, isDateBlocked, loadBlockedDays]
+  );
+
+  const handleUnblockDay = useCallback(
+    async (date: Date) => {
+      const day = startOfDay(date);
+      const covering = blockedDays.filter((blocked) => {
+        const start = startOfDay(parseISO(blocked.start_date));
+        const end = startOfDay(parseISO(blocked.end_date));
+        return day >= start && day <= end;
+      });
+      if (covering.length === 0) return;
+
+      setError('');
+      setSuccess('');
+
+      try {
+        const backendMode = getBackendMode();
+
+        if (backendMode === 'mock') {
+          const ids = new Set(covering.map((b) => b.id));
+          setBlockedDays((prev) => prev.filter((item) => !ids.has(item.id)));
+          setSuccess('Tag entsperrt');
+          setTimeout(() => setSuccess(''), 3000);
+          return;
+        }
+
+        const { error } = await supabase
+          .from('expert_absences')
+          .delete()
+          .in(
+            'id',
+            covering.map((b) => b.id)
+          );
+
+        if (error) throw error;
+
+        await loadBlockedDays(expertProfileId!);
+        setSuccess('Tag entsperrt');
+        setTimeout(() => setSuccess(''), 3000);
+      } catch (err: any) {
+        setError(err.message);
+      }
+    },
+    [blockedDays, expertProfileId, loadBlockedDays]
+  );
+
+  const handleAddAvailability = useCallback(
+    async (slot: { day_of_week: number; start_time: string; end_time: string }) => {
+      if (!expertProfileId) return;
+
+      setError('');
+      setSuccess('');
+
+      try {
+        const backendMode = getBackendMode();
+
+        if (backendMode === 'mock') {
+          const newId = String(Date.now());
+          setAvailability((prev) => [
+            ...prev,
+            {
+              id: newId,
+              day_of_week: slot.day_of_week,
+              start_time: slot.start_time,
+              end_time: slot.end_time,
+              is_available: true,
+            },
+          ]);
+          setSuccess('Verfügbarkeit hinzugefügt');
+          setTimeout(() => setSuccess(''), 3000);
+          return;
+        }
+
+        const { error } = await supabase.from('expert_availability').insert({
+          expert_profile_id: expertProfileId,
+          day_of_week: slot.day_of_week,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
           is_available: true,
         });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      setSuccess('Verfügbarkeit hinzugefügt');
-      await loadAvailability(expertProfileId);
-      setIsDialogOpen(false);
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
+        setSuccess('Verfügbarkeit hinzugefügt');
+        await loadAvailability(expertProfileId);
+        setTimeout(() => setSuccess(''), 3000);
+      } catch (err: any) {
+        setError(err.message);
+      }
+    },
+    [expertProfileId, loadAvailability]
+  );
 
-  const handleDeleteAvailability = async (availabilityId: string) => {
-    if (!confirm('Möchtest du diese Verfügbarkeit wirklich löschen?')) return;
+  const handleDeleteAvailability = useCallback(
+    async (availabilityId: string) => {
+      try {
+        const backendMode = getBackendMode();
 
-    try {
-      const backendMode = process.env.NEXT_PUBLIC_BACKEND_MODE || 'supabase';
-      
-      if (backendMode === 'mock') {
-        setAvailability(availability.filter(avail => avail.id !== availabilityId));
+        if (backendMode === 'mock') {
+          setAvailability((prev) => prev.filter((avail) => avail.id !== availabilityId));
+          setSuccess('Verfügbarkeit gelöscht');
+          setTimeout(() => setSuccess(''), 3000);
+          return;
+        }
+
+        const { error } = await supabase
+          .from('expert_availability')
+          .delete()
+          .eq('id', availabilityId);
+
+        if (error) throw error;
+
+        if (expertProfileId) {
+          await loadAvailability(expertProfileId);
+        }
         setSuccess('Verfügbarkeit gelöscht');
         setTimeout(() => setSuccess(''), 3000);
-        return;
+      } catch (err: any) {
+        setError(err.message);
       }
+    },
+    [expertProfileId, loadAvailability]
+  );
 
-      const { error } = await supabase
-        .from('expert_availability')
-        .delete()
-        .eq('id', availabilityId);
-
-      if (error) throw error;
-
-      if (expertProfileId) {
-        await loadAvailability(expertProfileId);
-      }
-      setSuccess('Verfügbarkeit gelöscht');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  const getAppointmentsForDate = (date: Date) => {
-    return appointments.filter(apt => {
-      const aptDate = startOfDay(parseISO(apt.start_time));
-      return isSameDay(aptDate, date);
-    });
-  };
-
-  const getAvailabilityForDay = (dayOfWeek: number) => {
-    return availability.filter(avail => avail.day_of_week === dayOfWeek);
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed': return 'bg-success-bg text-success-text';
-      case 'requested':
-      case 'pending': return 'bg-red-100 text-red-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      case 'cancelled': return 'bg-error-bg text-error-text';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'confirmed': return 'Gebucht';
-      case 'requested':
-      case 'pending': return 'Ausstehend';
-      case 'completed': return 'Abgeschlossen';
-      case 'cancelled': return 'Storniert';
-      default: return status;
-    }
-  };
-
-  const filterByStatus = (status?: string) => {
-    if (!status) return appointments;
-    return appointments.filter(apt => apt.status === status);
-  };
-
-  const upcomingAppointments = appointments
-    .filter(apt => parseISO(apt.start_time) >= startOfDay(new Date()))
-    .slice(0, 5);
-
-  const confirmedAppointments = appointments.filter(apt => apt.status === 'confirmed');
-
-  const getWeekDays = () => {
-    const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
-    return eachDayOfInterval({ start: currentWeekStart, end: weekEnd });
-  };
-
-  const getAppointmentsForDaySorted = (date: Date) => {
-    return getAppointmentsForDate(date).sort((a, b) => {
-      return parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime();
-    });
-  };
-
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    setCurrentWeekStart(prev => {
-      const newDate = new Date(prev);
-      newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
-      return startOfWeek(newDate, { weekStartsOn: 1 });
-    });
-  };
+  const now = new Date();
+  const upcomingAppointments = appointments.filter(
+    (apt) =>
+      !apt.status.startsWith('cancelled') && parseISO(apt.end_time) >= now
+  );
+  const pastAppointments = appointments.filter(
+    (apt) =>
+      apt.status.startsWith('cancelled') || parseISO(apt.end_time) < now
+  );
 
   if (loading) {
     return (
-      <div className="p-3 sm:p-4 lg:p-5 space-y-4">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-blue"></div>
+      <AppPageShell>
+        <div className="flex items-center justify-center min-h-[280px]">
+          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-primary-blue" />
         </div>
-      </div>
+      </AppPageShell>
     );
   }
 
   return (
-    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
-          Kalender & Verfügbarkeit
-        </h1>
-        <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
-          Verwalte deine Termine und wöchentliche Verfügbarkeit
-        </p>
-      </div>
+    <AppPageShell>
+      <AppPageHeader
+        title="Kalender"
+        description="Lege deine Verfügbarkeit fest und verwalte alle Buchungen"
+      />
 
       {error && (
-        <Alert className="mb-6 border-error-text bg-error-bg">
-          <AlertCircle className="h-4 w-4 text-error-text" />
-          <AlertDescription className="text-error-text font-body">{error}</AlertDescription>
+        <Alert className="border-error-text bg-error-bg py-2">
+          <AlertCircle className="h-3.5 w-3.5 text-error-text" />
+          <AlertDescription className="text-error-text font-body text-xs">{error}</AlertDescription>
         </Alert>
       )}
 
       {success && (
-        <Alert className="mb-6 border-success-text bg-success-bg">
-          <AlertDescription className="text-success-text font-body">{success}</AlertDescription>
+        <Alert className="border-success-text bg-success-bg py-2">
+          <AlertDescription className="text-success-text font-body text-xs">{success}</AlertDescription>
         </Alert>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="font-heading text-base text-gray-600">Gebucht</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-heading font-bold text-text-dark">{confirmedAppointments.length}</p>
-            <p className="text-sm text-gray-600 font-body">Termine</p>
-          </CardContent>
-        </Card>
+      {/* Apple-inspired calendar */}
+      <ExpertAppleCalendar
+        events={calendarEvents}
+        syncEnabled={syncEnabled}
+        onSyncEnabledChange={handleSyncEnabledChange}
+        onSelectEvent={(eventId) => {
+          const event = calendarEvents.find((e) => e.id === eventId);
+          if (!event || event.source === 'external' || event.allDay) return;
+          setSelectedAppointmentId(eventId);
+          setIsDetailModalOpen(true);
+        }}
+        isDayBlocked={isDateBlocked}
+        onBlockDay={handleBlockDay}
+        onUnblockDay={handleUnblockDay}
+        onImportEvents={(events: CalendarEventInput[]) => {
+          const mapped: ExpertCalendarEvent[] = events.map((e, index) => ({
+            id: e.uid || `import-${Date.now()}-${index}`,
+            title: e.title,
+            start: e.start,
+            end: e.end,
+            allDay: e.allDay,
+            color: 'purple',
+            synced: true,
+            source: 'external',
+            meta: e.description,
+          }));
+          persistImported([...importedEvents, ...mapped]);
+          void Promise.all(
+            events.map((e) =>
+              createPersonalEvent({
+                title: e.title,
+                notes: e.description || 'Importiert aus externem Kalender',
+                start_time: e.start.toISOString(),
+                end_time: e.end.toISOString(),
+              })
+            )
+          );
+          setSuccess(`${events.length} Termin(e) aus deinem Kalender importiert.`);
+        }}
+      />
 
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="font-heading text-base text-gray-600">Bevorstehend</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-heading font-bold text-text-dark">
-              {upcomingAppointments.length}
-            </p>
-            <p className="text-sm text-gray-600 font-body">Nächste Termine</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="font-heading text-base text-gray-600">Diese Woche</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-heading font-bold text-text-dark">
-              {appointments.filter(apt => {
-                const aptDate = parseISO(apt.start_time);
-                const today = startOfDay(new Date());
-                const weekEnd = new Date(today);
-                weekEnd.setDate(weekEnd.getDate() + 7);
-                return aptDate >= today && aptDate < weekEnd;
-              }).length}
-            </p>
-            <p className="text-sm text-gray-600 font-body">Termine</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="font-heading text-base text-gray-600">Verfügbarkeiten</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-heading font-bold text-text-dark">{availability.length}</p>
-            <p className="text-sm text-gray-600 font-body">Zeitslots</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Weekly View */}
-      <Card className="border-2 mb-6">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="font-heading text-xl">Wochenübersicht</CardTitle>
-              <CardDescription className="font-body">
-                {format(currentWeekStart, 'd. MMMM', { locale: de })} - {format(endOfWeek(currentWeekStart, { weekStartsOn: 1 }), 'd. MMMM yyyy', { locale: de })}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigateWeek('prev')}
-                className="font-body"
-              >
-                ← Vorherige Woche
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
-                className="font-body"
-              >
-                Diese Woche
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigateWeek('next')}
-                className="font-body"
-              >
-                Nächste Woche →
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
-            {getWeekDays().map((day) => {
-              const dayAppointments = getAppointmentsForDaySorted(day);
-              const isToday = isSameDay(day, new Date());
-              const isBlocked = isDateBlocked(day);
-              
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={cn(
-                    "border-2 rounded-lg p-3 min-h-[400px]",
-                    isToday ? "border-primary-blue bg-primary-blue/5" : "border-gray-200",
-                    isBlocked && "bg-gray-100 opacity-60"
-                  )}
+      {/* Buchungen */}
+      <Tabs defaultValue="upcoming" className="w-full">
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="px-4 sm:px-5 pt-4 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <CardTitle className="font-heading text-base sm:text-lg text-text-dark">
+                  Buchungen
+                </CardTitle>
+                <CardDescription className="font-body text-xs sm:text-sm text-gray-600">
+                  Verwalte deine gebuchten Termine
+                </CardDescription>
+              </div>
+              <TabsList className="h-8 shrink-0 self-start bg-gray-100 p-0.5">
+                <TabsTrigger
+                  value="upcoming"
+                  className="font-body text-xs h-7 px-2.5 data-[state=active]:bg-text-dark data-[state=active]:text-white"
                 >
-                  <div className="mb-3 pb-2 border-b">
-                    <div className="font-heading font-semibold text-lg text-text-dark">
-                      {format(day, 'EEEE', { locale: de })}
-                    </div>
-                    <div className={cn(
-                      "text-sm font-body",
-                      isToday ? "text-primary-blue font-semibold" : "text-gray-600"
-                    )}>
-                      {format(day, 'd. MMMM', { locale: de })}
-                    </div>
-                    {isBlocked && (
-                      <Badge className="mt-2 bg-gray-400 text-white text-xs">
-                        <XCircle className="w-3 h-3 mr-1" />
-                        Gesperrt
-                      </Badge>
-                    )}
-                  </div>
+                  Kommende ({upcomingAppointments.length})
+                </TabsTrigger>
+                <TabsTrigger
+                  value="past"
+                  className="font-body text-xs h-7 px-2.5 data-[state=active]:bg-text-dark data-[state=active]:text-white"
+                >
+                  Vergangene ({pastAppointments.length})
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </CardHeader>
 
-                  <div className="space-y-2">
-                    {dayAppointments.length === 0 ? (
-                      <p className="text-xs text-gray-400 font-body text-center py-4">
-                        {isBlocked ? 'Gesperrt' : 'Keine Termine'}
+          <CardContent className="px-4 sm:px-5 pb-4 pt-0">
+            <div className="max-h-[21.5rem] overflow-y-auto pr-0.5">
+              {(
+                [
+                  { value: 'upcoming', list: upcomingAppointments, badge: 'offen' as const },
+                  { value: 'past', list: pastAppointments, badge: 'abgeschlossen' as const },
+                ] as const
+              ).map(({ value, list, badge }) => (
+                <TabsContent
+                  key={value}
+                  value={value}
+                  className="mt-0 space-y-2 focus-visible:outline-none"
+                >
+                  {list.length === 0 ? (
+                    <div className="text-center py-10">
+                      <CalendarIcon className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                      <p className="text-sm text-gray-600 font-body">
+                        {value === 'upcoming'
+                          ? 'Keine kommenden Buchungen'
+                          : 'Keine vergangenen Buchungen'}
                       </p>
-                    ) : (
-                      dayAppointments.map((apt) => (
+                    </div>
+                  ) : (
+                    list.map((appointment) => {
+                      const initials =
+                        (appointment.client?.full_name || '?')
+                          .split(/\s+/)
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((p) => p[0]?.toUpperCase())
+                          .join('') || '?';
+
+                      return (
                         <div
-                          key={apt.id}
-                          onClick={() => {
-                            setSelectedAppointmentId(apt.id);
-                            setIsDetailModalOpen(true);
-                          }}
-                          className={cn(
-                            "p-2 rounded border-2 cursor-pointer transition-all hover:shadow-md",
-                            apt.status === 'confirmed'
-                              ? 'bg-primary-green/10 border-primary-green'
-                              : apt.status === 'requested' || apt.status === 'pending'
-                              ? 'bg-red-50 border-red-300'
-                              : 'bg-gray-50 border-gray-200'
-                          )}
+                          key={appointment.id}
+                          className="flex items-center gap-2.5 p-2.5 sm:p-3 rounded-lg border border-gray-200 bg-white"
                         >
-                          <div className="flex items-start justify-between mb-1">
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-gray-500" />
-                              <span className="text-xs font-semibold font-body text-gray-700">
-                                {format(parseISO(apt.start_time), 'HH:mm', { locale: de })} - {format(parseISO(apt.end_time), 'HH:mm', { locale: de })}
+                          <Avatar className="h-9 w-9 shrink-0 border border-gray-100">
+                            {appointment.client?.avatar_url ? (
+                              <AvatarImage
+                                src={appointment.client.avatar_url}
+                                alt={appointment.client.full_name || 'Klient:in'}
+                              />
+                            ) : null}
+                            <AvatarFallback className="bg-info-bg text-info-text text-[11px] font-heading">
+                              {initials}
+                            </AvatarFallback>
+                          </Avatar>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <p className="font-heading font-semibold text-sm text-text-dark truncate">
+                                {appointment.offer.title}
+                              </p>
+                              <Badge
+                                className={cn(
+                                  'border-none text-[11px] font-body shrink-0 px-2 py-0.5',
+                                  badge === 'offen'
+                                    ? 'bg-info-bg text-info-text'
+                                    : 'bg-gray-100 text-gray-600'
+                                )}
+                              >
+                                {badge === 'offen' ? 'Offen' : 'Abgeschlossen'}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 font-body">
+                              {appointment.client?.full_name ? (
+                                <span className="flex items-center gap-1 truncate">
+                                  <User className="w-3 h-3 shrink-0" />
+                                  {appointment.client.full_name}
+                                </span>
+                              ) : null}
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3 shrink-0" />
+                                {format(parseISO(appointment.start_time), 'd. MMM · HH:mm', {
+                                  locale: de,
+                                })}
                               </span>
                             </div>
-                            <Badge className={`${getStatusColor(apt.status)} border-none text-xs px-1 py-0`}>
-                              {getStatusLabel(apt.status).substring(0, 3)}
-                            </Badge>
                           </div>
-                          <p className="text-xs font-heading font-semibold text-text-dark mb-1 line-clamp-2">
-                            {apt.offer.title}
-                          </p>
-                          {apt.client && (
-                            <div className="flex items-center gap-1 text-xs text-gray-600">
-                              <User className="w-2.5 h-2.5" />
-                              <span className="font-body truncate">{apt.client.full_name}</span>
-                            </div>
-                          )}
-                          {apt.offer.format && (
-                            <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
-                              {apt.offer.format === 'online' ? (
-                                <Video className="w-2.5 h-2.5" />
-                              ) : (
-                                <MapPin className="w-2.5 h-2.5" />
-                              )}
-                              <span className="font-body">{apt.offer.format === 'online' ? 'Online' : 'Vor Ort'}</span>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
 
-          <div className="mt-4 pt-4 border-t flex items-center gap-4 text-xs text-gray-600 font-body flex-wrap">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-primary-green/10 border-2 border-primary-green"></div>
-              <span>Gebucht</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-gray-100 border-2 border-gray-400"></div>
-              <span>Gesperrt</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-
-        {/* Upcoming Appointments */}
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="font-heading text-xl">Kommende Termine</CardTitle>
-            <CardDescription className="font-body">
-              Nächste {upcomingAppointments.length} Termine
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {upcomingAppointments.length === 0 ? (
-              <p className="text-gray-500 font-body text-sm text-center py-8">
-                Keine kommenden Termine
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {upcomingAppointments.map((apt) => (
-                  <div
-                    key={apt.id}
-                    onClick={() => {
-                      setSelectedAppointmentId(apt.id);
-                      setIsDetailModalOpen(true);
-                    }}
-                    className={cn(
-                      "p-3 rounded-lg border-2 bg-white hover:border-primary-blue cursor-pointer transition-colors",
-                      apt.status === 'confirmed'
-                        ? 'border-primary-green'
-                        : apt.status === 'requested' || apt.status === 'pending'
-                        ? 'border-red-300'
-                        : 'border-gray-200'
-                    )}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <p className="font-heading font-semibold text-sm mb-1">
-                          {apt.offer.title}
-                        </p>
-                        <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
-                          <Clock className="w-3 h-3" />
-                          <span>
-                            {format(parseISO(apt.start_time), 'd. MMM', { locale: de })} • {format(parseISO(apt.start_time), 'HH:mm', { locale: de })}
-                          </span>
-                        </div>
-                        {apt.client && (
-                          <div className="flex items-center gap-2 text-xs text-gray-600">
-                            <User className="w-3 h-3" />
-                            <span>{apt.client.full_name}</span>
-                          </div>
-                        )}
-                      </div>
-                      <Badge className={`${getStatusColor(apt.status)} border-none text-xs`}>
-                        {getStatusLabel(apt.status)}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Bookings Tabs */}
-      <Card className="border-2 mb-6">
-        <CardHeader>
-          <CardTitle className="font-heading text-xl">Buchungen</CardTitle>
-          <CardDescription className="font-body">Verwalte deine gebuchten Termine</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="confirmed" className="w-full">
-            <TabsList className="mb-6">
-              <TabsTrigger value="confirmed" className="font-body">
-                Gebucht ({filterByStatus('confirmed').length})
-              </TabsTrigger>
-              <TabsTrigger value="all" className="font-body">
-                Alle ({appointments.length})
-              </TabsTrigger>
-            </TabsList>
-
-            {['confirmed', 'all'].map((tabValue) => (
-              <TabsContent key={tabValue} value={tabValue} className="space-y-4">
-                {filterByStatus(tabValue === 'all' ? undefined : tabValue).map((appointment) => (
-                  <Card key={appointment.id} className="border-2 hover:border-primary-blue transition-colors">
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-4 flex-1">
-                          {appointment.client && (
-                            <Avatar className="w-12 h-12">
-                              <AvatarImage src={appointment.client.avatar_url} alt={appointment.client.full_name} />
-                              <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white font-heading">
-                                {appointment.client.full_name.split(' ').map(n => n[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                          )}
-
-                          <div className="flex-1">
-                            <CardTitle className="font-heading text-xl text-text-dark mb-1">
-                              {appointment.offer.title}
-                            </CardTitle>
-                            <CardDescription className="font-body">
-                              {appointment.client ? `Gebucht von ${appointment.client.full_name}` : 'Unbekannt'}
-                            </CardDescription>
-
-                            <div className="flex flex-wrap gap-3 mt-3">
-                              <div className="flex items-center gap-1 text-sm text-gray-600 font-body">
-                                <CalendarIcon className="w-4 h-4" />
-                                {format(new Date(appointment.start_time), 'dd. MMMM yyyy', { locale: de })}
-                              </div>
-                              <div className="flex items-center gap-1 text-sm text-gray-600 font-body">
-                                <Clock className="w-4 h-4" />
-                                {format(new Date(appointment.start_time), 'HH:mm')} - {format(new Date(appointment.end_time), 'HH:mm')}
-                              </div>
-                              <div className="flex items-center gap-1 text-sm text-gray-600 font-body">
-                                {appointment.offer.format === 'online' ? <Video className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
-                                {appointment.offer.format === 'online' ? 'Online' : 'Vor Ort'}
-                              </div>
-                            </div>
-
-                            {appointment.notes && (
-                              <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                                <p className="text-sm text-gray-700 font-body">{appointment.notes}</p>
-                              </div>
-                            )}
-
-                            {appointment.client?.phone && (
-                              <div className="mt-3 flex items-center gap-2 text-sm text-gray-600 font-body">
-                                <User className="w-4 h-4" />
-                                {appointment.client.phone}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="text-right space-y-2">
-                          <Badge className={`${getStatusColor(appointment.status)} border-none font-body`}>
-                            {getStatusLabel(appointment.status)}
-                          </Badge>
-                          <p className="text-xl font-heading font-bold text-text-dark">
-                            €{appointment.total_price.toFixed(2)}
-                          </p>
-                        </div>
-                      </div>
-
-                    </CardHeader>
-                  </Card>
-                ))}
-
-                {filterByStatus(tabValue === 'all' ? undefined : tabValue).length === 0 && (
-                  <div className="text-center py-12">
-                    <CalendarIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 font-body">
-                      Keine Termine in dieser Kategorie
-                    </p>
-                  </div>
-                )}
-              </TabsContent>
-            ))}
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Availability Management */}
-      <Card className="border-2 mb-6">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="font-heading text-xl text-text-dark">Wöchentliche Verfügbarkeit</CardTitle>
-              <CardDescription className="font-body">Lege deine regelmäßigen Arbeitszeiten fest</CardDescription>
-            </div>
-            <Button
-              onClick={() => setIsDialogOpen(true)}
-              size="sm"
-              className="bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 font-body"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Hinzufügen
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {availability.length === 0 ? (
-            <div className="text-center py-8">
-              <CalendarIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 font-body mb-4">Noch keine Verfügbarkeiten angelegt</p>
-              <Button
-                onClick={() => setIsDialogOpen(true)}
-                variant="outline"
-                className="font-body"
-              >
-                Erste Verfügbarkeit anlegen
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {DAYS_OF_WEEK.map(day => {
-                const dayAvailability = getAvailabilityForDay(day.value);
-                if (dayAvailability.length === 0) return null;
-
-                return (
-                  <div key={day.value} className="border-2 rounded-lg p-4 bg-gray-50">
-                    <div className="font-semibold text-text-dark font-heading mb-3 text-lg">{day.label}</div>
-                    <div className="space-y-2">
-                      {dayAvailability.map(avail => (
-                        <div key={avail.id} className="flex items-center justify-between p-2 bg-white rounded border">
-                          <span className="font-body text-gray-700">
-                            {avail.start_time.substring(0, 5)} - {avail.end_time.substring(0, 5)} Uhr
-                          </span>
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
-                            onClick={() => handleDeleteAvailability(avail.id)}
-                            className="text-error-text hover:bg-error-bg"
+                            className="shrink-0 font-body text-xs h-8 px-2.5"
+                            onClick={() => {
+                              setSelectedAppointmentId(appointment.id);
+                              setIsDetailModalOpen(true);
+                            }}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            Details
                           </Button>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                      );
+                    })
+                  )}
+                </TabsContent>
+              ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </Tabs>
 
-      {/* Blocked Days Management */}
-      <Card className="border-2">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="font-heading text-xl text-text-dark">Gesperrte Tage</CardTitle>
-              <CardDescription className="font-body">
-                Markiere Tage als gesperrt (z.B. Urlaub, Krankheit)
-              </CardDescription>
-            </div>
-            <Button
-              onClick={() => setIsBlockedDayDialogOpen(true)}
-              size="sm"
-              className="bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 font-body"
-            >
-              <XCircle className="w-4 h-4 mr-2" />
-              Tag sperren
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {blockedDays.length === 0 ? (
-            <div className="text-center py-8">
-              <XCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 font-body mb-4">Noch keine gesperrten Tage</p>
-              <Button
-                onClick={() => setIsBlockedDayDialogOpen(true)}
-                variant="outline"
-                className="font-body"
-              >
-                Ersten Tag sperren
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {blockedDays.map((blocked) => {
-                const startDate = parseISO(blocked.start_date);
-                const endDate = parseISO(blocked.end_date);
-                const isRange = !isSameDay(startDate, endDate);
-                
-                return (
-                  <div key={blocked.id} className="flex items-center justify-between p-3 border-2 rounded-lg bg-gray-50">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <XCircle className="w-4 h-4 text-gray-600" />
-                        <span className="font-heading font-semibold text-text-dark">
-                          {isRange 
-                            ? `${format(startDate, 'dd. MMM yyyy', { locale: de })} - ${format(endDate, 'dd. MMM yyyy', { locale: de })}`
-                            : format(startDate, 'dd. MMMM yyyy', { locale: de })
-                          }
-                        </span>
-                      </div>
-                      {blocked.reason && (
-                        <p className="text-sm text-gray-600 font-body ml-6">
-                          {blocked.reason}
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteBlockedDay(blocked.id)}
-                      className="text-error-text hover:bg-error-bg"
+      {/* Availability Management */}
+      <Collapsible open={availabilityOpen} onOpenChange={setAvailabilityOpen}>
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="px-4 sm:px-5 pt-4 pb-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <CardTitle className="font-heading text-base sm:text-lg text-text-dark">
+                    Wöchentliche Verfügbarkeit
+                  </CardTitle>
+                  <HoverCard openDelay={100} closeDelay={100}>
+                    <HoverCardTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:text-primary-blue hover:bg-primary-blue/10 transition-colors shrink-0"
+                        aria-label="Hilfe zur Verfügbarkeit"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Info className="w-4 h-4" />
+                      </button>
+                    </HoverCardTrigger>
+                    <HoverCardContent
+                      align="start"
+                      className="w-72 sm:w-80 font-body text-sm space-y-2 p-4"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Add Availability Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="font-heading text-2xl text-text-dark">
-              Verfügbarkeit hinzufügen
-            </DialogTitle>
-            <DialogDescription className="font-body">
-              Lege einen wiederkehrenden Zeitslot fest
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div>
-              <Label className="font-body">Wochentag</Label>
-              <Select
-                value={newAvailability.day_of_week.toString()}
-                onValueChange={(value) => setNewAvailability({ ...newAvailability, day_of_week: parseInt(value) })}
-              >
-                <SelectTrigger className="font-body">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DAYS_OF_WEEK.map(day => (
-                    <SelectItem key={day.value} value={day.value.toString()} className="font-body">
-                      {day.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="font-body">Von</Label>
-                <Select
-                  value={newAvailability.start_time}
-                  onValueChange={(value) => setNewAvailability({ ...newAvailability, start_time: value })}
+                      <p className="font-heading font-semibold text-text-dark text-sm">
+                        Wozu dient die Verfügbarkeit?
+                      </p>
+                      <p className="text-gray-600 text-xs leading-relaxed">
+                        Hier legst du fest, wann Klient:innen dich buchen können. Die Zeiten gelten
+                        jede Woche erneut und steuern die buchbaren Termine in deinem Kalender.
+                      </p>
+                      <p className="font-heading font-semibold text-text-dark text-sm pt-1">
+                        So stellst du sie ein
+                      </p>
+                      <ul className="text-gray-600 text-xs leading-relaxed list-disc pl-4 space-y-1">
+                        <li>
+                          Ziehe in einer Tages-Spalte einen Zeitraum auf (15‑Minuten‑Raster), um
+                          Verfügbarkeit zu setzen.
+                        </li>
+                        <li>Rechtsklick auf einen Slot → Löschen.</li>
+                        <li>Gesperrte Tage im Hauptkalender überschreiben die Verfügbarkeit.</li>
+                      </ul>
+                    </HoverCardContent>
+                  </HoverCard>
+                </div>
+                <CardDescription className="font-body text-xs sm:text-sm text-gray-600">
+                  Regelmäßige Arbeitszeiten per Drag & Drop in der Wochenansicht festlegen
+                </CardDescription>
+              </div>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:text-text-dark hover:bg-gray-100 transition-colors shrink-0"
+                  aria-label={
+                    availabilityOpen
+                      ? 'Verfügbarkeit einklappen'
+                      : 'Verfügbarkeit aufklappen'
+                  }
                 >
-                  <SelectTrigger className="font-body">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_OPTIONS.map(time => (
-                      <SelectItem key={time} value={time} className="font-body">
-                        {time} Uhr
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label className="font-body">Bis</Label>
-                <Select
-                  value={newAvailability.end_time}
-                  onValueChange={(value) => setNewAvailability({ ...newAvailability, end_time: value })}
-                >
-                  <SelectTrigger className="font-body">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_OPTIONS.map(time => (
-                      <SelectItem key={time} value={time} className="font-body">
-                        {time} Uhr
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  <ChevronDown
+                    className={cn(
+                      'w-5 h-5 transition-transform duration-200',
+                      availabilityOpen && 'rotate-180'
+                    )}
+                  />
+                </button>
+              </CollapsibleTrigger>
             </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="font-body">
-              Abbrechen
-            </Button>
-            <Button
-              onClick={handleAddAvailability}
-              className="bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 font-body"
-            >
-              Hinzufügen
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Blocked Day Dialog */}
-      <Dialog open={isBlockedDayDialogOpen} onOpenChange={setIsBlockedDayDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="font-heading text-2xl text-text-dark">
-              Tag sperren
-            </DialogTitle>
-            <DialogDescription className="font-body">
-              Markiere einen Tag oder Zeitraum als gesperrt (z.B. Urlaub, Krankheit)
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="font-body">Von</Label>
-                <input
-                  type="date"
-                  value={newBlockedDay.start_date}
-                  onChange={(e) => setNewBlockedDay({ ...newBlockedDay, start_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md font-body"
-                  min={format(new Date(), 'yyyy-MM-dd')}
-                />
-              </div>
-
-              <div>
-                <Label className="font-body">Bis</Label>
-                <input
-                  type="date"
-                  value={newBlockedDay.end_date}
-                  onChange={(e) => setNewBlockedDay({ ...newBlockedDay, end_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md font-body"
-                  min={newBlockedDay.start_date}
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label className="font-body">Grund (optional)</Label>
-              <input
-                type="text"
-                value={newBlockedDay.reason}
-                onChange={(e) => setNewBlockedDay({ ...newBlockedDay, reason: e.target.value })}
-                placeholder="z.B. Urlaub, Krankheit"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md font-body"
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="px-4 sm:px-5 pb-4">
+              <WeeklyAvailabilityEditor
+                slots={availability}
+                onCreate={handleAddAvailability}
+                onDelete={handleDeleteAvailability}
+                disabled={!expertProfileId}
               />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setIsBlockedDayDialogOpen(false);
-              setNewBlockedDay({
-                start_date: format(new Date(), 'yyyy-MM-dd'),
-                end_date: format(new Date(), 'yyyy-MM-dd'),
-                reason: '',
-              });
-            }} className="font-body">
-              Abbrechen
-            </Button>
-            <Button
-              onClick={handleAddBlockedDay}
-              className="bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 font-body"
-            >
-              Sperren
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {selectedAppointmentId && (
         <AppointmentDetailModal
@@ -1185,8 +881,28 @@ export default function ExpertCalendarPage() {
             }
           }}
           userRole="expert"
+          onCancel={(id) => {
+            setIsDetailModalOpen(false);
+            setSelectedAppointmentId(null);
+            // Open cancel after detail dialog unmounts to avoid stacked Dialog focus traps
+            queueMicrotask(() => openCancel(id));
+          }}
         />
       )}
-    </div>
+
+      {actionMessage && (
+        <Alert className="fixed bottom-4 right-4 z-50 w-[min(100%-2rem,24rem)] border-primary-green bg-primary-green/20 shadow-lg">
+          <AlertDescription className="text-text-dark font-body">{actionMessage}</AlertDescription>
+        </Alert>
+      )}
+      {actionError && (
+        <Alert className="fixed bottom-4 right-4 z-50 w-[min(100%-2rem,24rem)] border-red-200 bg-red-50 shadow-lg">
+          <AlertCircle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-600 font-body">{actionError}</AlertDescription>
+        </Alert>
+      )}
+
+      {appointmentManageDialogs}
+    </AppPageShell>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { getBackendMode } from '@/lib/backend/mode';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,12 +10,38 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
+const DEMO_ACCOUNTS = [
+  {
+    email: 'client@test.com',
+    label: 'Klient',
+    hint: 'Aktives Client-Dashboard',
+  },
+  {
+    email: 'onboarding@test.com',
+    label: 'Expert:in · Verifizierung',
+    hint: 'Offene Checkliste, Profil offline',
+  },
+  {
+    email: 'expert@test.com',
+    label: 'Expert:in · Aktiv',
+    hint: 'Verifiziertes, buchbares Profil',
+  },
+] as const;
+
 export default function LoginPage() {
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const isMock = getBackendMode() === 'mock';
+  const demoPassword = isMock ? 'beliebig' : 'Test1234!';
+
+  const resolvePostLoginPath = (role: string) => {
+    if (role === 'admin') return '/admin';
+    // client → ClientDashboard, expert (verified or open verification) → ExpertDashboard
+    return '/app';
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,19 +55,20 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await signIn(email.trim(), password);
-
-      const emailLower = email.trim().toLowerCase();
-      const isAdminEmail = emailLower.includes('admin@') || emailLower.startsWith('admin');
-      const target = isAdminEmail ? '/admin' : '/app';
-
-      // Hard navigation so auth session is always picked up after login
-      window.location.assign(target);
+      const user = await signIn(email.trim(), password);
+      window.location.assign(resolvePostLoginPath(user.role));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Anmeldung fehlgeschlagen';
       setError(message);
       setLoading(false);
     }
+  };
+
+  const fillDemo = (demoEmail: string) => {
+    setEmail(demoEmail);
+    if (!isMock) setPassword('Test1234!');
+    else if (!password) setPassword('demo');
+    setError('');
   };
 
   return (
@@ -58,9 +86,6 @@ export default function LoginPage() {
           <CardDescription className="text-center font-body text-gray-600">
             Melde dich mit deinem Account an
           </CardDescription>
-          <p className="text-center text-xs text-gray-400 font-body pt-1">
-            Mock: expert@test.com / client@test.com — Passwort beliebig
-          </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
@@ -69,6 +94,32 @@ export default function LoginPage() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
+
+            <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-3 space-y-2">
+              <p className="text-[11px] font-body font-semibold uppercase tracking-wide text-gray-500">
+                Demo-Zugänge · Passwort {demoPassword}
+              </p>
+              <div className="space-y-1.5">
+                {DEMO_ACCOUNTS.map((account) => (
+                  <button
+                    key={account.email}
+                    type="button"
+                    onClick={() => fillDemo(account.email)}
+                    className="w-full text-left rounded-md border border-gray-200 bg-white px-2.5 py-2 hover:border-primary-blue/50 hover:bg-info-bg/40 transition-colors"
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-xs font-body font-semibold text-text-dark">
+                        {account.label}
+                      </span>
+                      <span className="text-[11px] font-mono text-primary-blue truncate">
+                        {account.email}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 font-body mt-0.5">{account.hint}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="space-y-2">
               <Label htmlFor="email" className="font-body font-medium text-text-dark">
@@ -79,7 +130,7 @@ export default function LoginPage() {
                 type="email"
                 name="email"
                 autoComplete="email"
-                placeholder="expert@test.com"
+                placeholder="client@test.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="font-body"
@@ -95,7 +146,7 @@ export default function LoginPage() {
                 type="password"
                 name="password"
                 autoComplete="current-password"
-                placeholder="test"
+                placeholder={demoPassword}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="font-body"
