@@ -70,7 +70,8 @@ function SettingToggleRow({
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { userId, signOut } = useAuth();
+  const { userId, role, signOut } = useAuth();
+  const isExpert = role === 'expert';
   const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -130,16 +131,17 @@ export default function SettingsPage() {
                     E-Mail-Benachrichtigungen
                   </p>
                   <p className="text-xs sm:text-sm text-gray-500 font-body font-normal mt-0.5">
-                    Erhalte Updates zu deinen Buchungen
+                    {isExpert
+                      ? 'Erhalte Updates zu Anfragen und Buchungen'
+                      : 'Erhalte Updates zu deinen Buchungen'}
                   </p>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="pb-4">
                 <p className="font-body text-xs sm:text-sm text-gray-600 leading-relaxed mb-3">
-                  Wir informieren dich per E-Mail über neue Buchungen, Erinnerungen und Änderungen
-                  an deinen Terminen. Du kannst Benachrichtigungen jederzeit aktivieren oder
-                  deaktivieren – wichtige Hinweise zum Vertrag können davon unabhängig gesendet
-                  werden.
+                  {isExpert
+                    ? 'Wir informieren dich per E-Mail über neue Buchungsanfragen, angenommene Termine, Erinnerungen und Änderungen. Du kannst Benachrichtigungen jederzeit aktivieren oder deaktivieren – wichtige Hinweise zum Vertrag können davon unabhängig gesendet werden.'
+                    : 'Wir informieren dich per E-Mail über neue Buchungen, Erinnerungen und Änderungen an deinen Terminen. Du kannst Benachrichtigungen jederzeit aktivieren oder deaktivieren – wichtige Hinweise zum Vertrag können davon unabhängig gesendet werden.'}
                 </p>
                 <SettingToggleRow
                   label="E-Mail-Benachrichtigungen"
@@ -162,9 +164,9 @@ export default function SettingsPage() {
               </AccordionTrigger>
               <AccordionContent className="pb-4">
                 <p className="font-body text-xs sm:text-sm text-gray-600 leading-relaxed mb-3">
-                  Lege fest, welche Daten zu Analyse- und Marketingzwecken genutzt werden dürfen
-                  und wie sichtbar dein Profil für Expert:innen ist. Du kannst diese Auswahl
-                  jederzeit anpassen.
+                  {isExpert
+                    ? 'Lege fest, welche Daten zu Analyse- und Marketingzwecken genutzt werden dürfen und wie sichtbar deine Sedcard für Klient:innen ist. Du kannst diese Auswahl jederzeit anpassen.'
+                    : 'Lege fest, welche Daten zu Analyse- und Marketingzwecken genutzt werden dürfen und wie sichtbar dein Profil für Expert:innen ist. Du kannst diese Auswahl jederzeit anpassen.'}
                 </p>
                 <div className="divide-y divide-gray-50">
                   <SettingToggleRow
@@ -173,17 +175,29 @@ export default function SettingsPage() {
                     onCheckedChange={(v) => update('analytics', v)}
                   />
                   <SettingToggleRow
-                    label="Personalisierte Angebote per E-Mail"
+                    label={
+                      isExpert
+                        ? 'Plattform-Tipps und Angebote per E-Mail'
+                        : 'Personalisierte Angebote per E-Mail'
+                    }
                     checked={settings.marketingEmail}
                     onCheckedChange={(v) => update('marketingEmail', v)}
                   />
                   <SettingToggleRow
-                    label="Profil für Expert:innen sichtbar"
+                    label={
+                      isExpert
+                        ? 'Sedcard für Klient:innen sichtbar'
+                        : 'Profil für Expert:innen sichtbar'
+                    }
                     checked={settings.profileVisible}
                     onCheckedChange={(v) => update('profileVisible', v)}
                   />
                   <SettingToggleRow
-                    label="Buchungsdaten mit Expert:in teilen"
+                    label={
+                      isExpert
+                        ? 'Kontaktdaten mit gebuchten Klient:innen teilen'
+                        : 'Buchungsdaten mit Expert:in teilen'
+                    }
                     checked={settings.shareBookingData}
                     onCheckedChange={(v) => update('shareBookingData', v)}
                   />
@@ -194,8 +208,10 @@ export default function SettingsPage() {
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-5 py-4 border-t border-gray-100">
             <div className="min-w-0">
-              <p className="font-heading font-semibold text-sm text-text-dark">Account löschen</p>
-              <p className="text-xs text-gray-500 font-body mt-0.5">
+              <p className="font-heading font-semibold text-sm sm:text-base text-text-dark">
+                Account löschen
+              </p>
+              <p className="text-xs sm:text-sm text-gray-500 font-body mt-0.5">
                 Permanente Löschung deines Accounts
               </p>
             </div>
@@ -203,7 +219,7 @@ export default function SettingsPage() {
               type="button"
               variant="outline"
               size="sm"
-              className="font-body h-8 text-xs shrink-0 self-start sm:self-auto text-error-text hover:bg-error-bg border-error-text/40"
+              className="font-body h-8 text-xs shrink-0 self-start sm:self-auto border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700"
               onClick={() => setDeleteOpen(true)}
             >
               Löschen

@@ -5,6 +5,10 @@ export interface Expert {
   avatar_url: string;
   bio: string;
   specializations: string[];
+  /** Freely editable professions (Decision 08.05.) */
+  professions?: string[];
+  /** Professions with at least one approved qualification */
+  verified_professions?: string[];
   hourly_rate: number;
   rating: number;
   total_reviews: number;

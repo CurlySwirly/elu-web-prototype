@@ -17,6 +17,7 @@ export class SupabaseExpertRepository implements IExpertRepository {
         user_id,
         bio,
         specializations,
+        professions,
         hourly_rate,
         rating,
         total_reviews,
@@ -40,7 +41,8 @@ export class SupabaseExpertRepository implements IExpertRepository {
       full_name: expert.profiles?.full_name || '',
       avatar_url: expert.profiles?.avatar_url || '',
       bio: expert.bio,
-      specializations: expert.specializations,
+      specializations: expert.specializations || [],
+      professions: expert.professions || [],
       hourly_rate: expert.hourly_rate,
       rating: expert.rating,
       total_reviews: expert.total_reviews,
@@ -60,6 +62,7 @@ export class SupabaseExpertRepository implements IExpertRepository {
         user_id,
         bio,
         specializations,
+        professions,
         hourly_rate,
         rating,
         total_reviews,
@@ -85,7 +88,8 @@ export class SupabaseExpertRepository implements IExpertRepository {
       full_name: expert.profiles?.full_name || '',
       avatar_url: expert.profiles?.avatar_url || '',
       bio: expert.bio,
-      specializations: expert.specializations,
+      specializations: expert.specializations || [],
+      professions: expert.professions || [],
       hourly_rate: expert.hourly_rate,
       rating: expert.rating,
       total_reviews: expert.total_reviews,
@@ -105,6 +109,7 @@ export class SupabaseExpertRepository implements IExpertRepository {
         user_id,
         bio,
         specializations,
+        professions,
         certifications,
         hourly_rate,
         years_experience,
@@ -131,6 +136,20 @@ export class SupabaseExpertRepository implements IExpertRepository {
 
     const profile = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles;
 
+    let verifiedProfessions: string[] = [];
+    try {
+      const { data: docs } = await supabase
+        .from('qualification_documents')
+        .select('profession')
+        .eq('expert_profile_id', data.id)
+        .eq('status', 'approved');
+      verifiedProfessions = Array.from(
+        new Set((docs || []).map((d) => (d.profession || '').trim()).filter(Boolean))
+      );
+    } catch {
+      /* column may not exist yet */
+    }
+
     return {
       id: data.id,
       user_id: data.user_id,
@@ -139,7 +158,9 @@ export class SupabaseExpertRepository implements IExpertRepository {
       phone: profile?.phone || '',
       email: profile?.email || '',
       bio: data.bio,
-      specializations: data.specializations,
+      specializations: data.specializations || [],
+      professions: data.professions || [],
+      verified_professions: verifiedProfessions,
       certifications: data.certifications,
       hourly_rate: data.hourly_rate,
       years_experience: data.years_experience,

@@ -9,7 +9,11 @@ import { verificationService } from '@/lib/services/verification';
 
 interface DocumentUploadProps {
   expertProfileId: string;
+  /** Available professions to link a qualification to */
+  professions?: string[];
   onUploadComplete?: () => void;
+  /** When false, hide the top label/description (parent provides them). */
+  showIntro?: boolean;
 }
 
 const DOCUMENT_TYPES = [
@@ -19,9 +23,15 @@ const DOCUMENT_TYPES = [
   { value: 'other', label: 'Sonstiges' },
 ];
 
-export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUploadProps) {
+export function DocumentUpload({
+  expertProfileId,
+  professions = [],
+  onUploadComplete,
+  showIntro = true,
+}: DocumentUploadProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [documentTypes, setDocumentTypes] = useState<Record<string, string>>({});
+  const [documentProfessions, setDocumentProfessions] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -38,6 +48,12 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
             [file.name]: 'certificate',
           }));
         }
+        if (!documentProfessions[file.name] && professions[0]) {
+          setDocumentProfessions((prev) => ({
+            ...prev,
+            [file.name]: professions[0],
+          }));
+        }
       });
     }
   };
@@ -45,6 +61,10 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
   const handleRemoveFile = (fileName: string) => {
     setSelectedFiles((prev) => prev.filter((f) => f.name !== fileName));
     setDocumentTypes((prev) => {
+      const { [fileName]: _, ...rest } = prev;
+      return rest;
+    });
+    setDocumentProfessions((prev) => {
       const { [fileName]: _, ...rest } = prev;
       return rest;
     });
@@ -62,6 +82,17 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
       setError('Bitte wähle mindestens eine Datei aus');
       return;
     }
+    if (professions.length === 0) {
+      setError('Bitte hinterlege zuerst mindestens eine Profession unter Stammdaten');
+      return;
+    }
+    const missingProfession = selectedFiles.some(
+      (file) => !documentProfessions[file.name]?.trim()
+    );
+    if (missingProfession) {
+      setError('Bitte wähle für jedes Dokument eine Profession');
+      return;
+    }
 
     setUploading(true);
     setError('');
@@ -70,12 +101,19 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
     try {
       for (const file of selectedFiles) {
         const documentType = documentTypes[file.name] || 'certificate';
-        await verificationService.uploadDocument(expertProfileId, file, documentType);
+        const profession = documentProfessions[file.name] || '';
+        await verificationService.uploadDocument(
+          expertProfileId,
+          file,
+          documentType,
+          profession
+        );
       }
 
       setSuccess(`${selectedFiles.length} Dokument(e) erfolgreich hochgeladen`);
       setSelectedFiles([]);
       setDocumentTypes({});
+      setDocumentProfessions({});
 
       if (onUploadComplete) {
         onUploadComplete();
@@ -92,12 +130,16 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
   return (
     <div className="space-y-3">
       <div>
-        <Label htmlFor="documents" className="font-body text-sm font-medium mb-1 block">
-          Qualifikationsnachweise hochladen
-        </Label>
-        <p className="text-xs text-gray-500 font-body mb-2">
-          Abschlüsse, Zertifikate und Lizenzen (PDF, JPG, PNG)
-        </p>
+        {showIntro && (
+          <>
+            <Label htmlFor="documents" className="font-body text-sm font-medium mb-1 block">
+              Qualifikationsnachweise hochladen
+            </Label>
+            <p className="text-xs text-gray-500 font-body mb-2">
+              Abschlüsse, Zertifikate und Lizenzen (PDF, JPG, PNG)
+            </p>
+          </>
+        )}
 
         <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-primary-blue transition-colors">
           <input
@@ -111,9 +153,9 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
           <label htmlFor="documents" className="cursor-pointer">
             <Upload className="w-6 h-6 text-gray-400 mx-auto mb-1.5" />
             <p className="text-xs font-body text-gray-600 mb-0.5">
-              Klicken oder Dateien hierher ziehen
+              Klicke hier oder ziehe Dateien hierher
             </p>
-            <p className="text-[11px] text-gray-400 font-body">PDF, JPG, PNG · max. 10MB</p>
+            <p className="text-[11px] text-gray-400 font-body">PDF, JPG, PNG (max. 10MB pro Datei)</p>
           </label>
         </div>
       </div>
@@ -162,6 +204,37 @@ export function DocumentUpload({ expertProfileId, onUploadComplete }: DocumentUp
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <Label className="text-[11px] font-body mb-1 block text-gray-500">
+                  Profession *
+                </Label>
+                {professions.length === 0 ? (
+                  <p className="text-[11px] text-gray-500 font-body">
+                    Bitte zuerst unter Stammdaten Professions anlegen.
+                  </p>
+                ) : (
+                  <select
+                    value={documentProfessions[file.name] || ''}
+                    onChange={(e) =>
+                      setDocumentProfessions((prev) => ({
+                        ...prev,
+                        [file.name]: e.target.value,
+                      }))
+                    }
+                    className="w-full px-2.5 py-1.5 border rounded-md text-xs font-body h-8"
+                  >
+                    <option value="" disabled>
+                      Profession wählen
+                    </option>
+                    {professions.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
           ))}

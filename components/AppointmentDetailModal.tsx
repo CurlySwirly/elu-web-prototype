@@ -447,6 +447,15 @@ export default function AppointmentDetailModal({
     ? 'Online'
     : offerAddress || expertAddress || 'Adresse folgt';
   const priceBreakdown = getSessionPriceBreakdown(appointment.total_price);
+  // Demo / default: Expert:innen als Kleinunternehmer → keine USt auf den Servicepreis
+  const sessionVatApplies = false;
+  const sessionGross = priceBreakdown.clientPays;
+  const sessionVat = sessionVatApplies
+    ? Math.round(
+        (sessionGross - sessionGross / (1 + priceBreakdown.vatRate)) * 100
+      ) / 100
+    : 0;
+  const sessionNet = Math.round((sessionGross - sessionVat) * 100) / 100;
 
   const person =
     userRole === 'expert'
@@ -483,8 +492,8 @@ export default function AppointmentDetailModal({
     userRole === 'client' &&
     appointment.status === 'confirmed' &&
     startsInFuture;
-  /** Invoice only after the session took place — never for open/upcoming bookings */
-  const showInvoice = isPastSession;
+  // Only after the booking is completed (Vergangene) — never for open/upcoming confirmed sessions
+  const showInvoice = appointment.status === 'completed';
   const actionCount =
     (canChat ? 1 : 0) +
     (showReschedule ? 1 : 0) +
@@ -606,32 +615,41 @@ export default function AppointmentDetailModal({
             </h4>
             <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
               <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                <span className="text-sm text-gray-600 font-body">
-                  {userRole === 'expert' ? 'Klient:in zahlt' : 'Sessionpreis'}
-                </span>
+                <span className="text-sm text-gray-600 font-body">Sessionpreis brutto</span>
                 <span className="text-sm font-body font-medium text-text-dark tabular-nums">
-                  {formatEuro(priceBreakdown.clientPays)}
+                  {formatEuro(sessionGross)}
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-3 px-3.5 py-2.5">
+                <div className="min-w-0">
+                  <span className="text-sm text-gray-600 font-body">MwSt.</span>
+                  {!sessionVatApplies && (
+                    <p className="text-[11px] text-gray-400 font-body mt-0.5 leading-snug">
+                      Kleinunternehmerregelung, §&nbsp;6 Abs.&nbsp;1 Z&nbsp;27 UStG
+                    </p>
+                  )}
+                </div>
+                <span className="text-sm font-body font-medium text-text-dark tabular-nums shrink-0">
+                  {formatEuro(sessionVat)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                <span className="text-sm text-gray-600 font-body">Servicepreis netto</span>
+                <span className="text-sm font-body font-medium text-text-dark tabular-nums">
+                  {formatEuro(sessionNet)}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
                 <span className="text-sm text-gray-600 font-body">
-                  elu-Gebühr ({Math.round(priceBreakdown.feeRate * 100)}&nbsp;%, netto)
+                  Plattformprovision ({Math.round(priceBreakdown.feeRate * 100)}&nbsp;%)
                 </span>
                 <span className="text-sm font-body font-medium text-text-dark tabular-nums">
-                  {formatEuro(priceBreakdown.platformFeeNet)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                <span className="text-sm text-gray-600 font-body">
-                  MwSt. ({Math.round(priceBreakdown.vatRate * 100)}&nbsp;%)
-                </span>
-                <span className="text-sm font-body font-medium text-text-dark tabular-nums">
-                  {formatEuro(priceBreakdown.vatAmount)}
+                  −{formatEuro(priceBreakdown.platformFeeGross)}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-bg-light/80">
                 <span className="text-sm font-heading font-semibold text-text-dark">
-                  {userRole === 'expert' ? 'Dein Anteil' : 'Expert:in erhält'}
+                  {userRole === 'expert' ? 'Auszahlung' : 'Auszahlung an Expert:in'}
                 </span>
                 <span className="text-sm font-heading font-semibold text-text-dark tabular-nums">
                   {formatEuro(priceBreakdown.expertPayout)}

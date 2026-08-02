@@ -7,6 +7,8 @@ export interface QualificationDocument {
   document_type: string;
   file_path: string;
   file_name: string;
+  /** Linked profession (Decision 08.05.) */
+  profession?: string;
   status: 'pending' | 'approved' | 'rejected';
   uploaded_at: string;
   reviewed_at?: string;
@@ -127,7 +129,8 @@ export const verificationService = {
   async uploadDocument(
     expertProfileId: string,
     file: File,
-    documentType: string
+    documentType: string,
+    profession?: string
   ) {
     const fileExt = file.name.split('.').pop();
     const fileName = `${expertProfileId}_${Date.now()}.${fileExt}`;
@@ -146,6 +149,7 @@ export const verificationService = {
         document_type: documentType,
         file_path: filePath,
         file_name: file.name,
+        profession: profession?.trim() || '',
       })
       .select()
       .single();

@@ -8,6 +8,8 @@ export const mockExperts: Expert[] = [
     avatar_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
     bio: 'Zertifizierte Physiotherapeutin mit 8 Jahren Erfahrung in manueller Therapie und Rehabilitation.',
     specializations: ['Physiotherapie', 'Manuelle Therapie', 'Rehabilitation'],
+    professions: ['Physiotherapie'],
+    verified_professions: ['Physiotherapie'],
     hourly_rate: 85.00,
     rating: 4.8,
     total_reviews: 124,
@@ -29,6 +31,8 @@ export const mockExperts: Expert[] = [
     avatar_url: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg',
     bio: 'Zertifizierter Personal Trainer mit Fokus auf Krafttraining und Körpertransformation.',
     specializations: ['Personal Training', 'Krafttraining', 'Ernährungsberatung'],
+    professions: ['Personal Training', 'Ernährungsberatung'],
+    verified_professions: ['Personal Training'],
     hourly_rate: 75.00,
     rating: 4.9,
     total_reviews: 156,
@@ -783,6 +787,15 @@ export const mockProfile: UserProfile = {
 
 /** Verified expert demo account (`expert@test.com`) */
 export const MOCK_VERIFIED_EXPERT_USER_ID = 'mock-user-expert';
+
+/** Demo payout / bank details for verified expert */
+export const mockExpertPayoutAccount = {
+  accountHolder: 'Demo Expert GmbH',
+  iban: 'AT1212345678907890',
+  bic: 'GIBAATWWXXX',
+  bankName: 'Erste Bank',
+  verified: true,
+};
 
 /** Onboarding / verification demo account (`onboarding@test.com`) */
 export const MOCK_ONBOARDING_EXPERT_USER_ID = 'mock-user-expert-onboarding';
