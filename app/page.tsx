@@ -182,25 +182,20 @@ export default async function Home() {
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6">
               {[
                 {
                   step: '1',
-                  title: 'Profil anlegen',
-                  text: 'Teile deine Ziele und Präferenzen in wenigen Minuten.',
-                },
-                {
-                  step: '2',
                   title: 'Expert:in finden',
                   text: 'Wir zeigen dir passende Fachpersonen für deine Bedürfnisse.',
                 },
                 {
-                  step: '3',
+                  step: '2',
                   title: 'Termin buchen',
                   text: 'Flexibel, sicher und ohne lange Wartezeiten.',
                 },
                 {
-                  step: '4',
+                  step: '3',
                   title: 'Gesundheit verbessern',
                   text: 'Mit Expert:innen, die dich langfristig begleiten.',
                 },

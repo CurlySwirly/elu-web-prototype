@@ -30,6 +30,7 @@ import {
 import { format, isBefore, parseISO, startOfDay, startOfToday } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { formatEuro, getClientPriceBreakdown } from '@/lib/utils/pricing';
 import { supabase } from '@/lib/supabase';
 import { cancelAppointmentByClient, cancelAppointmentByExpert } from '@/lib/services/booking';
 import {
@@ -365,7 +366,12 @@ export function useAppointmentManageFlow({
         await new Promise((resolve) => setTimeout(resolve, 600));
         const startTime = appointment ? parseISO(appointment.start_time) : new Date();
         const hoursUntilStart = (startTime.getTime() - Date.now()) / (1000 * 60 * 60);
-        const refundAmount = hoursUntilStart >= 48 ? appointment?.total_price || 0 : 0;
+        const servicePrice = appointment?.total_price || 0;
+        const refundBase =
+          actor === 'client'
+            ? getClientPriceBreakdown(servicePrice).clientTotal
+            : servicePrice;
+        const refundAmount = hoursUntilStart >= 48 ? refundBase : 0;
 
         if (isExpert) {
           setActionMessage(
@@ -706,7 +712,11 @@ export function useAppointmentManageFlow({
                       {rescheduleSuccess.appointment.offer.title}
                     </p>
                     <p className="font-heading font-bold text-text-dark shrink-0 text-sm sm:text-base">
-                      €{Number(rescheduleSuccess.appointment.total_price).toFixed(2)}
+                      {formatEuro(
+                        getClientPriceBreakdown(
+                          Number(rescheduleSuccess.appointment.total_price) || 0
+                        ).clientTotal
+                      )}
                     </p>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 font-body">
@@ -816,7 +826,13 @@ export function useAppointmentManageFlow({
                       ) : null}
                     </div>
                     <p className="font-heading font-bold text-text-dark shrink-0 text-sm sm:text-base">
-                      €{Number(selectedAppointment.total_price).toFixed(2)}
+                      {formatEuro(
+                        actor === 'client'
+                          ? getClientPriceBreakdown(
+                              Number(selectedAppointment.total_price) || 0
+                            ).clientTotal
+                          : Number(selectedAppointment.total_price) || 0
+                      )}
                     </p>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 font-body">

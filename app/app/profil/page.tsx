@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -35,9 +36,13 @@ import {
   Pencil,
   Camera,
   Trash2,
+  ChevronDown,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { formatEuro, getClientPriceBreakdown } from '@/lib/utils/pricing';
+import { downloadInvoice } from '@/lib/utils/invoice';
+import { isOnlineOfferFormat } from '@/lib/utils/offer-location';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -61,6 +66,36 @@ const GENDER_OPTIONS = [
   { value: 'diverse', label: 'Divers' },
   { value: 'prefer_not_to_say', label: 'Keine Angabe' },
 ];
+
+const LANGUAGE_OPTIONS = [
+  'Arabisch',
+  'Chinesisch',
+  'Deutsch',
+  'Englisch',
+  'Französisch',
+  'Italienisch',
+  'Niederländisch',
+  'Polnisch',
+  'Portugiesisch',
+  'Russisch',
+  'Spanisch',
+  'Türkisch',
+].sort((a, b) => a.localeCompare(b, 'de'));
+
+function parseLanguages(value: string): string[] {
+  return value
+    .split(',')
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+function toggleLanguage(current: string, lang: string): string {
+  const selected = parseLanguages(current);
+  const next = selected.includes(lang)
+    ? selected.filter((l) => l !== lang)
+    : [...selected, lang];
+  return next.sort((a, b) => a.localeCompare(b, 'de')).join(', ');
+}
 
 interface PastBooking {
   id: string;
@@ -276,6 +311,7 @@ export default function ProfilePage() {
           expert_id,
           expert_profiles:expert_id (
             id,
+            profile_image_url,
             profiles:user_id (
               full_name,
               avatar_url
@@ -301,6 +337,9 @@ export default function ProfilePage() {
           const expertProfile = Array.isArray(expertProfiles?.profiles)
             ? expertProfiles?.profiles[0]
             : expertProfiles?.profiles;
+          const offer = Array.isArray(apt.expert_offers)
+            ? apt.expert_offers[0]
+            : apt.expert_offers;
 
           return {
             id: apt.id,
@@ -310,12 +349,13 @@ export default function ProfilePage() {
             total_price: Number(apt.total_price) || 0,
             expert: {
               id: expertProfiles?.id || apt.expert_id || '',
-              full_name: expertProfile?.full_name || '',
-              avatar_url: expertProfile?.avatar_url || '',
+              full_name: expertProfile?.full_name || 'Expert:in',
+              avatar_url:
+                expertProfile?.avatar_url || expertProfiles?.profile_image_url || '',
             },
             offer: {
-              title: apt.expert_offers?.title || '',
-              format: apt.expert_offers?.format || '',
+              title: offer?.title || 'Session',
+              format: offer?.format || '',
             },
           };
         })
@@ -555,17 +595,37 @@ export default function ProfilePage() {
     }
   };
 
-  const handleDownloadReceipt = async () => {
+  const handleDownloadReceipt = async (booking: PastBooking) => {
     toast({
       title: 'Rechnung wird generiert',
       description: 'Die Rechnung wird für dich vorbereitet…',
     });
-    setTimeout(() => {
+    try {
+      downloadInvoice({
+        appointmentId: booking.id,
+        offerTitle: booking.offer.title || 'Session',
+        sessionStart: booking.start_time,
+        sessionEnd: booking.end_time,
+        totalPrice: booking.total_price,
+        expertName: booking.expert.full_name || 'Expert:in',
+        clientName:
+          [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim() ||
+          user?.fullName ||
+          'Klient:in',
+        formatLabel: isOnlineOfferFormat(booking.offer.format) ? 'Online' : 'Vor Ort',
+        forClient: true,
+      });
       toast({
         title: 'Rechnung heruntergeladen',
         description: 'Die Rechnung wurde erfolgreich generiert.',
       });
-    }, 1200);
+    } catch {
+      toast({
+        title: 'Fehler',
+        description: 'Rechnung konnte nicht erstellt werden.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const toggleGoal = (goal: string) => {
@@ -607,10 +667,10 @@ export default function ProfilePage() {
     return (
       <div className="p-3 sm:p-4 lg:p-5 space-y-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
+          <h1 className="text-lg sm:text-xl font-heading font-bold text-text-dark">
             Mein Profil
           </h1>
-          <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
+          <p className="text-sm text-gray-500 font-body mt-1">
             Verwalte deine persönlichen Informationen.
           </p>
         </div>
@@ -660,10 +720,10 @@ export default function ProfilePage() {
   return (
     <div className="p-3 sm:p-4 lg:p-5 space-y-4">
       <div>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
+        <h1 className="text-lg sm:text-xl font-heading font-bold text-text-dark">
           Mein Profil
         </h1>
-        <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
+        <p className="text-sm text-gray-500 font-body mt-1">
           Verwalte deine persönlichen Informationen.
         </p>
       </div>
@@ -889,12 +949,49 @@ export default function ProfilePage() {
                     </div>
                     <div className="space-y-2">
                       <Label className="font-body">Gesprochene Sprachen</Label>
-                      <Input
-                        value={draft.languages}
-                        onChange={(e) => setDraft((d) => ({ ...d, languages: e.target.value }))}
-                        className="font-body"
-                        placeholder="z. B. Deutsch, Englisch"
-                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full justify-between font-body font-normal h-10 px-3"
+                          >
+                            <span
+                              className={cn(
+                                'truncate text-left',
+                                !draft.languages.trim() && 'text-muted-foreground'
+                              )}
+                            >
+                              {draft.languages.trim() || 'Sprachen auswählen'}
+                            </span>
+                            <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="start"
+                          className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-64 overflow-y-auto"
+                        >
+                          {LANGUAGE_OPTIONS.map((lang) => {
+                            const selected = parseLanguages(draft.languages);
+                            return (
+                              <DropdownMenuCheckboxItem
+                                key={lang}
+                                checked={selected.includes(lang)}
+                                onCheckedChange={() =>
+                                  setDraft((d) => ({
+                                    ...d,
+                                    languages: toggleLanguage(d.languages, lang),
+                                  }))
+                                }
+                                onSelect={(e) => e.preventDefault()}
+                                className="font-body"
+                              >
+                                {lang}
+                              </DropdownMenuCheckboxItem>
+                            );
+                          })}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                       <Label className="font-body">Adresse</Label>
@@ -925,11 +1022,11 @@ export default function ProfilePage() {
           <TabsContent value="goals" className="mt-0">
             <Card className="border-2">
               <CardHeader>
-                <CardTitle className="font-heading text-xl sm:text-2xl text-text-dark flex items-center gap-2">
-                  <Target className="w-6 h-6 text-primary-blue" />
+                <CardTitle className="font-heading text-xl text-text-dark flex items-center gap-2">
+                  <Target className="w-5 h-5 text-primary-blue" />
                   Meine Gesundheitsziele
                 </CardTitle>
-                <CardDescription className="font-body">
+                <CardDescription className="font-body text-sm">
                   Wähle deine Ziele aus, um passende Expert:innen zu finden
                 </CardDescription>
               </CardHeader>
@@ -969,11 +1066,11 @@ export default function ProfilePage() {
           <TabsContent value="bookings" className="mt-0">
             <Card className="border-2">
               <CardHeader>
-                <CardTitle className="font-heading text-xl sm:text-2xl text-text-dark flex items-center gap-2">
-                  <Calendar className="w-6 h-6 text-primary-blue" />
+                <CardTitle className="font-heading text-xl text-text-dark flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-primary-blue" />
                   Vergangene Buchungen
                 </CardTitle>
-                <CardDescription className="font-body">
+                <CardDescription className="font-body text-sm">
                   Sieh dir deine abgeschlossenen Termine an und lade Rechnungen herunter
                 </CardDescription>
               </CardHeader>
@@ -1056,14 +1153,21 @@ export default function ProfilePage() {
                           </div>
 
                           <div className="shrink-0 flex flex-col items-end justify-between gap-2">
-                            <p className="font-heading font-bold text-text-dark">
-                              €{booking.total_price.toFixed(2)}
-                            </p>
+                            <div className="text-right">
+                              <p className="font-heading font-bold text-text-dark">
+                                {formatEuro(
+                                  getClientPriceBreakdown(booking.total_price).clientTotal
+                                )}
+                              </p>
+                              <p className="text-[11px] text-gray-400 font-body mt-0.5">
+                                inkl. Servicegebühr
+                              </p>
+                            </div>
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
-                              onClick={() => handleDownloadReceipt()}
+                              onClick={() => handleDownloadReceipt(booking)}
                               className="font-body h-8"
                             >
                               <Download className="w-3.5 h-3.5 mr-1.5" />

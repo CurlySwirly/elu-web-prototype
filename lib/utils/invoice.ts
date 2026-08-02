@@ -1,17 +1,20 @@
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { formatEuro } from '@/lib/utils/pricing';
+import { formatEuro, getClientPriceBreakdown } from '@/lib/utils/pricing';
 
 export type InvoiceData = {
   appointmentId: string;
   offerTitle: string;
   sessionStart: string;
   sessionEnd: string;
+  /** Servicepreis / offer price (brutto) – service fee is derived for client invoices */
   totalPrice: number;
   expertName: string;
   expertAddress?: string;
   clientName: string;
   formatLabel: string;
+  /** When true, invoice shows Servicepreis + Servicegebühr + Endpreis */
+  forClient?: boolean;
 };
 
 export function getInvoiceNumber(appointmentId: string) {
@@ -24,7 +27,34 @@ export function buildInvoiceHtml(data: InvoiceData) {
   const issuedOn = format(parseISO(data.sessionEnd), 'd. MMMM yyyy', { locale: de });
   const sessionDate = format(parseISO(data.sessionStart), 'd. MMMM yyyy', { locale: de });
   const sessionTime = `${format(parseISO(data.sessionStart), 'HH:mm')} – ${format(parseISO(data.sessionEnd), 'HH:mm')} Uhr`;
-  const amount = formatEuro(data.totalPrice);
+  const forClient = data.forClient !== false;
+  const breakdown = getClientPriceBreakdown(data.totalPrice);
+  const totalLabel = forClient ? formatEuro(breakdown.clientTotal) : formatEuro(data.totalPrice);
+
+  const lineRows = forClient
+    ? `
+      <tr>
+        <td>
+          <strong>${escapeHtml(data.offerTitle)}</strong><br />
+          <span class="muted">${sessionDate} · ${sessionTime} · ${escapeHtml(data.formatLabel)}</span>
+        </td>
+        <td class="amount">${formatEuro(breakdown.servicePrice)}</td>
+      </tr>
+      <tr>
+        <td>
+          Servicegebühr<br />
+          <span class="muted">inkl. ${Math.round(breakdown.serviceFeeVatRate * 100)}% USt</span>
+        </td>
+        <td class="amount">${formatEuro(breakdown.serviceFeeGross)}</td>
+      </tr>`
+    : `
+      <tr>
+        <td>
+          <strong>${escapeHtml(data.offerTitle)}</strong><br />
+          <span class="muted">${sessionDate} · ${sessionTime} · ${escapeHtml(data.formatLabel)}</span>
+        </td>
+        <td class="amount">${formatEuro(data.totalPrice)}</td>
+      </tr>`;
 
   return `<!DOCTYPE html>
 <html lang="de">
@@ -72,19 +102,13 @@ export function buildInvoiceHtml(data: InvoiceData) {
       </tr>
     </thead>
     <tbody>
-      <tr>
-        <td>
-          <strong>${escapeHtml(data.offerTitle)}</strong><br />
-          <span class="muted">${sessionDate} · ${sessionTime} · ${escapeHtml(data.formatLabel)}</span>
-        </td>
-        <td class="amount">${amount}</td>
-      </tr>
+      ${lineRows}
     </tbody>
   </table>
 
   <div class="total">
-    <span>Gesamtbetrag</span>
-    <strong>${amount}</strong>
+    <span>${forClient ? 'Endpreis' : 'Gesamtbetrag'}</span>
+    <strong>${totalLabel}</strong>
   </div>
 
   <p class="footer">

@@ -50,8 +50,9 @@ export default function ExpertsPage() {
 
       const formatsMap: Record<string, Set<'online' | 'in_person'>> = {};
       const backendMode = getBackendMode();
+      const usingMockIds = data.some((e) => /^\d+$/.test(e.id) || e.id.startsWith('mock-'));
 
-      if (backendMode === 'mock') {
+      if (backendMode === 'mock' || usingMockIds) {
         const { mockExpertOffers } = await import('@/lib/backend/mock/data');
         for (const offer of mockExpertOffers) {
           const normalized = normalizeOfferFormat(offer.format);
@@ -97,6 +98,20 @@ export default function ExpertsPage() {
       setExpertFormats(formatsMap);
     } catch (error) {
       console.error('Failed to load experts:', error);
+      try {
+        const { mockExperts, mockExpertOffers } = await import('@/lib/backend/mock/data');
+        setExperts(mockExperts);
+        const formatsMap: Record<string, Set<'online' | 'in_person'>> = {};
+        for (const offer of mockExpertOffers) {
+          const normalized = normalizeOfferFormat(offer.format);
+          if (!normalized) continue;
+          if (!formatsMap[offer.expert_id]) formatsMap[offer.expert_id] = new Set();
+          formatsMap[offer.expert_id].add(normalized);
+        }
+        setExpertFormats(formatsMap);
+      } catch {
+        /* ignore */
+      }
     } finally {
       setLoading(false);
     }
@@ -186,10 +201,10 @@ export default function ExpertsPage() {
   return (
     <div className="p-3 sm:p-4 lg:p-5 space-y-4">
       <div>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
+        <h1 className="text-lg sm:text-xl font-heading font-bold text-text-dark">
           Expert:innen finden
         </h1>
-        <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
+        <p className="text-sm text-gray-500 font-body mt-1">
           Durchsuche unser Netzwerk von zertifizierten Wellness-Expert:innen
         </p>
       </div>

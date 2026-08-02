@@ -1,7 +1,7 @@
 'use client';
 
 import { getBackendMode } from '@/lib/backend/mode';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { MapPin, Video, CheckCircle2, ArrowLeft, AlertCircle, CalendarPlus, MessageCircle } from 'lucide-react';
-import { format, setHours, setMinutes, isBefore, startOfToday, addMinutes } from 'date-fns';
+import { format, setHours, setMinutes, isBefore, startOfToday, addMinutes, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import {
   buildGoogleCalendarUrl,
@@ -27,23 +27,28 @@ import {
 } from '@/lib/utils/calendar-export';
 import { chatService } from '@/lib/services/chat';
 import {
+  getAvailableTimeSlotsForDate,
+  hasAvailabilityOnDate,
+  type ExpertAbsence,
+  type ExpertAvailabilitySlot,
+  type BusyInterval,
+} from '@/lib/services/availability';
+import {
   formatLocationParts,
   formatOfferLocation,
   isOnlineOfferFormat,
 } from '@/lib/utils/offer-location';
+import { formatEuro, getClientPriceBreakdown } from '@/lib/utils/pricing';
+import { ClientPriceBreakdownView } from '@/components/ClientPriceBreakdown';
 
 interface ExpertProfile {
   full_name: string;
   avatar_url: string;
+  professions?: string[];
   address?: string;
   postal_code?: string;
   city?: string;
   country?: string;
-}
-
-interface TimeSlot {
-  time: string;
-  available: boolean;
 }
 
 export default function BookingPage() {
@@ -68,6 +73,9 @@ export default function BookingPage() {
   const [createdAccount, setCreatedAccount] = useState(false);
   const [bookedAppointmentId, setBookedAppointmentId] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
+  const [availability, setAvailability] = useState<ExpertAvailabilitySlot[]>([]);
+  const [absences, setAbsences] = useState<ExpertAbsence[]>([]);
+  const [busyIntervals, setBusyIntervals] = useState<BusyInterval[]>([]);
 
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
@@ -76,20 +84,16 @@ export default function BookingPage() {
   const [createAccount, setCreateAccount] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
-  const timeSlots: TimeSlot[] = [
-    { time: '08:00', available: true },
-    { time: '09:00', available: true },
-    { time: '10:00', available: true },
-    { time: '11:00', available: true },
-    { time: '12:00', available: false },
-    { time: '13:00', available: true },
-    { time: '14:00', available: true },
-    { time: '15:00', available: true },
-    { time: '16:00', available: true },
-    { time: '17:00', available: true },
-    { time: '18:00', available: true },
-    { time: '19:00', available: false },
-  ];
+  const availableTimes = useMemo(() => {
+    if (!selectedDate || !offer) return [];
+    return getAvailableTimeSlotsForDate({
+      date: selectedDate,
+      availability,
+      absences,
+      durationMinutes: offer.duration_minutes || 60,
+      busyIntervals,
+    });
+  }, [selectedDate, offer, availability, absences, busyIntervals]);
 
   const loadBookingData = useCallback(async () => {
     try {
@@ -101,9 +105,14 @@ export default function BookingPage() {
       ]);
 
       if (expertData) {
+        const professions =
+          expertData.professions?.filter(Boolean) ||
+          expertData.specializations?.slice(0, 1) ||
+          [];
         setExpert({
           full_name: expertData.full_name,
           avatar_url: expertData.avatar_url || '',
+          professions,
           address: expertData.address,
           postal_code: expertData.postal_code,
           city: expertData.city,
@@ -128,6 +137,47 @@ export default function BookingPage() {
           }
         }
       }
+
+      if (backendMode === 'mock') {
+        const { mockExpertAvailabilityByExpertId } = await import('@/lib/backend/mock/data');
+        const slots =
+          mockExpertAvailabilityByExpertId[expertId] ||
+          mockExpertAvailabilityByExpertId['1'] ||
+          [];
+        setAvailability(slots);
+        setAbsences([]);
+        setBusyIntervals([]);
+      } else {
+        const profileId = expertData?.id || expertId;
+        const [{ data: availabilityRows }, { data: absenceRows }, { data: busyRows }] =
+          await Promise.all([
+            supabase
+              .from('expert_availability')
+              .select('id, day_of_week, start_time, end_time, is_available')
+              .eq('expert_profile_id', profileId)
+              .eq('is_available', true),
+            supabase
+              .from('expert_absences')
+              .select('id, start_date, end_date, reason')
+              .eq('expert_profile_id', profileId),
+            supabase
+              .from('appointments')
+              .select('id, start_time, end_time')
+              .eq('expert_id', profileId)
+              .in('status', ['confirmed', 'requested', 'pending'])
+              .gte('start_time', new Date().toISOString()),
+          ]);
+
+        setAvailability((availabilityRows as ExpertAvailabilitySlot[]) || []);
+        setAbsences((absenceRows as ExpertAbsence[]) || []);
+        setBusyIntervals(
+          (busyRows || []).map((apt: { id: string; start_time: string; end_time: string }) => ({
+            id: apt.id,
+            start: parseISO(apt.start_time),
+            end: parseISO(apt.end_time),
+          }))
+        );
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -148,8 +198,8 @@ export default function BookingPage() {
     }
 
     if (isGuest) {
-      if (!guestName.trim() || !guestEmail.trim()) {
-        setError('Bitte gib Name und E-Mail an');
+      if (!guestName.trim() || !guestEmail.trim() || !guestPhone.trim()) {
+        setError('Bitte gib Name, E-Mail und Telefonnummer an');
         return;
       }
       if (createAccount && guestPassword.length < 6) {
@@ -364,7 +414,7 @@ export default function BookingPage() {
             <div className="w-16 h-16 rounded-full bg-primary-green/20 flex items-center justify-center mx-auto mb-5">
               <CheckCircle2 className="w-8 h-8 text-primary-green" />
             </div>
-            <h2 className="font-heading text-xl sm:text-2xl font-bold text-text-dark mb-3">
+            <h2 className="font-heading text-lg sm:text-xl font-bold text-text-dark mb-3">
               Termin gebucht!
             </h2>
             <p className="text-sm text-gray-600 font-body mb-6">
@@ -452,7 +502,7 @@ export default function BookingPage() {
 
           <Card className="border-2">
             <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
-              <CardTitle className="font-heading text-xl sm:text-2xl text-text-dark">
+              <CardTitle className="font-heading text-lg sm:text-xl text-text-dark">
                 Buchungsübersicht
               </CardTitle>
               <CardDescription className="font-body text-sm">
@@ -470,7 +520,11 @@ export default function BookingPage() {
                   </Avatar>
                   <div>
                     <p className="font-heading font-semibold text-text-dark text-sm sm:text-base">{expert.full_name}</p>
-                    <p className="text-xs text-gray-500 font-body">Expert:in</p>
+                    <p className="text-xs text-gray-500 font-body">
+                      {expert.professions?.length
+                        ? expert.professions.join(' · ')
+                        : 'Expert:in'}
+                    </p>
                   </div>
                 </div>
 
@@ -520,9 +574,9 @@ export default function BookingPage() {
                       <span className="font-body text-sm text-text-dark">{notes}</span>
                     </div>
                   )}
-                  <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
-                    <span className="font-heading text-base font-bold text-text-dark">Preis</span>
-                    <span className="font-heading text-xl font-bold text-text-dark">€{offer.price}</span>
+                  <div className="border-t border-gray-200 pt-3 space-y-2">
+                    <p className="font-heading text-sm font-semibold text-text-dark">Preisübersicht</p>
+                    <ClientPriceBreakdownView servicePrice={Number(offer.price) || 0} />
                   </div>
                 </div>
               </div>
@@ -561,13 +615,14 @@ export default function BookingPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="guestPhone" className="font-body text-sm">Telefon (optional)</Label>
+                    <Label htmlFor="guestPhone" className="font-body text-sm">Telefon</Label>
                     <Input
                       id="guestPhone"
                       type="tel"
                       value={guestPhone}
                       onChange={(e) => setGuestPhone(e.target.value)}
                       placeholder="+49 …"
+                      required
                       className="font-body text-sm"
                     />
                   </div>
@@ -661,11 +716,11 @@ export default function BookingPage() {
 
         <Card className="border-2">
           <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
-            <CardTitle className="font-heading text-xl sm:text-2xl text-text-dark">
+            <CardTitle className="font-heading text-lg sm:text-xl text-text-dark">
               Wähle Datum und Uhrzeit
             </CardTitle>
             <CardDescription className="font-body text-sm">
-              {offer.title} · €{offer.price}
+              {offer.title} · {formatEuro(getClientPriceBreakdown(Number(offer.price) || 0).clientTotal)}
             </CardDescription>
           </CardHeader>
           <CardContent className="px-4 sm:px-5 pb-4 sm:pb-5 space-y-5">
@@ -679,7 +734,10 @@ export default function BookingPage() {
                     setSelectedDate(date);
                     setSelectedTime('');
                   }}
-                  disabled={(date) => isBefore(date, startOfToday())}
+                  disabled={(date) =>
+                    isBefore(date, startOfToday()) ||
+                    !hasAvailabilityOnDate(date, availability, absences)
+                  }
                   locale={de}
                   className="rounded-md border w-full"
                   classNames={{
@@ -694,23 +752,29 @@ export default function BookingPage() {
               <div>
                 <Label className="font-body text-sm mb-2.5 block">Verfügbare Zeiten</Label>
                 {selectedDate ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    {timeSlots.map((slot) => (
-                      <Button
-                        key={slot.time}
-                        variant={selectedTime === slot.time ? 'default' : 'outline'}
-                        disabled={!slot.available}
-                        onClick={() => setSelectedTime(slot.time)}
-                        className={`font-body text-sm ${
-                          selectedTime === slot.time
-                            ? 'bg-primary-blue text-white hover:bg-primary-blue hover:opacity-90'
-                            : ''
-                        }`}
-                      >
-                        {slot.time}
-                      </Button>
-                    ))}
-                  </div>
+                  availableTimes.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-2 max-h-[320px] overflow-y-auto pr-1">
+                      {availableTimes.map((time) => (
+                        <Button
+                          key={time}
+                          variant={selectedTime === time ? 'default' : 'outline'}
+                          onClick={() => setSelectedTime(time)}
+                          className={`font-body text-sm ${
+                            selectedTime === time
+                              ? 'bg-primary-blue text-white hover:bg-primary-blue hover:opacity-90'
+                              : ''
+                          }`}
+                        >
+                          {time}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 font-body pt-1">
+                      An diesem Tag sind keine freien Zeiten verfügbar. Bitte wähle ein anderes
+                      Datum.
+                    </p>
+                  )
                 ) : (
                   <p className="text-sm text-gray-500 font-body pt-1">
                     Bitte zuerst ein Datum wählen.

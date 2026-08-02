@@ -1,7 +1,7 @@
 'use client';
 
 import { getBackendMode } from '@/lib/backend/mode';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,9 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { firstNameFrom } from '@/lib/utils/name';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -35,29 +33,20 @@ import {
   AlertCircle,
   Calendar as CalendarIcon,
   CalendarClock,
-  CalendarPlus,
   ArrowRight,
-  Clock,
-  MapPin,
   MoreHorizontal,
   Star,
   Trash2,
-  Video,
   MessageCircle,
 } from 'lucide-react';
 import {
   format,
-  isSameDay,
   isToday,
   parseISO,
   startOfDay,
-  startOfWeek,
-  endOfWeek,
-  isWithinInterval,
   setHours,
   setMinutes,
 } from 'date-fns';
-import { de } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import {
   createPersonalEvent,
@@ -69,16 +58,22 @@ import {
   type PendingReviewAppointment,
 } from '@/lib/services/review';
 import { ReviewFlowDialog } from '@/components/ReviewFlowDialog';
+import AppointmentDetailModal from '@/components/AppointmentDetailModal';
+import {
+  ExpertAppleCalendar,
+  type ExpertCalendarEvent,
+} from '@/components/ExpertAppleCalendar';
 import { chatService } from '@/lib/services/chat';
 import {
   useAppointmentManageFlow,
   type ManageableAppointment,
 } from '@/components/AppointmentManageDialogs';
 
-type FilterTab = 'all' | 'today' | 'week';
+type FilterTab = 'all' | 'today';
 
 type DashboardAppointment = ManageableAppointment & {
   expert?: ManageableAppointment['expert'] & {
+    id?: string;
     specialty?: string;
   };
 };
@@ -95,13 +90,6 @@ export default function ClientDashboard() {
   const [reviewAppointmentId, setReviewAppointmentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>('all');
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [hoveredDayPreview, setHoveredDayPreview] = useState<{
-    date: Date;
-    top: number;
-    left: number;
-  } | null>(null);
-  const dayPreviewHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
@@ -111,6 +99,8 @@ export default function ClientDashboard() {
   const [eventEnd, setEventEnd] = useState('11:00');
   const [eventNotes, setEventNotes] = useState('');
   const [greetingName, setGreetingName] = useState(() => firstNameFrom(user?.fullName));
+  const [detailAppointmentId, setDetailAppointmentId] = useState<string | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   const resolveGreetingName = useCallback(
     (fullName?: string | null) => {
@@ -144,10 +134,10 @@ export default function ClientDashboard() {
 
       if (backendMode === 'mock') {
         await new Promise((resolve) => setTimeout(resolve, 250));
-        const { mockClientBookingRequests, mockProfile } = await import('@/lib/backend/mock/data');
+        const { mockClientAppointments, mockProfile } = await import('@/lib/backend/mock/data');
         setGreetingName(resolveGreetingName(mockProfile.full_name));
         setAppointments(
-          mockClientBookingRequests
+          mockClientAppointments
             .filter((apt: DashboardAppointment) => apt.status === 'confirmed')
             .map((apt: any) => ({
               id: apt.id,
@@ -156,7 +146,12 @@ export default function ClientDashboard() {
               end_time: apt.end_time,
               status: apt.status,
               total_price: apt.total_price,
-              expert: apt.expert,
+              expert: {
+                id: apt.expert?.id || apt.expert_id || '',
+                full_name: apt.expert?.full_name || '',
+                avatar_url: apt.expert?.avatar_url || '',
+                specialty: apt.expert?.specialty || apt.expert?.specializations?.[0] || '',
+              },
               offer: {
                 title: apt.offer?.title || '',
                 format: apt.offer?.format || '',
@@ -225,6 +220,7 @@ export default function ClientDashboard() {
               status: apt.status,
               total_price: apt.total_price,
               expert: {
+                id: apt.expert_id || apt.expert?.id || '',
                 full_name: profile?.full_name || '',
                 avatar_url: profile?.avatar_url || '',
                 specialty: Array.isArray(specializations) ? specializations[0] : '',
@@ -268,12 +264,6 @@ export default function ClientDashboard() {
   }, [loadData]);
 
   useEffect(() => {
-    return () => {
-      if (dayPreviewHideTimer.current) clearTimeout(dayPreviewHideTimer.current);
-    };
-  }, []);
-
-  useEffect(() => {
     const reviewId = searchParams.get('review');
     if (!reviewId || loading) return;
     setReviewAppointmentId(reviewId);
@@ -306,65 +296,41 @@ export default function ClientDashboard() {
     if (filter === 'today') {
       return upcomingAppointments.filter((apt) => isToday(parseISO(apt.start_time)));
     }
-    if (filter === 'week') {
-      const now = new Date();
-      const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-      const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
-      return upcomingAppointments.filter((apt) =>
-        isWithinInterval(parseISO(apt.start_time), { start: weekStart, end: weekEnd })
-      );
-    }
     return upcomingAppointments;
   }, [upcomingAppointments, filter]);
 
-  const appointmentDates = useMemo(
-    () => appointments.map((apt) => startOfDay(parseISO(apt.start_time))),
-    [appointments]
-  );
-
-  const personalEventDates = useMemo(
-    () => personalEvents.map((evt) => startOfDay(parseISO(evt.start_time))),
-    [personalEvents]
-  );
-
-  const terminDates = useMemo(
-    () => [...appointmentDates, ...personalEventDates],
-    [appointmentDates, personalEventDates]
-  );
-
-  const clearDayPreviewHide = () => {
-    if (dayPreviewHideTimer.current) {
-      clearTimeout(dayPreviewHideTimer.current);
-      dayPreviewHideTimer.current = null;
-    }
-  };
-
-  const scheduleDayPreviewHide = () => {
-    clearDayPreviewHide();
-    dayPreviewHideTimer.current = setTimeout(() => setHoveredDayPreview(null), 160);
-  };
-
-  const getEventsForDay = useCallback(
-    (day: Date) => {
-      const apts = appointments
-        .filter((apt) => isSameDay(parseISO(apt.start_time), day))
-        .sort(
-          (a, b) => parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime()
-        );
-      const personal = personalEvents
-        .filter((evt) => isSameDay(parseISO(evt.start_time), day))
-        .sort(
-          (a, b) => parseISO(a.start_time).getTime() - parseISO(b.start_time).getTime()
-        );
-      return { apts, personal };
-    },
-    [appointments, personalEvents]
-  );
-
-  const hoveredDayEvents = useMemo(() => {
-    if (!hoveredDayPreview) return { apts: [], personal: [] };
-    return getEventsForDay(hoveredDayPreview.date);
-  }, [hoveredDayPreview, getEventsForDay]);
+  const calendarEvents = useMemo<ExpertCalendarEvent[]>(() => {
+    const bookingEvents: ExpertCalendarEvent[] = appointments.map((apt) => {
+      const formatLabel =
+        apt.offer.format === 'online' || apt.offer.format === 'Online'
+          ? 'Online'
+          : 'Vor Ort';
+      return {
+        id: apt.id,
+        title: apt.offer.title,
+        start: parseISO(apt.start_time),
+        end: parseISO(apt.end_time),
+        color: 'blue',
+        source: 'elu',
+        meta: apt.expert?.full_name || 'Expert:in',
+        hoverLines: [
+          `mit ${apt.expert?.full_name || 'Expert:in'}`,
+          formatLabel,
+        ],
+      };
+    });
+    const ownEvents: ExpertCalendarEvent[] = personalEvents.map((evt) => ({
+      id: `personal-${evt.id}`,
+      title: evt.title,
+      start: parseISO(evt.start_time),
+      end: parseISO(evt.end_time),
+      color: 'green',
+      source: 'elu',
+      meta: 'Eigener Termin',
+      hoverLines: ['Eigener Termin'],
+    }));
+    return [...bookingEvents, ...ownEvents];
+  }, [appointments, personalEvents]);
 
   const {
     openReschedule,
@@ -387,7 +353,7 @@ export default function ClientDashboard() {
   });
 
   const openCreateDialog = (date?: Date) => {
-    const base = date || selectedDate || new Date();
+    const base = date || new Date();
     setEventDate(format(base, 'yyyy-MM-dd'));
     setEventTitle('');
     setEventStart('10:00');
@@ -560,11 +526,11 @@ export default function ClientDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Upcoming appointments */}
-        <Card className="border-2 lg:col-span-2">
+        <Card className="border-2">
           <CardHeader className="pb-3 pt-4 px-4 sm:px-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <CardTitle className="font-heading text-xl text-text-dark">
+                <CardTitle className="font-heading text-lg sm:text-xl text-text-dark">
                   Kommende Termine
                 </CardTitle>
               </div>
@@ -574,7 +540,6 @@ export default function ClientDashboard() {
                     [
                       { id: 'all', label: 'Alle' },
                       { id: 'today', label: 'Heute' },
-                      { id: 'week', label: 'Diese Woche' },
                     ] as const
                   ).map((tab) => (
                     <button
@@ -597,14 +562,14 @@ export default function ClientDashboard() {
           </CardHeader>
           <CardContent className="space-y-2.5 px-4 sm:px-5 pb-4">
             {filteredAppointments.length === 0 ? (
-              <div className="flex flex-col items-center text-center py-12 sm:py-16 px-4">
+              <div className="flex flex-col items-center text-center py-8 px-2">
                 <svg
-                  width="88"
-                  height="96"
+                  width="64"
+                  height="70"
                   viewBox="0 0 88 96"
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"
-                  className="mb-5 drop-shadow-sm"
+                  className="mb-3 drop-shadow-sm"
                   aria-hidden
                 >
                   <rect x="8" y="18" width="72" height="70" rx="10" fill="#F3F4F6" stroke="#D1D5DB" strokeWidth="2" />
@@ -622,110 +587,116 @@ export default function ClientDashboard() {
                     fill="none"
                   />
                 </svg>
-                <h3 className="font-heading text-xl sm:text-2xl font-bold text-text-dark mb-2">
+                <h3 className="font-heading text-base font-semibold text-text-dark mb-1.5">
                   Keine kommenden Termine
                 </h3>
-                <p className="font-body text-sm sm:text-base text-gray-500 max-w-sm mb-6 leading-relaxed">
+                <p className="font-body text-xs text-gray-500 max-w-[14rem] mb-4 leading-relaxed">
                   {upcomingAppointments.length === 0
                     ? 'Du hast keine anstehenden Termine. Buche eine Expert:in, um loszulegen.'
                     : 'In dieser Ansicht sind keine Termine. Wechsle den Filter oder buche eine Expert:in.'}
                 </p>
                 <Button
                   asChild
-                  className="bg-primary-blue hover:bg-primary-blue/90 text-white font-body font-semibold px-6 py-5 rounded-xl shadow-md"
+                  size="sm"
+                  className="bg-primary-blue hover:bg-primary-blue/90 text-white font-body font-semibold text-xs px-4 rounded-lg shadow-sm"
                 >
                   <Link href="/app/experten">Expert:in finden</Link>
                 </Button>
               </div>
             ) : (
-              filteredAppointments.slice(0, 5).map((apt) => (
-                <div
-                  key={apt.id}
-                  className="w-full p-3 rounded-xl border-2 bg-white hover:border-primary-blue transition-colors"
-                >
-                  <div className="flex items-start gap-3">
-                    <Avatar className="w-11 h-11 shrink-0">
-                      <AvatarImage src={apt.expert?.avatar_url} alt={apt.expert?.full_name} />
-                      <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white text-xs font-heading">
-                        {(apt.expert?.full_name || '?')
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')}
-                      </AvatarFallback>
-                    </Avatar>
+              filteredAppointments.slice(0, 5).map((apt) => {
+                const expertProfileId = apt.expert?.id || apt.expert_id || '';
+                return (
+                  <div
+                    key={apt.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      setDetailAppointmentId(apt.id);
+                      setIsDetailModalOpen(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setDetailAppointmentId(apt.id);
+                        setIsDetailModalOpen(true);
+                      }
+                    }}
+                    className="w-full text-left p-3 rounded-xl border-2 bg-white hover:border-primary-blue transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar className="w-11 h-11 shrink-0">
+                        <AvatarImage src={apt.expert?.avatar_url} alt={apt.expert?.full_name} />
+                        <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white text-xs font-heading">
+                          {(apt.expert?.full_name || '?')
+                            .split(' ')
+                            .map((n) => n[0])
+                            .join('')}
+                        </AvatarFallback>
+                      </Avatar>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-heading font-semibold text-text-dark truncate">
-                            {apt.offer.title}
-                          </p>
-                          <p className="text-sm text-gray-600 font-body mt-0.5 line-clamp-2">
-                            mit {apt.expert?.full_name || 'Expert:in'}
-                            {apt.expert?.specialty ? ` · ${apt.expert.specialty}` : ''}
-                          </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-heading font-semibold text-text-dark truncate">
+                              {apt.offer.title}
+                            </p>
+                            <p className="text-sm text-gray-600 font-body mt-0.5 truncate">
+                              mit{' '}
+                              {expertProfileId ? (
+                                <Link
+                                  href={`/app/experten/${expertProfileId}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-primary-blue font-medium hover:underline"
+                                >
+                                  {apt.expert?.full_name || 'Expert:in'}
+                                </Link>
+                              ) : (
+                                apt.expert?.full_name || 'Expert:in'
+                              )}
+                            </p>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-500 hover:text-text-dark shrink-0 -mt-1 -mr-1"
+                                aria-label="Terminoptionen"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-52 font-body"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <DropdownMenuItem
+                                className="cursor-pointer"
+                                onSelect={() => openReschedule(apt.id)}
+                              >
+                                <CalendarClock className="w-4 h-4 mr-2 text-primary-blue" />
+                                Termin verschieben
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="cursor-pointer text-red-600 focus:text-red-600"
+                                onSelect={() => openCancel(apt.id)}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Termin stornieren
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-gray-500 hover:text-text-dark shrink-0 -mt-1 -mr-1"
-                              aria-label="Terminoptionen"
-                            >
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-52 font-body">
-                            <DropdownMenuItem
-                              className="cursor-pointer"
-                              onSelect={() => openReschedule(apt.id)}
-                            >
-                              <CalendarClock className="w-4 h-4 mr-2 text-primary-blue" />
-                              Termin verschieben
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="cursor-pointer text-red-600 focus:text-red-600"
-                              onSelect={() => openCancel(apt.id)}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Termin stornieren
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-
-                      <div className="flex flex-wrap items-end justify-between gap-2 mt-3">
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 font-body">
-                          <span className="flex items-center gap-1">
-                            <CalendarIcon className="w-3.5 h-3.5" />
-                            {format(parseISO(apt.start_time), 'd. MMM yyyy', { locale: de })}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            {format(parseISO(apt.start_time), 'HH:mm', { locale: de })} Uhr
-                          </span>
-                          <Badge className="bg-info-bg text-info-text border-none font-body flex items-center gap-1">
-                            {apt.offer.format === 'online' || apt.offer.format === 'Online' ? (
-                              <Video className="w-3 h-3" />
-                            ) : (
-                              <MapPin className="w-3 h-3" />
-                            )}
-                            {apt.offer.format === 'online' || apt.offer.format === 'Online'
-                              ? 'Online'
-                              : 'Vor Ort'}
-                          </Badge>
-                        </div>
-                        <p className="font-heading font-bold text-text-dark text-sm sm:text-base shrink-0 ml-auto">
-                          €{Number(apt.total_price).toFixed(2)}
-                        </p>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
 
             {upcomingAppointments.length > 5 && (
@@ -742,138 +713,35 @@ export default function ClientDashboard() {
         </Card>
 
         {/* Calendar + create personal event */}
-        <Card className="border-2">
+        <Card className="border-2 lg:col-span-2 overflow-hidden">
           <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
-            <CardTitle className="font-heading text-xl text-text-dark">Kalender</CardTitle>
+            <CardTitle className="font-heading text-lg sm:text-xl text-text-dark">Kalender</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 px-4 sm:px-5 pb-4">
-            <div className="relative">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={setSelectedDate}
-                locale={de}
-                className="rounded-md w-full p-0"
-                classNames={{
-                  day_today:
-                    'border-2 border-primary-blue text-text-dark bg-transparent hover:bg-info-bg/40',
-                  day_selected:
-                    'bg-primary-blue text-white hover:bg-primary-blue hover:text-white focus:bg-primary-blue focus:text-white',
-                }}
-                modifiers={{
-                  termin: terminDates,
-                }}
-                modifiersClassNames={{
-                  termin:
-                    'bg-info-bg font-semibold text-text-dark [&[aria-selected]]:bg-primary-blue [&[aria-selected]]:text-white',
-                }}
-                onDayMouseEnter={(day, modifiers, e) => {
-                  clearDayPreviewHide();
-                  if (!modifiers.termin) {
-                    setHoveredDayPreview(null);
-                    return;
-                  }
-                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  const width = 260;
-                  const left = Math.min(
-                    Math.max(8, rect.left + rect.width / 2 - width / 2),
-                    window.innerWidth - width - 8
-                  );
-                  setHoveredDayPreview({
-                    date: day,
-                    top: rect.bottom + 8,
-                    left,
-                  });
-                }}
-                onDayMouseLeave={() => scheduleDayPreviewHide()}
-              />
-
-              {hoveredDayPreview &&
-                (hoveredDayEvents.apts.length > 0 || hoveredDayEvents.personal.length > 0) && (
-                  <div
-                    className="fixed z-50 w-[260px] rounded-xl border-2 border-gray-100 bg-white p-3 shadow-lg"
-                    style={{ top: hoveredDayPreview.top, left: hoveredDayPreview.left }}
-                    onMouseEnter={clearDayPreviewHide}
-                    onMouseLeave={scheduleDayPreviewHide}
-                  >
-                    <p className="font-heading text-sm font-bold text-text-dark mb-2">
-                      {format(hoveredDayPreview.date, 'EEE., d. MMM', { locale: de })}
-                    </p>
-                    <div className="space-y-2 max-h-56 overflow-y-auto">
-                      {hoveredDayEvents.apts.map((apt) => (
-                        <div
-                          key={apt.id}
-                          className="rounded-lg bg-info-bg/70 border border-primary-blue/15 p-2.5"
-                        >
-                          <p className="font-heading text-sm font-semibold text-text-dark leading-snug">
-                            {apt.offer.title}
-                          </p>
-                          <p className="text-xs text-gray-600 font-body mt-0.5 truncate">
-                            mit {apt.expert?.full_name || 'Expert:in'}
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-gray-500 font-body">
-                            <span className="inline-flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {format(parseISO(apt.start_time), 'HH:mm', { locale: de })}–
-                              {format(parseISO(apt.end_time), 'HH:mm', { locale: de })} Uhr
-                            </span>
-                            <span className="inline-flex items-center gap-1">
-                              {apt.offer.format === 'online' ||
-                              apt.offer.format === 'Online' ? (
-                                <Video className="w-3 h-3" />
-                              ) : (
-                                <MapPin className="w-3 h-3" />
-                              )}
-                              {apt.offer.format === 'online' || apt.offer.format === 'Online'
-                                ? 'Online'
-                                : 'Vor Ort'}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                      {hoveredDayEvents.personal.map((evt) => (
-                        <div
-                          key={evt.id}
-                          className="rounded-lg bg-bg-light border border-gray-100 p-2.5"
-                        >
-                          <p className="font-heading text-sm font-semibold text-text-dark leading-snug">
-                            {evt.title}
-                          </p>
-                          <p className="text-[11px] text-gray-500 font-body mt-1 inline-flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {format(parseISO(evt.start_time), 'HH:mm', { locale: de })}–
-                            {format(parseISO(evt.end_time), 'HH:mm', { locale: de })} Uhr
-                            <span className="text-gray-400">· Eigen</span>
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-            </div>
+            <ExpertAppleCalendar
+              events={calendarEvents}
+              availableViews={['week', 'month']}
+              defaultView="month"
+              showSync={false}
+              compactHours
+              className="border shadow-none rounded-xl"
+              onAddEvent={() => openCreateDialog()}
+              onSelectEvent={(eventId) => {
+                if (eventId.startsWith('personal-')) return;
+                setDetailAppointmentId(eventId);
+                setIsDetailModalOpen(true);
+              }}
+            />
 
             <div className="flex items-center gap-5 text-xs text-gray-600 font-body border-t border-gray-100 pt-3">
               <div className="flex items-center gap-2">
-                <div className="w-3.5 h-3.5 rounded-sm border-2 border-primary-blue bg-white" />
-                <span>Heute</span>
+                <div className="w-3.5 h-3.5 rounded-sm bg-info-bg border border-primary-blue/40" />
+                <span>Buchung</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3.5 h-3.5 rounded-sm bg-info-bg border border-primary-blue/40" />
-                <span>Termin</span>
+                <div className="w-3.5 h-3.5 rounded-sm bg-primary-green/30 border border-primary-green/50" />
+                <span>Eigener Termin</span>
               </div>
-            </div>
-
-            <div className="text-center pt-1">
-              <CalendarPlus className="w-9 h-9 text-gray-300 mx-auto mb-2" strokeWidth={1.25} />
-              <p className="font-body text-sm text-gray-500 mb-3">
-                Termine einfach erstellen und verwalten.
-              </p>
-              <Button
-                onClick={() => openCreateDialog()}
-                className="w-full bg-primary-blue hover:bg-primary-blue/90 text-white font-body font-semibold rounded-xl py-5 shadow-md"
-              >
-                + Termin erstellen
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -969,6 +837,17 @@ export default function ClientDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AppointmentDetailModal
+        appointmentId={detailAppointmentId}
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setDetailAppointmentId(null);
+        }}
+        userRole="client"
+        hidePrice
+      />
 
       {appointmentManageDialogs}
 

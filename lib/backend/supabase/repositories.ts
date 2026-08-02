@@ -8,133 +8,141 @@ import type {
 } from '../types';
 import type { Expert, ExpertOffer, Appointment, Room, RoomBooking, UserProfile } from '@/lib/types';
 
+function profileRow(profiles: any) {
+  if (!profiles) return null;
+  return Array.isArray(profiles) ? profiles[0] : profiles;
+}
+
+function mapExpert(expert: any): Expert {
+  const profile = profileRow(expert.profiles);
+  const professionsFromArray = Array.isArray(expert.professions)
+    ? expert.professions.filter(Boolean)
+    : [];
+  const legacyProfession =
+    typeof expert.profession === 'string' && expert.profession.trim()
+      ? [expert.profession.trim()]
+      : [];
+  return {
+    id: expert.id,
+    user_id: expert.user_id,
+    full_name: profile?.full_name || '',
+    avatar_url: profile?.avatar_url || expert.profile_image_url || '',
+    bio: expert.bio || '',
+    specializations: expert.specializations || [],
+    professions: professionsFromArray.length ? professionsFromArray : legacyProfession,
+    verified_professions: expert.verified_professions,
+    certifications: expert.certifications || [],
+    hourly_rate: Number(expert.hourly_rate) || 0,
+    rating: Number(expert.rating) || 0,
+    total_reviews: Number(expert.total_reviews) || 0,
+    is_verified: Boolean(expert.is_verified) || expert.verification_status === 'verified',
+    city: expert.city,
+    country: expert.country,
+    address: expert.address,
+    postal_code: expert.postal_code,
+    years_experience: expert.years_experience,
+    availability_status: expert.availability_status,
+  };
+}
+
+const EXPERT_LIST_SELECT = `
+  id,
+  user_id,
+  bio,
+  specializations,
+  profession,
+  professions,
+  profile_image_url,
+  hourly_rate,
+  rating,
+  total_reviews,
+  is_verified,
+  verification_status,
+  city,
+  country,
+  years_experience,
+  availability_status,
+  profiles:user_id (
+    full_name,
+    avatar_url
+  )
+`;
+
+const EXPERT_DETAIL_SELECT = `
+  id,
+  user_id,
+  bio,
+  specializations,
+  profession,
+  professions,
+  certifications,
+  profile_image_url,
+  hourly_rate,
+  years_experience,
+  rating,
+  total_reviews,
+  is_verified,
+  verification_status,
+  address,
+  postal_code,
+  city,
+  country,
+  availability_status,
+  profiles:user_id (
+    full_name,
+    avatar_url
+  )
+`;
+
 export class SupabaseExpertRepository implements IExpertRepository {
   async findAll(): Promise<Expert[]> {
     const { data, error } = await supabase
       .from('expert_profiles')
-      .select(`
-        id,
-        user_id,
-        bio,
-        specializations,
-        professions,
-        hourly_rate,
-        rating,
-        total_reviews,
-        is_verified,
-        city,
-        country,
-        years_experience,
-        availability_status,
-        profiles:user_id (
-          full_name,
-          avatar_url
-        )
-      `)
+      .select(EXPERT_LIST_SELECT)
+      .or('verification_status.eq.verified,is_verified.eq.true')
       .order('rating', { ascending: false });
 
     if (error) throw error;
 
-    return data.map((expert: any) => ({
-      id: expert.id,
-      user_id: expert.user_id,
-      full_name: expert.profiles?.full_name || '',
-      avatar_url: expert.profiles?.avatar_url || '',
-      bio: expert.bio,
-      specializations: expert.specializations || [],
-      professions: expert.professions || [],
-      hourly_rate: expert.hourly_rate,
-      rating: expert.rating,
-      total_reviews: expert.total_reviews,
-      is_verified: expert.is_verified,
-      city: expert.city,
-      country: expert.country,
-      years_experience: expert.years_experience,
-      availability_status: expert.availability_status,
-    }));
+    return (data || []).map(mapExpert);
   }
 
   async findFeatured(limit = 8): Promise<Expert[]> {
     const { data, error } = await supabase
       .from('expert_profiles')
-      .select(`
-        id,
-        user_id,
-        bio,
-        specializations,
-        professions,
-        hourly_rate,
-        rating,
-        total_reviews,
-        is_verified,
-        city,
-        country,
-        years_experience,
-        availability_status,
-        profiles:user_id (
-          full_name,
-          avatar_url
-        )
-      `)
-      .eq('is_verified', true)
+      .select(EXPERT_LIST_SELECT)
+      .or('verification_status.eq.verified,is_verified.eq.true')
       .order('rating', { ascending: false })
       .limit(limit);
 
     if (error) throw error;
 
-    return data.map((expert: any) => ({
-      id: expert.id,
-      user_id: expert.user_id,
-      full_name: expert.profiles?.full_name || '',
-      avatar_url: expert.profiles?.avatar_url || '',
-      bio: expert.bio,
-      specializations: expert.specializations || [],
-      professions: expert.professions || [],
-      hourly_rate: expert.hourly_rate,
-      rating: expert.rating,
-      total_reviews: expert.total_reviews,
-      is_verified: expert.is_verified,
-      city: expert.city,
-      country: expert.country,
-      years_experience: expert.years_experience,
-      availability_status: expert.availability_status,
-    }));
+    return (data || []).map(mapExpert);
   }
 
   async findById(id: string): Promise<Expert | null> {
-    const { data, error } = await supabase
+    if (!id) return null;
+
+    let data: any = null;
+    let error: any = null;
+
+    ({ data, error } = await supabase
       .from('expert_profiles')
-      .select(`
-        id,
-        user_id,
-        bio,
-        specializations,
-        professions,
-        certifications,
-        hourly_rate,
-        years_experience,
-        rating,
-        total_reviews,
-        is_verified,
-        address,
-        postal_code,
-        city,
-        country,
-        availability_status,
-        profiles:user_id (
-          full_name,
-          avatar_url,
-          phone,
-          email
-        )
-      `)
+      .select(EXPERT_DETAIL_SELECT)
       .eq('id', id)
-      .maybeSingle();
+      .maybeSingle());
+
+    // Some older booking rows may store auth user_id instead of expert_profiles.id
+    if (!data && !error) {
+      ({ data, error } = await supabase
+        .from('expert_profiles')
+        .select(EXPERT_DETAIL_SELECT)
+        .eq('user_id', id)
+        .maybeSingle());
+    }
 
     if (error) throw error;
     if (!data) return null;
-
-    const profile = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles;
 
     let verifiedProfessions: string[] = [];
     try {
@@ -150,28 +158,14 @@ export class SupabaseExpertRepository implements IExpertRepository {
       /* column may not exist yet */
     }
 
+    const mapped = mapExpert(data);
     return {
-      id: data.id,
-      user_id: data.user_id,
-      full_name: profile?.full_name || '',
-      avatar_url: profile?.avatar_url || '',
-      phone: profile?.phone || '',
-      email: profile?.email || '',
-      bio: data.bio,
-      specializations: data.specializations || [],
-      professions: data.professions || [],
+      ...mapped,
       verified_professions: verifiedProfessions,
-      certifications: data.certifications,
-      hourly_rate: data.hourly_rate,
-      years_experience: data.years_experience,
-      rating: data.rating,
-      total_reviews: data.total_reviews,
-      is_verified: data.is_verified,
-      address: data.address || '',
-      postal_code: data.postal_code || '',
-      city: data.city,
-      country: data.country,
-      availability_status: data.availability_status,
+      phone: mapped.phone || '',
+      email: mapped.email || '',
+      address: mapped.address || '',
+      postal_code: mapped.postal_code || '',
     };
   }
 
@@ -198,7 +192,10 @@ export class SupabaseAppointmentRepository implements IAppointmentRepository {
         end_time,
         status,
         total_price,
+        expert_id,
         expert_profiles:expert_id (
+          id,
+          profile_image_url,
           profiles:user_id (
             full_name,
             avatar_url
@@ -214,21 +211,32 @@ export class SupabaseAppointmentRepository implements IAppointmentRepository {
 
     if (error) throw error;
 
-    return data.map((apt: any) => ({
-      id: apt.id,
-      expert: {
-        full_name: apt.expert_profiles?.profiles?.full_name || '',
-        avatar_url: apt.expert_profiles?.profiles?.avatar_url || '',
-      },
-      offer: {
-        title: apt.expert_offers?.title || '',
-        format: apt.expert_offers?.format || '',
-      },
-      start_time: apt.start_time,
-      end_time: apt.end_time,
-      status: apt.status,
-      total_price: apt.total_price,
-    }));
+    return data.map((apt: any) => {
+      const expertProfiles = Array.isArray(apt.expert_profiles)
+        ? apt.expert_profiles[0]
+        : apt.expert_profiles;
+      const expertProfile = Array.isArray(expertProfiles?.profiles)
+        ? expertProfiles?.profiles[0]
+        : expertProfiles?.profiles;
+      const offer = Array.isArray(apt.expert_offers) ? apt.expert_offers[0] : apt.expert_offers;
+
+      return {
+        id: apt.id,
+        expert: {
+          id: expertProfiles?.id || apt.expert_id || '',
+          full_name: expertProfile?.full_name || '',
+          avatar_url: expertProfile?.avatar_url || expertProfiles?.profile_image_url || '',
+        },
+        offer: {
+          title: offer?.title || '',
+          format: offer?.format || '',
+        },
+        start_time: apt.start_time,
+        end_time: apt.end_time,
+        status: apt.status,
+        total_price: apt.total_price,
+      };
+    });
   }
 
   async findByExpertId(expertId: string): Promise<Appointment[]> {

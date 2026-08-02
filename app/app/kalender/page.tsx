@@ -3,9 +3,9 @@
 import { getBackendMode } from '@/lib/backend/mode';
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -72,7 +72,8 @@ interface BlockedDay {
 }
 
 export default function ExpertCalendarPage() {
-  const { userId } = useAuth();
+  const router = useRouter();
+  const { userId, role, loading: authLoading } = useAuth();
   const [expertProfileId, setExpertProfileId] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [availability, setAvailability] = useState<Availability[]>([]);
@@ -252,10 +253,15 @@ export default function ExpertCalendarPage() {
   }, [userId]);
 
   useEffect(() => {
-    if (userId) {
-      loadExpertData();
+    if (authLoading) return;
+    if (role !== 'expert') {
+      router.replace('/app/termine');
+      return;
     }
-  }, [userId, loadExpertData]);
+    if (userId) {
+      void loadExpertData();
+    }
+  }, [userId, role, authLoading, loadExpertData, router]);
 
   const loadAppointments = async (profileId: string) => {
     try {
@@ -582,7 +588,7 @@ export default function ExpertCalendarPage() {
       apt.status.startsWith('cancelled') || parseISO(apt.end_time) < now
   );
 
-  if (loading) {
+  if (authLoading || role !== 'expert' || loading) {
     return (
       <AppPageShell>
         <div className="flex items-center justify-center min-h-[280px]">
@@ -687,10 +693,10 @@ export default function ExpertCalendarPage() {
             <div className="max-h-[21.5rem] overflow-y-auto pr-0.5">
               {(
                 [
-                  { value: 'upcoming', list: upcomingAppointments, badge: 'offen' as const },
-                  { value: 'past', list: pastAppointments, badge: 'abgeschlossen' as const },
+                  { value: 'upcoming', list: upcomingAppointments },
+                  { value: 'past', list: pastAppointments },
                 ] as const
-              ).map(({ value, list, badge }) => (
+              ).map(({ value, list }) => (
                 <TabsContent
                   key={value}
                   value={value}
@@ -733,21 +739,9 @@ export default function ExpertCalendarPage() {
                           </Avatar>
 
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <p className="font-heading font-semibold text-sm text-text-dark truncate">
-                                {appointment.offer.title}
-                              </p>
-                              <Badge
-                                className={cn(
-                                  'border-none text-[11px] font-body shrink-0 px-2 py-0.5',
-                                  badge === 'offen'
-                                    ? 'bg-info-bg text-info-text'
-                                    : 'bg-gray-100 text-gray-600'
-                                )}
-                              >
-                                {badge === 'offen' ? 'Offen' : 'Abgeschlossen'}
-                              </Badge>
-                            </div>
+                            <p className="font-heading font-semibold text-sm text-text-dark truncate mb-1">
+                              {appointment.offer.title}
+                            </p>
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 font-body">
                               {appointment.client?.full_name ? (
                                 <span className="flex items-center gap-1 truncate">

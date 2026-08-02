@@ -19,7 +19,7 @@ import {
   CalendarClock,
   Trash2,
   MessageCircle,
-  FileText,
+  Download,
 } from 'lucide-react';
 import { format, parseISO, isBefore } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -30,7 +30,10 @@ import {
   formatOfferLocation,
   isOnlineOfferFormat,
 } from '@/lib/utils/offer-location';
-import { formatEuro, getSessionPriceBreakdown } from '@/lib/utils/pricing';
+import {
+  ClientPriceBreakdownView,
+  ExpertPriceBreakdownView,
+} from '@/components/ClientPriceBreakdown';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
 import type { InvoiceData } from '@/lib/utils/invoice';
 
@@ -41,6 +44,15 @@ interface AppointmentDetailModalProps {
   userRole: 'client' | 'expert';
   onReschedule?: (appointmentId: string) => void;
   onCancel?: (appointmentId: string) => void;
+  /** Hide price / Kostenaufstellung (e.g. upcoming tiles on client dashboard) */
+  hidePrice?: boolean;
+  /** Hide chat action (e.g. when chat is already on the list card) */
+  hideChat?: boolean;
+  /**
+   * Force past-session UI (invoice) when opened from „Vergangene“.
+   * Needed when status/start_time heuristics disagree with the list tab.
+   */
+  forcePastSession?: boolean;
 }
 
 interface AppointmentDetail {
@@ -104,6 +116,9 @@ export default function AppointmentDetailModal({
   userRole,
   onReschedule,
   onCancel,
+  hidePrice = false,
+  hideChat = false,
+  forcePastSession = false,
 }: AppointmentDetailModalProps) {
   const router = useRouter();
   const { userId, user } = useAuth();
@@ -446,16 +461,6 @@ export default function AppointmentDetailModal({
   const sessionAddress = sessionIsOnline
     ? 'Online'
     : offerAddress || expertAddress || 'Adresse folgt';
-  const priceBreakdown = getSessionPriceBreakdown(appointment.total_price);
-  // Demo / default: Expert:innen als Kleinunternehmer → keine USt auf den Servicepreis
-  const sessionVatApplies = false;
-  const sessionGross = priceBreakdown.clientPays;
-  const sessionVat = sessionVatApplies
-    ? Math.round(
-        (sessionGross - sessionGross / (1 + priceBreakdown.vatRate)) * 100
-      ) / 100
-    : 0;
-  const sessionNet = Math.round((sessionGross - sessionVat) * 100) / 100;
 
   const person =
     userRole === 'expert'
@@ -470,10 +475,12 @@ export default function AppointmentDetailModal({
 
   const isCancellableStatus = appointment.status === 'confirmed';
   const startsInFuture = isBefore(new Date(), parseISO(appointment.start_time));
-  const hasEnded = isBefore(parseISO(appointment.end_time), new Date());
   const isPastSession =
-    appointment.status === 'completed' ||
-    (hasEnded && !appointment.status.startsWith('cancelled'));
+    forcePastSession ||
+    (!appointment.status.startsWith('cancelled') &&
+      (appointment.status === 'completed' ||
+        isBefore(parseISO(appointment.start_time), new Date()) ||
+        isBefore(parseISO(appointment.end_time), new Date())));
 
   const showNeukunde =
     userRole === 'expert' &&
@@ -481,19 +488,25 @@ export default function AppointmentDetailModal({
     appointment.status === 'confirmed' &&
     !isPastSession;
   const canChat =
-    (userRole === 'expert' && Boolean(appointment.client)) ||
-    (userRole === 'client' && Boolean(appointment.expert));
+    !hideChat &&
+    ((userRole === 'expert' && Boolean(appointment.client)) ||
+      (userRole === 'client' && Boolean(appointment.expert_id || appointment.expert?.id)));
   const showCancel =
     Boolean(onCancel) &&
     isCancellableStatus &&
-    (userRole === 'expert' || startsInFuture);
+    (userRole === 'expert' || startsInFuture) &&
+    !isPastSession;
   const showReschedule =
     Boolean(onReschedule) &&
     userRole === 'client' &&
     appointment.status === 'confirmed' &&
-    startsInFuture;
-  // Only after the booking is completed (Vergangene) — never for open/upcoming confirmed sessions
-  const showInvoice = appointment.status === 'completed';
+    startsInFuture &&
+    !isPastSession;
+  // Past sessions (incl. forced from „Vergangene“) can download invoice
+  const showInvoice =
+    userRole === 'client'
+      ? isPastSession
+      : appointment.status === 'completed';
   const actionCount =
     (canChat ? 1 : 0) +
     (showReschedule ? 1 : 0) +
@@ -521,6 +534,7 @@ export default function AppointmentDetailModal({
       appointment.client?.full_name ||
       (userRole === 'client' ? user?.fullName || 'Klient:in' : 'Klient:in'),
     formatLabel: sessionIsOnline ? 'Online' : 'Vor Ort',
+    forClient: userRole === 'client',
   };
 
   const keyInfos = [
@@ -609,54 +623,16 @@ export default function AppointmentDetailModal({
             </div>
           ) : null}
 
-          <div>
-            <h4 className="font-heading font-semibold text-text-dark mb-2 text-sm">
-              Kostenaufstellung
-            </h4>
-            <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
-              <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                <span className="text-sm text-gray-600 font-body">Sessionpreis brutto</span>
-                <span className="text-sm font-body font-medium text-text-dark tabular-nums">
-                  {formatEuro(sessionGross)}
-                </span>
-              </div>
-              <div className="flex items-start justify-between gap-3 px-3.5 py-2.5">
-                <div className="min-w-0">
-                  <span className="text-sm text-gray-600 font-body">MwSt.</span>
-                  {!sessionVatApplies && (
-                    <p className="text-[11px] text-gray-400 font-body mt-0.5 leading-snug">
-                      Kleinunternehmerregelung, §&nbsp;6 Abs.&nbsp;1 Z&nbsp;27 UStG
-                    </p>
-                  )}
-                </div>
-                <span className="text-sm font-body font-medium text-text-dark tabular-nums shrink-0">
-                  {formatEuro(sessionVat)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                <span className="text-sm text-gray-600 font-body">Servicepreis netto</span>
-                <span className="text-sm font-body font-medium text-text-dark tabular-nums">
-                  {formatEuro(sessionNet)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                <span className="text-sm text-gray-600 font-body">
-                  Plattformprovision ({Math.round(priceBreakdown.feeRate * 100)}&nbsp;%)
-                </span>
-                <span className="text-sm font-body font-medium text-text-dark tabular-nums">
-                  −{formatEuro(priceBreakdown.platformFeeGross)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-bg-light/80">
-                <span className="text-sm font-heading font-semibold text-text-dark">
-                  {userRole === 'expert' ? 'Auszahlung' : 'Auszahlung an Expert:in'}
-                </span>
-                <span className="text-sm font-heading font-semibold text-text-dark tabular-nums">
-                  {formatEuro(priceBreakdown.expertPayout)}
-                </span>
-              </div>
+          {!hidePrice && userRole === 'expert' ? (
+            <ExpertPriceBreakdownView sessionPrice={appointment.total_price} />
+          ) : !hidePrice && userRole === 'client' ? (
+            <div>
+              <ClientPriceBreakdownView
+                servicePrice={appointment.total_price}
+                collapsible
+              />
             </div>
-          </div>
+          ) : null}
 
           {actionCount > 0 && (
             <div
@@ -680,10 +656,10 @@ export default function AppointmentDetailModal({
                 <Button
                   type="button"
                   variant="outline"
-                  className="font-body h-10 w-full rounded-lg"
+                  className="font-body h-10 w-full rounded-lg text-primary-blue border-primary-blue/40 hover:bg-info-bg/50 hover:text-primary-blue"
                   onClick={() => setInvoiceOpen(true)}
                 >
-                  <FileText className="w-4 h-4 mr-2 text-primary-blue" />
+                  <Download className="w-4 h-4 mr-2" />
                   Rechnung
                 </Button>
               )}

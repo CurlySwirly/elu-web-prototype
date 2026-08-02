@@ -325,9 +325,23 @@ async function main() {
   ];
 
   async function ensureExpertProfile(userId, e, { verified = true, force = false } = {}) {
+    const specializations = e.specializations || [];
+    const profession =
+      e.profession ||
+      (Array.isArray(e.professions) && e.professions[0]) ||
+      specializations[0] ||
+      '';
+    const professions =
+      Array.isArray(e.professions) && e.professions.length
+        ? e.professions
+        : profession
+          ? [profession]
+          : [];
     const payload = {
       bio: e.bio || '',
-      specializations: e.specializations || [],
+      specializations,
+      profession,
+      professions,
       certifications: e.certifications || [],
       hourly_rate: e.hourly_rate || 0,
       years_experience: e.years_experience || 0,
@@ -407,7 +421,7 @@ async function main() {
       phone: e.phone || '',
       avatar_url: e.avatar_url,
     });
-    const epid = await ensureExpertProfile(uid, e, { verified: true });
+    const epid = await ensureExpertProfile(uid, e, { verified: true, force: true });
     expertProfileByEmail[e.email] = epid;
     console.log('✓ expert', e.full_name, epid);
   }
@@ -526,25 +540,153 @@ async function main() {
     location_city: 'Frankfurt',
   });
 
-  // --- Availability for main expert (Mon / Wed / Fri 09–17) ---
+  const annaExpertId = expertProfileByEmail['anna.becker@example.com'];
+  const davidExpertId = expertProfileByEmail['david.hoffmann@example.com'];
+  const lauraExpertId = expertProfileByEmail['laura.klein@example.com'];
+  const markusExpertId = expertProfileByEmail['markus.braun@example.com'];
+
+  await ensureOffer(annaExpertId, {
+    title: 'Ernährungsberatung',
+    description: 'Individueller Ernährungsplan und ganzheitliche Beratung',
+    category: 'Ernährung',
+    format: 'online',
+    duration_minutes: 60,
+    price: 70,
+  });
+  await ensureOffer(davidExpertId, {
+    title: 'Tiefengewebsmassage',
+    description: 'Intensive Massage bei Verspannungen und Faszienbeschwerden',
+    category: 'Massage',
+    format: 'in-person',
+    duration_minutes: 60,
+    price: 80,
+    location_address: 'Königstraße 30',
+    location_postal_code: '70173',
+    location_city: 'Stuttgart',
+  });
+  await ensureOffer(lauraExpertId, {
+    title: 'Osteopathie-Behandlung',
+    description: 'Ganzheitliche osteopathische Behandlung',
+    category: 'Osteopathie',
+    format: 'in-person',
+    duration_minutes: 60,
+    price: 95,
+    location_address: 'Ludwigstraße 15',
+    location_postal_code: '80539',
+    location_city: 'München',
+  });
+  await ensureOffer(markusExpertId, {
+    title: 'Rückenschule & Haltung',
+    description: 'Prävention und Übungen für einen gesunden Rücken',
+    category: 'Physiotherapie',
+    format: 'in-person',
+    duration_minutes: 45,
+    price: 78,
+    location_address: 'Königsallee 60',
+    location_postal_code: '40212',
+    location_city: 'Düsseldorf',
+  });
+  await ensureOffer(juliaId, {
+    title: 'Online Yoga Flow',
+    description: 'Geführte Yoga-Einheit per Video',
+    category: 'Yoga',
+    format: 'online',
+    duration_minutes: 45,
+    price: 45,
+  });
+
+  // Activate online offer for main expert if previously inactive
   try {
-    await api('DELETE', `/rest/v1/expert_availability?expert_profile_id=eq.${mainExpertProfileId}`);
+    await api('PATCH', `/rest/v1/expert_offers?id=eq.${offerOnline}`, { is_active: true });
   } catch {
     /* ignore */
   }
-  try {
-    const slots = [1, 3, 5].map((dow) => ({
-      expert_profile_id: mainExpertProfileId,
+
+  console.log('✓ marketplace offers', offerPT, offerYoga, offerSport);
+
+  // Second offer per marketplace expert (min. 2 offers each)
+  await ensureOffer(michaelId, {
+    title: 'Online Trainingsplan Review',
+    description: 'Besprechung und Anpassung deines Trainingsplans per Video',
+    category: 'Training',
+    format: 'online',
+    duration_minutes: 30,
+    price: 45,
+  });
+  await ensureOffer(thomasId, {
+    title: 'Online Sportberatung',
+    description: 'Beratung zu Belastung, Regeneration und Prävention',
+    category: 'Beratung',
+    format: 'online',
+    duration_minutes: 30,
+    price: 55,
+  });
+  await ensureOffer(annaExpertId, {
+    title: 'Ernährungs-Check vor Ort',
+    description: 'Persönliche Analyse und Einkaufsberatung',
+    category: 'Ernährung',
+    format: 'in-person',
+    duration_minutes: 45,
+    price: 65,
+    location_address: 'Schildergasse 18',
+    location_postal_code: '50667',
+    location_city: 'Köln',
+  });
+  await ensureOffer(davidExpertId, {
+    title: 'Entspannungsmassage',
+    description: 'Wohltuende Massage zur Stressreduktion',
+    category: 'Massage',
+    format: 'in-person',
+    duration_minutes: 45,
+    price: 65,
+    location_address: 'Königstraße 30',
+    location_postal_code: '70173',
+    location_city: 'Stuttgart',
+  });
+  await ensureOffer(lauraExpertId, {
+    title: 'Online Osteopathie-Beratung',
+    description: 'Einschätzung und Übungen per Video-Call',
+    category: 'Osteopathie',
+    format: 'online',
+    duration_minutes: 30,
+    price: 60,
+  });
+  await ensureOffer(markusExpertId, {
+    title: 'Online Rückencheck',
+    description: 'Analyse von Haltung und Alltagsbelastung online',
+    category: 'Physiotherapie',
+    format: 'online',
+    duration_minutes: 30,
+    price: 49,
+  });
+
+  // --- Availability for all verified marketplace experts ---
+  async function ensureAvailability(expertProfileId, daysOfWeek, startTime = '09:00', endTime = '17:00') {
+    if (!expertProfileId) return;
+    try {
+      await api('DELETE', `/rest/v1/expert_availability?expert_profile_id=eq.${expertProfileId}`);
+    } catch {
+      /* ignore */
+    }
+    const slots = daysOfWeek.map((dow) => ({
+      expert_profile_id: expertProfileId,
       day_of_week: dow,
-      start_time: '09:00',
-      end_time: '17:00',
+      start_time: startTime,
+      end_time: endTime,
       is_available: true,
     }));
     await api('POST', '/rest/v1/expert_availability', slots);
-    console.log('✓ availability (Mon/Wed/Fri)');
-  } catch (e) {
-    console.warn('availability skip:', e.message.slice(0, 160));
   }
+
+  await ensureAvailability(mainExpertProfileId, [1, 3, 5], '09:00', '17:00');
+  await ensureAvailability(michaelId, [2, 4], '10:00', '18:00');
+  await ensureAvailability(juliaId, [0, 2, 4, 6], '09:00', '14:00');
+  await ensureAvailability(thomasId, [1, 2, 3, 4, 5], '08:00', '16:00');
+  await ensureAvailability(annaExpertId, [1, 3, 5], '09:00', '15:00');
+  await ensureAvailability(davidExpertId, [2, 3, 4, 5], '11:00', '19:00');
+  await ensureAvailability(lauraExpertId, [1, 3, 5], '09:00', '17:00');
+  await ensureAvailability(markusExpertId, [1, 2, 4], '08:00', '16:00');
+  console.log('✓ availability for all marketplace experts');
 
   // Blocked day sample for calendar demo
   try {
@@ -577,61 +719,82 @@ async function main() {
     return rows[0].id;
   }
 
-  // Client view: bookings with various experts
-  await ensureAppointment({
+  // Keep client calendar realistic: wipe prior demo bookings (seed re-runs otherwise pile up)
+  async function resetClientAppointments(cid) {
+    try {
+      const threads = await api('GET', `/rest/v1/chat_threads?client_id=eq.${cid}&select=id`);
+      for (const t of threads || []) {
+        try {
+          await api('DELETE', `/rest/v1/chat_messages?thread_id=eq.${t.id}`);
+        } catch {
+          /* ignore */
+        }
+      }
+      await api('DELETE', `/rest/v1/chat_threads?client_id=eq.${cid}`);
+    } catch {
+      /* ignore */
+    }
+    try {
+      await api('DELETE', `/rest/v1/reviews?client_id=eq.${cid}`);
+    } catch {
+      /* ignore */
+    }
+    await api('DELETE', `/rest/v1/appointments?client_id=eq.${cid}`);
+  }
+
+  await resetClientAppointments(clientId);
+
+  // Client view: ~1 session / week (never stacked same day)
+  const atHour = (dayOffset, hour, minute = 0) => {
+    const d = new Date(now + dayOffset * 86400000);
+    d.setHours(hour, minute, 0, 0);
+    return d;
+  };
+  let todaySession = atHour(0, Math.min(20, new Date().getHours() + 3), 0);
+  if (todaySession.getTime() <= Date.now()) {
+    todaySession = atHour(1, 11, 0);
+  }
+
+  async function upsertClientAppointment(row) {
+    const rows = await api('POST', '/rest/v1/appointments', row);
+    return rows[0].id;
+  }
+
+  await upsertClientAppointment({
     client_id: clientId,
     expert_id: mainExpertProfileId,
     offer_id: offerErst,
-    start_time: days(1),
-    end_time: new Date(now + 1 * 86400000 + 60 * 60000).toISOString(),
+    start_time: todaySession.toISOString(),
+    end_time: new Date(todaySession.getTime() + 60 * 60000).toISOString(),
     status: 'confirmed',
     notes: 'Bitte bringen Sie bequeme Kleidung mit.',
     total_price: 85,
     payment_status: 'paid',
   });
-  await ensureAppointment({
+  const inFourDays = atHour(4, 10, 0);
+  await upsertClientAppointment({
     client_id: clientId,
     expert_id: michaelId,
     offer_id: offerPT,
-    start_time: days(3),
-    end_time: new Date(now + 3 * 86400000 + 60 * 60000).toISOString(),
+    start_time: inFourDays.toISOString(),
+    end_time: new Date(inFourDays.getTime() + 60 * 60000).toISOString(),
     status: 'confirmed',
     total_price: 75,
     payment_status: 'paid',
   });
-  await ensureAppointment({
+  const inElevenDays = atHour(11, 14, 0);
+  await upsertClientAppointment({
     client_id: clientId,
     expert_id: juliaId,
     offer_id: offerYoga,
-    start_time: days(7),
-    end_time: new Date(now + 7 * 86400000 + 90 * 60000).toISOString(),
+    start_time: inElevenDays.toISOString(),
+    end_time: new Date(inElevenDays.getTime() + 90 * 60000).toISOString(),
     status: 'confirmed',
     total_price: 65,
     payment_status: 'paid',
   });
-  await ensureAppointment({
-    client_id: clientId,
-    expert_id: thomasId,
-    offer_id: offerSport,
-    start_time: days(10),
-    end_time: new Date(now + 10 * 86400000 + 60 * 60000).toISOString(),
-    status: 'confirmed',
-    total_price: 90,
-    payment_status: 'paid',
-  });
 
-  // Expert view: bookings for Sarah / expert@test.com
-  await ensureAppointment({
-    client_id: clientId,
-    expert_id: mainExpertProfileId,
-    offer_id: offerErst,
-    start_time: new Date(now + 1 * 86400000 + 2 * 3600000).toISOString(),
-    end_time: new Date(now + 1 * 86400000 + 3 * 3600000).toISOString(),
-    status: 'confirmed',
-    notes: 'Erste Sitzung, Rückenschmerzen',
-    total_price: 85,
-    payment_status: 'paid',
-  });
+  // Expert view: bookings for Sarah / expert@test.com (other clients – not demo client)
   await ensureAppointment({
     client_id: annaId,
     expert_id: mainExpertProfileId,
@@ -662,7 +825,7 @@ async function main() {
     total_price: 75,
     payment_status: 'paid',
   });
-  // past completed
+  // past completed (other clients)
   await ensureAppointment({
     client_id: annaId,
     expert_id: mainExpertProfileId,
@@ -683,37 +846,27 @@ async function main() {
     total_price: 70,
     payment_status: 'paid',
   });
-  await ensureAppointment({
-    client_id: clientId,
-    expert_id: mainExpertProfileId,
-    offer_id: offerErst,
-    start_time: days(-20),
-    end_time: new Date(now - 20 * 86400000 + 60 * 60000).toISOString(),
-    status: 'completed',
-    total_price: 85,
-    payment_status: 'paid',
-  });
 
   console.log('✓ appointments');
 
   // Completed sessions for main client → open reviews (no review rows)
-  const clientPastSarah = await ensureAppointment({
+  const clientPastSarah = await upsertClientAppointment({
     client_id: clientId,
     expert_id: mainExpertProfileId,
     offer_id: offerErst,
-    start_time: days(-2),
-    end_time: new Date(now - 2 * 86400000 + 60 * 60000).toISOString(),
+    start_time: days(-3),
+    end_time: new Date(now - 3 * 86400000 + 60 * 60000).toISOString(),
     status: 'completed',
     total_price: 85,
     payment_status: 'paid',
     notes: 'Abgeschlossene Session – Bewertung offen',
   });
-  const clientPastMichael = await ensureAppointment({
+  const clientPastMichael = await upsertClientAppointment({
     client_id: clientId,
     expert_id: michaelId,
     offer_id: offerPT,
-    start_time: days(-5),
-    end_time: new Date(now - 5 * 86400000 + 60 * 60000).toISOString(),
+    start_time: days(-10),
+    end_time: new Date(now - 10 * 86400000 + 60 * 60000).toISOString(),
     status: 'completed',
     total_price: 75,
     payment_status: 'paid',
@@ -976,7 +1129,7 @@ async function main() {
   }
   console.log('✓ chat threads + messages');
 
-  // Reviews
+  // Reviews – at least one per verified marketplace expert
   try {
     async function ensureReview(row) {
       const existing = await api(
@@ -985,6 +1138,44 @@ async function main() {
       );
       if (existing?.length) return;
       await api('POST', '/rest/v1/reviews', row);
+    }
+
+    async function ensureCompletedWithReview({
+      expertProfileId,
+      offerId,
+      clientUserId,
+      dayOffset,
+      rating,
+      title,
+      review_text,
+      helpful_count = 2,
+      durationMinutes = 60,
+      price = 70,
+    }) {
+      if (!expertProfileId || !offerId || !clientUserId) return;
+      const start = new Date(now + dayOffset * 86400000);
+      start.setHours(11, 0, 0, 0);
+      const end = new Date(start.getTime() + durationMinutes * 60000);
+      const aptId = await ensureAppointment({
+        client_id: clientUserId,
+        expert_id: expertProfileId,
+        offer_id: offerId,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        status: 'completed',
+        total_price: price,
+        payment_status: 'paid',
+      });
+      if (!aptId) return;
+      await ensureReview({
+        appointment_id: aptId,
+        expert_profile_id: expertProfileId,
+        client_id: clientUserId,
+        rating,
+        title,
+        review_text,
+        helpful_count,
+      });
     }
 
     if (jonasPastId) {
@@ -1013,7 +1204,144 @@ async function main() {
         helpful_count: 3,
       });
     }
-    console.log('✓ reviews');
+
+    // Extra Sarah review from main demo client
+    await ensureCompletedWithReview({
+      expertProfileId: mainExpertProfileId,
+      offerId: offerBehandlung,
+      clientUserId: clientId,
+      dayOffset: -18,
+      rating: 5,
+      title: 'Fühle mich deutlich besser',
+      review_text:
+        'Nach wenigen Sitzungen spüre ich klare Fortschritte. Sarah erklärt alles verständlich und nimmt sich Zeit.',
+      helpful_count: 6,
+      durationMinutes: 45,
+      price: 75,
+    });
+
+    // One of the visible „Vergangene“ sessions is already rated (UI: „Bereits bewertet“)
+    if (clientPastMichael) {
+      await ensureReview({
+        appointment_id: clientPastMichael,
+        expert_profile_id: michaelId,
+        client_id: clientId,
+        rating: 5,
+        title: 'Starkes Training',
+        review_text: 'Motivierend und effektiv – genau die richtige Intensität.',
+        helpful_count: 2,
+      });
+      console.log('✓ client past Michael marked as reviewed', clientPastMichael);
+    }
+    await ensureCompletedWithReview({
+      expertProfileId: mainExpertProfileId,
+      offerId: offerManuell,
+      clientUserId: lisaId,
+      dayOffset: -25,
+      rating: 4,
+      title: 'Sehr gute Behandlung',
+      review_text:
+        'Kompetent, freundlich und strukturiert. Die manuelle Therapie hat meine Verspannungen gelöst.',
+      helpful_count: 2,
+      durationMinutes: 45,
+      price: 70,
+    });
+
+    // One review per other marketplace expert
+    await ensureCompletedWithReview({
+      expertProfileId: michaelId,
+      offerId: offerPT,
+      clientUserId: tomId,
+      dayOffset: -14,
+      rating: 5,
+      title: 'Starkes Training',
+      review_text: 'Motivierend und effektiv – mein Kraftlevel hat sich spürbar verbessert.',
+      price: 75,
+    });
+    await ensureCompletedWithReview({
+      expertProfileId: juliaId,
+      offerId: offerYoga,
+      clientUserId: lisaId,
+      dayOffset: -11,
+      rating: 5,
+      title: 'Wunderbar entspannt',
+      review_text: 'Die Yoga-Session war genau richtig für meinen Stress. Komme gerne wieder.',
+      durationMinutes: 90,
+      price: 65,
+    });
+    await ensureCompletedWithReview({
+      expertProfileId: thomasId,
+      offerId: offerSport,
+      clientUserId: jonasId,
+      dayOffset: -16,
+      rating: 5,
+      title: 'Endlich schmerzfrei trainieren',
+      review_text: 'Thomas hat die Ursache meiner Beschwerden schnell gefunden. Top Sportphysio.',
+      price: 90,
+    });
+
+    const offerAnna = await api(
+      'GET',
+      `/rest/v1/expert_offers?expert_id=eq.${annaExpertId}&title=eq.${encodeURIComponent('Ernährungsberatung')}&select=id&limit=1`
+    );
+    await ensureCompletedWithReview({
+      expertProfileId: annaExpertId,
+      offerId: offerAnna?.[0]?.id,
+      clientUserId: annaId,
+      dayOffset: -9,
+      rating: 4,
+      title: 'Klare Ernährungsstrategie',
+      review_text: 'Praktische Tipps ohne Dogma – fühle mich energiegeladener im Alltag.',
+      price: 70,
+    });
+
+    const offerDavid = await api(
+      'GET',
+      `/rest/v1/expert_offers?expert_id=eq.${davidExpertId}&title=eq.${encodeURIComponent('Tiefengewebsmassage')}&select=id&limit=1`
+    );
+    await ensureCompletedWithReview({
+      expertProfileId: davidExpertId,
+      offerId: offerDavid?.[0]?.id,
+      clientUserId: tomId,
+      dayOffset: -8,
+      rating: 5,
+      title: 'Verspannungen weg',
+      review_text: 'Intensive, aber wohltuende Massage. Nacken und Schultern fühlen sich frei an.',
+      price: 80,
+    });
+
+    const offerLaura = await api(
+      'GET',
+      `/rest/v1/expert_offers?expert_id=eq.${lauraExpertId}&title=eq.${encodeURIComponent('Osteopathie-Behandlung')}&select=id&limit=1`
+    );
+    await ensureCompletedWithReview({
+      expertProfileId: lauraExpertId,
+      offerId: offerLaura?.[0]?.id,
+      clientUserId: lisaId,
+      dayOffset: -13,
+      rating: 5,
+      title: 'Ganzheitlich und einfühlsam',
+      review_text: 'Laura nimmt sich Zeit und schaut den ganzen Körper an. Sehr empfehlenswert.',
+      price: 95,
+    });
+
+    const offerMarkus = await api(
+      'GET',
+      `/rest/v1/expert_offers?expert_id=eq.${markusExpertId}&title=eq.${encodeURIComponent('Rückenschule & Haltung')}&select=id&limit=1`
+    );
+    await ensureCompletedWithReview({
+      expertProfileId: markusExpertId,
+      offerId: offerMarkus?.[0]?.id,
+      clientUserId: jonasId,
+      dayOffset: -7,
+      rating: 4,
+      title: 'Gute Übungen für den Alltag',
+      review_text: 'Praktische Rückenschule – die Haltungstipps nutze ich jetzt täglich im Büro.',
+      durationMinutes: 45,
+      price: 78,
+    });
+
+    console.log('✓ reviews for all marketplace experts');
   } catch (e) {
     console.warn('review skip:', e.message.slice(0, 160));
   }

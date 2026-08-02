@@ -21,6 +21,8 @@ import {
   AlertCircle,
   Eye,
   MessageCircle,
+  Star,
+  CheckCircle2,
 } from 'lucide-react';
 import { format, parseISO, isSameDay, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -31,6 +33,11 @@ import {
   type ManageableAppointment,
 } from '@/components/AppointmentManageDialogs';
 import { cn } from '@/lib/utils';
+import { ReviewFlowDialog } from '@/components/ReviewFlowDialog';
+import {
+  reviewService,
+  type PendingReviewAppointment,
+} from '@/lib/services/review';
 
 interface Appointment extends ManageableAppointment {
   notes?: string;
@@ -50,11 +57,14 @@ interface Appointment extends ManageableAppointment {
 export default function AppointmentsPage() {
   const { userId, role } = useAuth();
   const router = useRouter();
+  const isExpert = role === 'expert';
+  const isClient = role === 'client';
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [detailFromPastTab, setDetailFromPastTab] = useState(false);
   const [chatLoadingId, setChatLoadingId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [hoveredDayPreview, setHoveredDayPreview] = useState<{
@@ -63,12 +73,18 @@ export default function AppointmentsPage() {
     left: number;
   } | null>(null);
   const dayPreviewHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingReviews, setPendingReviews] = useState<PendingReviewAppointment[]>([]);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewAppointmentId, setReviewAppointmentId] = useState<string | null>(null);
+  const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
 
   const loadAppointments = useCallback(async () => {
+    if (!userId || !role) return;
+
     try {
       const backendMode = getBackendMode();
 
-      if (role === 'expert') {
+      if (isExpert) {
         if (backendMode === 'mock') {
           await new Promise((resolve) => setTimeout(resolve, 300));
           const { mockExpertAppointments } = await import('@/lib/backend/mock/data');
@@ -153,7 +169,7 @@ export default function AppointmentsPage() {
             },
           })));
         }
-      } else {
+      } else if (isClient) {
         if (backendMode === 'mock') {
           await new Promise((resolve) => setTimeout(resolve, 300));
           const { mockClientAppointments } = await import('@/lib/backend/mock/data');
@@ -200,6 +216,7 @@ export default function AppointmentsPage() {
               expert_id,
               expert_profiles:expert_id (
                 id,
+                profile_image_url,
                 profiles:user_id (
                   full_name,
                   avatar_url
@@ -212,7 +229,7 @@ export default function AppointmentsPage() {
               )
             `)
             .eq('client_id', profile.id)
-            .order('start_time', { ascending: true });
+            .order('start_time', { ascending: false });
 
           if (error) throw error;
 
@@ -223,6 +240,9 @@ export default function AppointmentsPage() {
             const expertProfile = Array.isArray(expertProfiles?.profiles)
               ? expertProfiles?.profiles[0]
               : expertProfiles?.profiles;
+            const offer = Array.isArray(apt.expert_offers)
+              ? apt.expert_offers[0]
+              : apt.expert_offers;
 
             return {
               id: apt.id,
@@ -234,12 +254,13 @@ export default function AppointmentsPage() {
               expert: {
                 id: expertProfiles?.id || apt.expert_id || '',
                 full_name: expertProfile?.full_name || '',
-                avatar_url: expertProfile?.avatar_url || '',
+                avatar_url:
+                  expertProfile?.avatar_url || expertProfiles?.profile_image_url || '',
               },
               offer: {
-                title: apt.expert_offers?.title || '',
-                format: apt.expert_offers?.format || '',
-                duration_minutes: apt.expert_offers?.duration_minutes,
+                title: offer?.title || '',
+                format: offer?.format || '',
+                duration_minutes: offer?.duration_minutes,
               },
             };
           }));
@@ -250,17 +271,99 @@ export default function AppointmentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [userId, role]);
+  }, [userId, role, isExpert, isClient]);
 
   useEffect(() => {
-    if (userId) {
-      loadAppointments();
+    if (userId && role) {
+      void loadAppointments();
     }
   }, [userId, role, loadAppointments]);
 
+  useEffect(() => {
+    if (!userId || !isClient) {
+      setPendingReviews([]);
+      setReviewedIds(new Set());
+      return;
+    }
+    void reviewService.getPendingReviewAppointments(userId).then(setPendingReviews);
+
+    const pastIds = appointments
+      .filter((apt) => {
+        if (apt.status.startsWith('cancelled')) return true;
+        return (
+          apt.status === 'completed' ||
+          parseISO(apt.start_time).getTime() < Date.now()
+        );
+      })
+      .map((apt) => apt.id);
+
+    if (pastIds.length === 0) {
+      setReviewedIds(new Set());
+      return;
+    }
+
+    void Promise.all(
+      pastIds.map(async (id) => {
+        const review = await reviewService.getClientReviewForAppointment(id, userId);
+        return review ? id : null;
+      })
+    ).then((ids) => {
+      setReviewedIds(new Set(ids.filter(Boolean) as string[]));
+    });
+  }, [userId, isClient, appointments]);
+
+  const openReviewFlow = (appointmentId: string) => {
+    setIsDetailModalOpen(false);
+    const apt = appointments.find((a) => a.id === appointmentId);
+    if (apt) {
+      setPendingReviews((prev) => {
+        if (prev.some((p) => p.id === appointmentId)) return prev;
+        return [
+          ...prev,
+          {
+            id: apt.id,
+            expert_id: apt.expert_id || apt.expert?.id || '',
+            start_time: apt.start_time,
+            end_time: apt.end_time,
+            total_price: apt.total_price,
+            expert: {
+              full_name: apt.expert?.full_name || 'Expert:in',
+              avatar_url: apt.expert?.avatar_url || '',
+            },
+            offer: {
+              title: apt.offer.title || 'Session',
+              format: apt.offer.format || '',
+            },
+          },
+        ];
+      });
+    }
+    setReviewAppointmentId(appointmentId);
+    setIsReviewOpen(true);
+  };
+
   const filterByStatus = (status?: string) => {
-    if (!status) return appointments;
-    return appointments.filter(apt => apt.status === status);
+    const list = !status
+      ? appointments
+      : appointments.filter((apt) => apt.status === status);
+    return [...list].sort(
+      (a, b) => parseISO(b.start_time).getTime() - parseISO(a.start_time).getTime()
+    );
+  };
+
+  const filterByTime = (bucket: 'upcoming' | 'past') => {
+    const now = new Date();
+    const list = appointments.filter((apt) => {
+      if (apt.status.startsWith('cancelled')) return bucket === 'past';
+      const start = parseISO(apt.start_time);
+      const isPast = apt.status === 'completed' || start < now;
+      return bucket === 'past' ? isPast : !isPast;
+    });
+    return list.sort((a, b) => {
+      const ta = parseISO(a.start_time).getTime();
+      const tb = parseISO(b.start_time).getTime();
+      return bucket === 'upcoming' ? ta - tb : tb - ta;
+    });
   };
 
   const terminDates = useMemo(
@@ -301,8 +404,9 @@ export default function AppointmentsPage() {
     return getAppointmentsForDay(hoveredDayPreview.date);
   }, [hoveredDayPreview, getAppointmentsForDay]);
 
-  const handleOpenDetail = (appointmentId: string) => {
+  const handleOpenDetail = (appointmentId: string, fromPast = false) => {
     setSelectedAppointmentId(appointmentId);
+    setDetailFromPastTab(fromPast);
     setIsDetailModalOpen(true);
   };
 
@@ -390,9 +494,10 @@ export default function AppointmentsPage() {
   };
 
   const handleCloseDetail = () => {
-    setSelectedAppointmentId(null);
     setIsDetailModalOpen(false);
-    loadAppointments();
+    setSelectedAppointmentId(null);
+    setDetailFromPastTab(false);
+    void loadAppointments();
   };
 
   const {
@@ -427,7 +532,19 @@ export default function AppointmentsPage() {
     );
   }
 
-  const renderAppointmentCard = (appointment: Appointment) => (
+  const renderAppointmentCard = (
+    appointment: Appointment,
+    options?: { isPast?: boolean }
+  ) => {
+    const isPast = Boolean(isClient && options?.isPast);
+    const isReviewed = reviewedIds.has(appointment.id);
+    const showReviewAction = isPast;
+    const showChat =
+      !showReviewAction &&
+      ((role === 'client' && Boolean(appointment.expert?.id)) ||
+        (role === 'expert' && Boolean(appointment.client)));
+
+    return (
     <div
       key={appointment.id}
       className="rounded-xl border-2 border-gray-100 bg-white p-3.5 sm:p-4 hover:border-primary-blue/50 transition-colors"
@@ -471,16 +588,27 @@ export default function AppointmentsPage() {
                 )}
               </p>
             </div>
-            <Badge className="bg-info-bg text-info-text border-none font-body text-[11px] shrink-0 flex items-center gap-1">
-              {appointment.offer.format === 'online' || appointment.offer.format === 'Online' ? (
-                <Video className="w-3 h-3" />
-              ) : (
-                <MapPin className="w-3 h-3" />
-              )}
-              {appointment.offer.format === 'online' || appointment.offer.format === 'Online'
-                ? 'Online'
-                : 'Vor Ort'}
-            </Badge>
+            {role === 'client' ? (
+              <div className="text-right shrink-0">
+                <p className="text-[11px] sm:text-xs font-body font-medium text-text-dark leading-snug">
+                  {format(parseISO(appointment.start_time), 'd. MMM yyyy', { locale: de })}
+                </p>
+                <p className="text-[11px] sm:text-xs text-gray-500 font-body mt-0.5">
+                  {format(parseISO(appointment.start_time), 'HH:mm', { locale: de })} Uhr
+                </p>
+              </div>
+            ) : (
+              <Badge className="bg-info-bg text-info-text border-none font-body text-[11px] shrink-0 flex items-center gap-1">
+                {appointment.offer.format === 'online' || appointment.offer.format === 'Online' ? (
+                  <Video className="w-3 h-3" />
+                ) : (
+                  <MapPin className="w-3 h-3" />
+                )}
+                {appointment.offer.format === 'online' || appointment.offer.format === 'Online'
+                  ? 'Online'
+                  : 'Vor Ort'}
+              </Badge>
+            )}
           </div>
         </div>
       </div>
@@ -488,14 +616,11 @@ export default function AppointmentsPage() {
       <div
         className={cn(
           'mt-3 grid gap-2',
-          (role === 'client' && appointment.expert?.id) ||
-            (role === 'expert' && appointment.client)
-            ? 'grid-cols-2'
-            : 'grid-cols-1'
+          showChat || showReviewAction ? 'grid-cols-2' : 'grid-cols-1'
         )}
       >
         <Button
-          onClick={() => handleOpenDetail(appointment.id)}
+          onClick={() => handleOpenDetail(appointment.id, Boolean(options?.isPast))}
           variant="outline"
           size="sm"
           className="font-body h-9 w-full rounded-lg"
@@ -503,8 +628,31 @@ export default function AppointmentsPage() {
           <Eye className="w-3.5 h-3.5 mr-1.5 shrink-0" />
           Details anzeigen
         </Button>
-        {((role === 'client' && appointment.expert?.id) ||
-          (role === 'expert' && appointment.client)) && (
+        {showReviewAction ? (
+          isReviewed ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled
+              className="font-body h-9 w-full rounded-lg text-gray-500 border-gray-200"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+              Bereits bewertet
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => openReviewFlow(appointment.id)}
+              variant="outline"
+              size="sm"
+              className="font-body h-9 w-full rounded-lg text-primary-blue border-primary-blue/40 hover:bg-info-bg/50 hover:text-primary-blue"
+            >
+              <Star className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+              Bewerten
+            </Button>
+          )
+        ) : showChat ? (
           <Button
             onClick={() => handleStartChat(appointment)}
             disabled={chatLoadingId === appointment.id}
@@ -514,19 +662,20 @@ export default function AppointmentsPage() {
             <MessageCircle className="w-3.5 h-3.5 mr-1.5 shrink-0" />
             {chatLoadingId === appointment.id ? 'Öffnet…' : 'Chat starten'}
           </Button>
-        )}
+        ) : null}
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="p-3 sm:p-4 lg:p-5 space-y-4">
       <div>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
-          {role === 'expert' ? 'Meine Buchungen' : 'Meine Termine'}
+        <h1 className="text-lg sm:text-xl font-heading font-bold text-text-dark">
+          {isExpert ? 'Meine Buchungen' : 'Meine Termine'}
         </h1>
-        <p className="text-sm sm:text-base text-gray-500 font-body mt-1">
-          {role === 'expert'
+        <p className="text-sm text-gray-500 font-body mt-1">
+          {isExpert
             ? 'Verwalte deine gebuchten Termine'
             : 'Übersicht deiner gebuchten Wellness-Sessions'}
         </p>
@@ -557,53 +706,56 @@ export default function AppointmentsPage() {
           <CardContent className="py-12 text-center">
             <CalendarIcon className="w-14 h-14 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-600 font-body mb-2">
-              {role === 'expert'
+              {isExpert
                 ? 'Du hast noch keine Buchungen erhalten.'
                 : 'Du hast noch keine Termine gebucht.'}
             </p>
             <p className="text-sm text-gray-500 font-body">
-              {role === 'expert'
+              {isExpert
                 ? 'Sobald Klient:innen deine Angebote buchen, erscheinen sie hier.'
                 : 'Finde jetzt Expert:innen und buche deine erste Session!'}
             </p>
           </CardContent>
         </Card>
-      ) : role === 'client' ? (
-        <Tabs defaultValue="all" className="w-full space-y-3">
+      ) : isClient ? (
+        <Tabs defaultValue="upcoming" className="w-full space-y-3">
           <div className="overflow-x-auto -mx-1 px-1">
             <TabsList>
-              <TabsTrigger value="all">Alle ({appointments.length})</TabsTrigger>
-              <TabsTrigger value="confirmed">
-                Gebucht ({filterByStatus('confirmed').length})
+              <TabsTrigger value="upcoming">
+                Kommende ({filterByTime('upcoming').length})
               </TabsTrigger>
-              <TabsTrigger value="completed">
-                Abgeschlossen ({filterByStatus('completed').length})
+              <TabsTrigger value="past">
+                Vergangene ({filterByTime('past').length})
               </TabsTrigger>
             </TabsList>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4 items-start">
-            <section className="min-w-0">
-              {['all', 'confirmed', 'completed'].map((tabValue) => {
-                const list = filterByStatus(tabValue === 'all' ? undefined : tabValue);
+            <section className="min-w-0 space-y-2.5">
+              {(['upcoming', 'past'] as const).map((tabValue) => {
+                const list = filterByTime(tabValue);
                 return (
                   <TabsContent key={tabValue} value={tabValue} className="mt-0 space-y-2.5">
                     {list.length === 0 ? (
                       <div className="rounded-xl border-2 border-dashed border-gray-200 py-14 text-center">
                         <CalendarIcon className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                         <p className="text-gray-500 font-body text-sm">
-                          Keine Termine in dieser Kategorie
+                          {tabValue === 'upcoming'
+                            ? 'Keine kommenden Termine'
+                            : 'Keine vergangenen Termine'}
                         </p>
                       </div>
                     ) : (
-                      list.map(renderAppointmentCard)
+                      list.map((apt) =>
+                        renderAppointmentCard(apt, { isPast: tabValue === 'past' })
+                      )
                     )}
                   </TabsContent>
                 );
               })}
             </section>
 
-            <aside className="lg:sticky lg:top-4">
+            <aside className="min-w-0 lg:sticky lg:top-4">
               <Card className="border-2 overflow-hidden">
                 <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
                   <CardTitle className="font-heading text-lg sm:text-xl text-text-dark">
@@ -718,7 +870,7 @@ export default function AppointmentsPage() {
             </aside>
           </div>
         </Tabs>
-      ) : (
+      ) : isExpert ? (
         <Tabs defaultValue="all" className="w-full">
           <TabsList className="mb-3">
             <TabsTrigger value="all">Alle ({appointments.length})</TabsTrigger>
@@ -748,6 +900,12 @@ export default function AppointmentsPage() {
             );
           })}
         </Tabs>
+      ) : (
+        <Card className="border-2">
+          <CardContent className="py-12 text-center">
+            <p className="text-gray-500 font-body text-sm">Rolle wird geladen…</p>
+          </CardContent>
+        </Card>
       )}
 
       <AppointmentDetailModal
@@ -755,6 +913,8 @@ export default function AppointmentsPage() {
         isOpen={isDetailModalOpen}
         onClose={handleCloseDetail}
         userRole={role as 'client' | 'expert'}
+        hideChat={role === 'client'}
+        forcePastSession={isClient && detailFromPastTab}
         onReschedule={
           role === 'client'
             ? async (id) => {
@@ -772,6 +932,27 @@ export default function AppointmentsPage() {
             : undefined
         }
       />
+
+      {isClient && userId ? (
+        <ReviewFlowDialog
+          open={isReviewOpen}
+          onOpenChange={(open) => {
+            setIsReviewOpen(open);
+            if (!open) setReviewAppointmentId(null);
+          }}
+          pending={pendingReviews}
+          initialAppointmentId={reviewAppointmentId}
+          clientId={userId}
+          onCompleted={async () => {
+            const next = await reviewService.getPendingReviewAppointments(userId);
+            setPendingReviews(next);
+            if (reviewAppointmentId) {
+              setReviewedIds((prev) => new Set([...prev, reviewAppointmentId]));
+            }
+            await loadAppointments();
+          }}
+        />
+      ) : null}
 
       {appointmentManageDialogs}
 

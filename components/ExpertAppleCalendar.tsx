@@ -33,7 +33,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -77,41 +76,66 @@ type ExpertAppleCalendarProps = {
   onSelectEvent?: (eventId: string) => void;
   onAddEvent?: () => void;
   onImportEvents?: (events: CalendarEventInput[]) => void;
-  syncEnabled: boolean;
-  onSyncEnabledChange: (enabled: boolean) => void;
+  syncEnabled?: boolean;
+  onSyncEnabledChange?: (enabled: boolean) => void;
+  /** Which view modes to offer (default: Tag / Woche / Monat) */
+  availableViews?: CalendarViewMode[];
+  defaultView?: CalendarViewMode;
+  /** Show ICS sync menu (expert calendar). Default true when sync handlers exist. */
+  showSync?: boolean;
+  className?: string;
   /** Month view: whether a calendar day is blocked */
   isDayBlocked?: (date: Date) => boolean;
   /** Month view: block a single day (right-click) */
   onBlockDay?: (date: Date) => void;
   /** Month view: unblock a day (right-click) */
   onUnblockDay?: (date: Date) => void;
+  /** Denser hour rows without 15-min guide lines (client dashboard) */
+  compactHours?: boolean;
 };
 
 const HOUR_START = 7;
 const HOUR_END = 21;
 const HOUR_HEIGHT = 56;
-const QUARTER_HEIGHT = HOUR_HEIGHT / 4;
+const HOUR_HEIGHT_COMPACT = 28;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
 
 function pad(n: number) {
   return String(n).padStart(2, '0');
 }
 
-function HourGridLines({ showLabel, hour }: { showLabel?: boolean; hour: number }) {
+function HourGridLines({
+  showLabel,
+  hour,
+  hourHeight,
+  showQuarters,
+}: {
+  showLabel?: boolean;
+  hour: number;
+  hourHeight: number;
+  showQuarters: boolean;
+}) {
+  const quarterHeight = hourHeight / 4;
   return (
-    <div className="relative border-b border-gray-200" style={{ height: HOUR_HEIGHT }}>
-      {[1, 2, 3].map((quarter) => (
-        <div
-          key={quarter}
-          className={cn(
-            'absolute left-0 right-0 border-b pointer-events-none',
-            quarter === 2 ? 'border-gray-100' : 'border-gray-50'
-          )}
-          style={{ top: quarter * QUARTER_HEIGHT }}
-        />
-      ))}
+    <div className="relative border-b border-gray-200" style={{ height: hourHeight }}>
+      {showQuarters &&
+        [1, 2, 3].map((quarter) => (
+          <div
+            key={quarter}
+            className={cn(
+              'absolute left-0 right-0 border-b pointer-events-none',
+              quarter === 2 ? 'border-gray-100' : 'border-gray-50'
+            )}
+            style={{ top: quarter * quarterHeight }}
+          />
+        ))}
       {showLabel ? (
-        <span className="absolute -top-2 right-2 text-[10px] font-body text-gray-400 z-[1]">
+        <span
+          className={cn(
+            'absolute right-1 font-body text-gray-400 z-[1]',
+            hourHeight <= 32 ? '-top-1.5 text-[9px]' : '-top-2 right-2 text-[10px]'
+          )}
+        >
           {pad(hour)}:00
         </span>
       ) : null}
@@ -158,13 +182,16 @@ type LaidOutTimedEvent = {
 };
 
 /** Pack overlapping events into side-by-side columns (calendar lane layout). */
-function layoutTimedEvents(dayEvents: ExpertCalendarEvent[]): LaidOutTimedEvent[] {
+function layoutTimedEvents(
+  dayEvents: ExpertCalendarEvent[],
+  hourHeight: number
+): LaidOutTimedEvent[] {
   const items = dayEvents
     .map((event) => {
       const startMin = Math.max(minutesFromDayStart(event.start), HOUR_START * 60);
       const endMin = Math.min(minutesFromDayStart(event.end), HOUR_END * 60);
-      const top = ((startMin - HOUR_START * 60) / 60) * HOUR_HEIGHT;
-      const height = Math.max(((endMin - startMin) / 60) * HOUR_HEIGHT, 22);
+      const top = ((startMin - HOUR_START * 60) / 60) * hourHeight;
+      const height = Math.max(((endMin - startMin) / 60) * hourHeight, hourHeight >= 40 ? 22 : 14);
       return {
         event,
         startMin,
@@ -228,13 +255,21 @@ export function ExpertAppleCalendar({
   onSelectEvent,
   onAddEvent,
   onImportEvents,
-  syncEnabled,
+  syncEnabled = false,
   onSyncEnabledChange,
+  availableViews = ['day', 'week', 'month'],
+  defaultView = 'week',
+  showSync,
+  className,
   isDayBlocked,
   onBlockDay,
   onUnblockDay,
+  compactHours = false,
 }: ExpertAppleCalendarProps) {
-  const [view, setView] = useState<CalendarViewMode>('week');
+  const syncUi = showSync ?? Boolean(onSyncEnabledChange);
+  const views = availableViews.length > 0 ? availableViews : (['week'] as CalendarViewMode[]);
+  const initialView = views.includes(defaultView) ? defaultView : views[0];
+  const [view, setView] = useState<CalendarViewMode>(initialView);
   const [anchorDate, setAnchorDate] = useState(new Date());
   const [syncOpen, setSyncOpen] = useState(false);
   const [importMessage, setImportMessage] = useState('');
@@ -245,6 +280,8 @@ export function ExpertAppleCalendar({
     blocked: boolean;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const hourHeight = compactHours ? HOUR_HEIGHT_COMPACT : HOUR_HEIGHT;
+  const showQuarters = !compactHours;
 
   const closeDayMenu = useCallback(() => setDayMenu(null), []);
 
@@ -385,9 +422,19 @@ export function ExpertAppleCalendar({
             )}
           >
             <span className={cn('w-1.5 shrink-0', color.bar)} aria-hidden />
-            <span className="min-w-0 flex-1 px-1.5 py-1 overflow-hidden">
+            <span
+              className={cn(
+                'min-w-0 flex-1 overflow-hidden',
+                compactHours ? 'px-1 py-0.5' : 'px-1.5 py-1'
+              )}
+            >
               <span className="flex items-start justify-between gap-1">
-                <span className="block font-heading text-[11px] font-semibold leading-tight truncate">
+                <span
+                  className={cn(
+                    'block font-heading font-semibold leading-tight truncate',
+                    compactHours ? 'text-[10px]' : 'text-[11px]'
+                  )}
+                >
                   {event.title}
                 </span>
                 {(event.synced || event.source === 'external') && (
@@ -397,7 +444,7 @@ export function ExpertAppleCalendar({
                   />
                 )}
               </span>
-              {height > 34 && (
+              {height > (compactHours ? 40 : 34) && (
                 <span className="block text-[10px] font-body opacity-80 mt-0.5 truncate">
                   {format(event.start, 'HH:mm')} – {format(event.end, 'HH:mm')}
                 </span>
@@ -413,7 +460,10 @@ export function ExpertAppleCalendar({
     events.filter((e) => e.allDay && isSameDay(e.start, day));
 
   const laidOutTimedForDay = (day: Date) =>
-    layoutTimedEvents(events.filter((e) => !e.allDay && isSameDay(e.start, day)));
+    layoutTimedEvents(
+      events.filter((e) => !e.allDay && isSameDay(e.start, day)),
+      hourHeight
+    );
 
   const monthDays = eachDayOfInterval({
     start: startOfWeek(startOfMonth(anchorDate), { weekStartsOn: 1 }),
@@ -421,81 +471,125 @@ export function ExpertAppleCalendar({
   });
 
   return (
-    <div className="rounded-2xl border-2 border-gray-200 bg-white overflow-hidden shadow-sm">
+    <div
+      className={cn(
+        'rounded-2xl border-2 border-gray-200 bg-white overflow-hidden shadow-sm',
+        className
+      )}
+    >
       {/* Toolbar */}
-      <div className="relative border-b border-gray-200 px-3 sm:px-4 py-3">
+      <div
+        className={cn(
+          'relative border-b border-gray-200',
+          compactHours ? 'px-2.5 sm:px-3 py-2' : 'px-3 sm:px-4 py-3'
+        )}
+      >
         {onAddEvent ? (
           <Button
             type="button"
             variant="outline"
             size="icon"
-            className="absolute top-3 left-3 sm:left-4 h-8 w-8 rounded-full z-10"
+            className={cn(
+              'absolute rounded-full z-10',
+              compactHours
+                ? 'top-2 left-2.5 sm:left-3 h-7 w-7'
+                : 'top-3 left-3 sm:left-4 h-8 w-8'
+            )}
             onClick={onAddEvent}
             aria-label="Termin hinzufügen"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className={cn(compactHours ? 'w-3 h-3' : 'w-3.5 h-3.5')} />
           </Button>
         ) : null}
 
-        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3">
-          <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 justify-self-start">
-            {(
-              [
-                { id: 'day', label: 'Tag' },
-                { id: 'week', label: 'Woche' },
-                { id: 'month', label: 'Monat' },
-              ] as const
-            ).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setView(item.id)}
-                className={cn(
-                  'px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-body rounded-md transition-colors',
-                  view === item.id
-                    ? 'bg-white text-text-dark shadow-sm font-semibold'
-                    : 'text-gray-500 hover:text-text-dark'
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+        <div
+          className={cn(
+            'grid items-center gap-1.5 sm:gap-2',
+            onAddEvent
+              ? compactHours
+                ? 'grid-cols-[auto_1fr_auto] pl-9'
+                : 'grid-cols-[auto_1fr_auto] pl-10 sm:pl-12'
+              : 'grid-cols-[auto_1fr_auto]'
+          )}
+        >
+          {views.length > 1 ? (
+            <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5 justify-self-start">
+              {views.map((id) => {
+                const label =
+                  id === 'day' ? 'Tag' : id === 'week' ? 'Woche' : 'Monat';
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setView(id)}
+                    className={cn(
+                      'font-body rounded-md transition-colors',
+                      compactHours
+                        ? 'px-2 py-1 text-[11px] sm:text-xs'
+                        : 'px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm',
+                      view === id
+                        ? 'bg-white text-text-dark shadow-sm font-semibold'
+                        : 'text-gray-500 hover:text-text-dark'
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div />
+          )}
 
-          <h2 className="font-heading text-xl sm:text-2xl font-bold text-text-dark tracking-tight capitalize text-center truncate px-1">
+          <h2
+            className={cn(
+              'font-heading text-text-dark tracking-tight capitalize text-center truncate px-1',
+              compactHours
+                ? 'text-sm sm:text-base font-semibold'
+                : 'text-xl sm:text-2xl font-bold'
+            )}
+          >
             {titleLabel}
           </h2>
 
-          <div className="flex items-center gap-2 justify-self-end">
+          <div className="flex items-center gap-1.5 sm:gap-2 justify-self-end">
             <div className="inline-flex items-center rounded-lg border border-gray-200 overflow-hidden">
               <button
                 type="button"
                 onClick={goPrev}
-                className="h-9 w-9 flex items-center justify-center hover:bg-gray-50 text-gray-600"
+                className={cn(
+                  'flex items-center justify-center hover:bg-gray-50 text-gray-600',
+                  compactHours ? 'h-7 w-7' : 'h-9 w-9'
+                )}
                 aria-label="Zurück"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className={cn(compactHours ? 'w-3.5 h-3.5' : 'w-4 h-4')} />
               </button>
               <button
                 type="button"
                 onClick={goNext}
-                className="h-9 w-9 flex items-center justify-center hover:bg-gray-50 text-gray-600 border-l border-gray-200"
+                className={cn(
+                  'flex items-center justify-center hover:bg-gray-50 text-gray-600 border-l border-gray-200',
+                  compactHours ? 'h-7 w-7' : 'h-9 w-9'
+                )}
                 aria-label="Weiter"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className={cn(compactHours ? 'w-3.5 h-3.5' : 'w-4 h-4')} />
               </button>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-9 w-9 rounded-full shrink-0"
-              onClick={() => setSyncOpen(true)}
-              aria-label="Kalender synchronisieren"
-              title="Kalender synchronisieren"
-            >
-              <MoreHorizontal className="w-4 h-4" />
-            </Button>
+            {syncUi ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 rounded-full shrink-0"
+                onClick={() => setSyncOpen(true)}
+                aria-label="Kalender synchronisieren"
+                title="Kalender synchronisieren"
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -503,10 +597,12 @@ export function ExpertAppleCalendar({
       {view !== 'month' ? (
         <div className="overflow-x-auto">
           <div
-            className="min-w-[720px]"
+            className={cn(compactHours ? 'min-w-0 w-full' : 'min-w-[720px]')}
             style={{
               display: 'grid',
-              gridTemplateColumns: `56px repeat(${dayColumns.length}, minmax(0, 1fr))`,
+              gridTemplateColumns: compactHours
+                ? `36px repeat(${dayColumns.length}, minmax(0, 1fr))`
+                : `56px repeat(${dayColumns.length}, minmax(0, 1fr))`,
             }}
           >
             {/* Day headers */}
@@ -516,19 +612,26 @@ export function ExpertAppleCalendar({
               return (
                 <div
                   key={`head-${day.toISOString()}`}
-                  className="border-b border-l border-gray-200 px-2 py-2 text-center"
+                  className={cn(
+                    'border-b border-l border-gray-200 text-center',
+                    compactHours ? 'px-0.5 py-1' : 'px-2 py-2'
+                  )}
                 >
                   <div
                     className={cn(
-                      'text-xs font-body text-gray-500',
+                      'font-body text-gray-500',
+                      compactHours ? 'text-[10px]' : 'text-xs',
                       today && 'text-primary-blue font-semibold'
                     )}
                   >
-                    {format(day, 'EE', { locale: de })}
+                    {format(day, compactHours ? 'EEEEEE' : 'EE', { locale: de })}
                   </div>
                   <div
                     className={cn(
-                      'mx-auto mt-1 flex h-8 w-8 items-center justify-center rounded-full font-heading text-lg font-semibold',
+                      'mx-auto flex items-center justify-center rounded-full font-heading font-semibold',
+                      compactHours
+                        ? 'mt-0.5 h-6 w-6 text-xs'
+                        : 'mt-1 h-8 w-8 text-lg',
                       today ? 'bg-primary-blue text-white' : 'text-text-dark'
                     )}
                   >
@@ -539,13 +642,23 @@ export function ExpertAppleCalendar({
             })}
 
             {/* All-day row */}
-            <div className="border-b border-gray-200 px-1 py-2 text-[10px] font-body text-gray-400 text-right pr-2">
-              Ganztägig
+            <div
+              className={cn(
+                'border-b border-gray-200 font-body text-gray-400 text-right',
+                compactHours
+                  ? 'px-0.5 py-1 text-[9px] leading-tight pr-1'
+                  : 'px-1 py-2 text-[10px] pr-2'
+              )}
+            >
+              {compactHours ? '' : 'Ganztägig'}
             </div>
             {dayColumns.map((day) => (
               <div
                 key={`allday-${day.toISOString()}`}
-                className="border-b border-l border-gray-200 min-h-[36px] px-1 py-1 flex flex-col gap-1"
+                className={cn(
+                  'border-b border-l border-gray-200 px-1 py-1 flex flex-col gap-1',
+                  compactHours ? 'min-h-[24px]' : 'min-h-[36px]'
+                )}
               >
                 {allDayForDay(day).map((event) => {
                   const color = COLOR_STYLES[event.color || 'green'];
@@ -573,7 +686,13 @@ export function ExpertAppleCalendar({
             {/* Time grid */}
             <div className="relative border-r border-gray-100">
               {HOURS.map((hour) => (
-                <HourGridLines key={hour} hour={hour} showLabel />
+                <HourGridLines
+                  key={hour}
+                  hour={hour}
+                  showLabel
+                  hourHeight={hourHeight}
+                  showQuarters={showQuarters}
+                />
               ))}
             </div>
 
@@ -581,11 +700,16 @@ export function ExpertAppleCalendar({
               <div
                 key={`grid-${day.toISOString()}`}
                 className="relative border-l border-gray-100 isolate"
-                style={{ height: HOURS.length * HOUR_HEIGHT }}
+                style={{ height: HOURS.length * hourHeight }}
               >
                 <div className="pointer-events-none absolute inset-0">
                   {HOURS.map((hour) => (
-                    <HourGridLines key={hour} hour={hour} />
+                    <HourGridLines
+                      key={hour}
+                      hour={hour}
+                      hourHeight={hourHeight}
+                      showQuarters={showQuarters}
+                    />
                   ))}
                 </div>
                 {laidOutTimedForDay(day).map(renderTimedEvent)}
@@ -640,7 +764,8 @@ export function ExpertAppleCalendar({
                       type="button"
                       onClick={() => {
                         setAnchorDate(day);
-                        setView('day');
+                        if (views.includes('day')) setView('day');
+                        else if (views.includes('week')) setView('week');
                       }}
                       className={cn(
                         'inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-heading font-semibold hover:bg-gray-100',
@@ -765,7 +890,10 @@ export function ExpertAppleCalendar({
                   Importierte Termine werden im Kalender mit Sync-Symbol angezeigt.
                 </p>
               </div>
-              <Switch checked={syncEnabled} onCheckedChange={onSyncEnabledChange} />
+              <Switch
+                checked={syncEnabled}
+                onCheckedChange={(checked) => onSyncEnabledChange?.(checked)}
+              />
             </div>
 
             <div className="space-y-2">
@@ -805,7 +933,7 @@ export function ExpertAppleCalendar({
                 type="button"
                 className="w-full font-body bg-gradient-to-r from-primary-blue to-primary-green text-white"
                 onClick={() => {
-                  if (!syncEnabled) onSyncEnabledChange(true);
+                  if (!syncEnabled) onSyncEnabledChange?.(true);
                   fileInputRef.current?.click();
                 }}
               >
@@ -817,12 +945,6 @@ export function ExpertAppleCalendar({
               <p className="text-sm text-primary-blue font-body">{importMessage}</p>
             )}
           </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setSyncOpen(false)}>
-              Fertig
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

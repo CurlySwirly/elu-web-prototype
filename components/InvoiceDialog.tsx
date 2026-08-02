@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { formatEuro } from '@/lib/utils/pricing';
+import { formatEuro, getClientPriceBreakdown } from '@/lib/utils/pricing';
 import {
   downloadInvoice,
   getInvoiceNumber,
@@ -36,6 +36,9 @@ export function InvoiceDialog({ open, onOpenChange, invoice }: InvoiceDialogProp
     parseISO(invoice.sessionEnd),
     'HH:mm'
   )} Uhr`;
+  const forClient = invoice.forClient !== false;
+  const breakdown = getClientPriceBreakdown(invoice.totalPrice);
+  const displayTotal = forClient ? breakdown.clientTotal : invoice.totalPrice;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -88,15 +91,28 @@ export function InvoiceDialog({ open, onOpenChange, invoice }: InvoiceDialogProp
                 </p>
               </div>
               <p className="text-sm font-heading font-semibold text-text-dark tabular-nums shrink-0">
-                {formatEuro(invoice.totalPrice)}
+                {formatEuro(forClient ? breakdown.servicePrice : invoice.totalPrice)}
               </p>
             </div>
+            {forClient && (
+              <div className="flex items-center justify-between gap-3 px-3.5 py-3 border-b border-gray-100">
+                <div className="min-w-0">
+                  <p className="text-sm text-gray-600 font-body">Servicegebühr</p>
+                  <p className="text-[11px] text-gray-400 font-body mt-0.5">
+                    inkl. {Math.round(breakdown.serviceFeeVatRate * 100)}% USt
+                  </p>
+                </div>
+                <p className="text-sm font-body font-medium text-text-dark tabular-nums shrink-0">
+                  {formatEuro(breakdown.serviceFeeGross)}
+                </p>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-3 px-3.5 py-3 bg-bg-light/80">
               <span className="text-sm font-heading font-semibold text-text-dark">
-                Gesamtbetrag
+                {forClient ? 'Endpreis' : 'Gesamtbetrag'}
               </span>
               <span className="text-sm font-heading font-semibold text-text-dark tabular-nums">
-                {formatEuro(invoice.totalPrice)}
+                {formatEuro(displayTotal)}
               </span>
             </div>
           </div>
@@ -109,7 +125,7 @@ export function InvoiceDialog({ open, onOpenChange, invoice }: InvoiceDialogProp
           <Button
             type="button"
             className="w-full h-10 font-body rounded-lg bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90"
-            onClick={() => downloadInvoice(invoice)}
+            onClick={() => downloadInvoice({ ...invoice, forClient })}
           >
             <Download className="w-4 h-4 mr-2" />
             Rechnung herunterladen

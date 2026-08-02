@@ -59,8 +59,9 @@ export function ExpertSedcard({
   const [reviewsOpen, setReviewsOpen] = useState(false);
   const isPreview = mode === 'preview';
   const location = expert.location || expert.city;
+  const displayName = expert.full_name?.trim() || 'Expert:in';
 
-  const initials = expert.full_name
+  const initials = displayName
     .split(' ')
     .map((n) => n[0])
     .join('');
@@ -70,7 +71,7 @@ export function ExpertSedcard({
       <div className="rounded-2xl border-2 bg-white p-4 sm:p-5">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-5">
           <Avatar className="w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0">
-            <AvatarImage src={expert.avatar_url} alt={expert.full_name} />
+            <AvatarImage src={expert.avatar_url} alt={displayName} />
             <AvatarFallback className="bg-gradient-to-r from-primary-blue to-primary-green text-white font-heading text-2xl">
               {initials}
             </AvatarFallback>
@@ -79,7 +80,7 @@ export function ExpertSedcard({
           <div className="flex-1 text-center md:text-left min-w-0">
             <div className="flex items-center justify-center md:justify-start gap-2 mb-3">
               <h1 className="text-xl sm:text-2xl font-heading font-bold text-text-dark">
-                {expert.full_name}
+                {displayName}
               </h1>
               {expert.is_verified && (
                 <CheckCircle2 className="w-5 h-5 text-primary-blue shrink-0" />
@@ -90,7 +91,7 @@ export function ExpertSedcard({
               <div>
                 <p className="text-xs text-gray-500 font-body mb-0.5">Stundensatz</p>
                 <p className="font-heading font-semibold text-text-dark text-sm sm:text-base">
-                  Ab €{expert.hourly_rate}
+                  Ab €{Number(expert.hourly_rate) || 0}
                 </p>
               </div>
               {expert.rating != null && expert.total_reviews != null && expert.total_reviews > 0 && (
@@ -99,7 +100,7 @@ export function ExpertSedcard({
                   <div className="flex items-center gap-1">
                     <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                     <span className="font-heading font-semibold text-text-dark text-sm sm:text-base">
-                      {expert.rating.toFixed(1)} ({expert.total_reviews})
+                      {Number(expert.rating).toFixed(1)} ({expert.total_reviews})
                     </span>
                   </div>
                 </div>

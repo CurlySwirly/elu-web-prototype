@@ -6,7 +6,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
-import { Clock, AlertCircle } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Clock, AlertCircle, MoreVertical } from 'lucide-react';
 import { format, isSameDay, parseISO, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -107,8 +113,8 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
             is_new_booking: apt.is_new_booking,
           })));
         } else {
-          const { mockClientBookingRequests } = await import('@/lib/backend/mock/data');
-          setAppointments(mockClientBookingRequests.map(apt => ({
+          const { mockClientAppointments } = await import('@/lib/backend/mock/data');
+          setAppointments(mockClientAppointments.map(apt => ({
             id: apt.id,
             start_time: apt.start_time,
             end_time: apt.end_time,
@@ -155,7 +161,7 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
               )
             `)
             .eq('expert_id', expertProfile.id)
-            .neq('status', 'cancelled')
+            .not('status', 'in', '(cancelled,cancelled_by_client,cancelled_by_expert)')
             .order('start_time', { ascending: true });
 
           if (error) throw error;
@@ -304,14 +310,21 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
   };
 
   const getAppointmentBadge = (apt: Appointment) => {
-    if (role === 'expert' && (apt.status === 'confirmed' || apt.status === 'completed')) {
-      if (!isNewClientAppointment(apt)) return null;
-      return (
-        <Badge className="border-none text-xs font-body shrink-0 bg-primary-green/25 text-text-dark">
-          {isFemaleClient(apt) ? 'Neukundin' : 'Neukunde'}
-        </Badge>
-      );
+    // Expert calendar: only Neukunde/Neukundin — never "Gebucht"
+    if (role === 'expert') {
+      if (
+        (apt.status === 'confirmed' || apt.status === 'completed') &&
+        isNewClientAppointment(apt)
+      ) {
+        return (
+          <Badge className="border-none text-xs font-body shrink-0 bg-primary-green/25 text-text-dark">
+            {isFemaleClient(apt) ? 'Neukundin' : 'Neukunde'}
+          </Badge>
+        );
+      }
+      return null;
     }
+
     if (apt.status === 'confirmed') {
       return (
         <Badge className="bg-info-bg text-info-text border-none text-xs font-body shrink-0">
@@ -322,8 +335,11 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
     const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
       completed: { label: 'Abgeschlossen', variant: 'secondary' },
       cancelled: { label: 'Abgesagt', variant: 'destructive' },
+      cancelled_by_client: { label: 'Abgesagt', variant: 'destructive' },
+      cancelled_by_expert: { label: 'Abgesagt', variant: 'destructive' },
     };
-    const statusInfo = statusMap[apt.status] || { label: 'Gebucht', variant: 'outline' };
+    const statusInfo = statusMap[apt.status];
+    if (!statusInfo) return null;
     return (
       <Badge variant={statusInfo.variant} className="text-xs font-body shrink-0">
         {statusInfo.label}
@@ -359,9 +375,17 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
             onMonthChange={setCurrentMonth}
             locale={de}
             className="rounded-md w-full p-0"
+            classNames={{
+              day_today:
+                '!bg-primary-blue !text-white hover:!bg-primary-blue hover:!text-white focus:!bg-primary-blue focus:!text-white font-semibold',
+              day_selected:
+                'bg-primary-blue text-white hover:bg-primary-blue hover:text-white focus:bg-primary-blue focus:text-white',
+            }}
             modifiers={{
-              hasAppointment: (date) => getAppointmentsForDate(date).length > 0,
+              hasAppointment: (date) =>
+                !isSameDay(date, new Date()) && getAppointmentsForDate(date).length > 0,
               hasNewlyAccepted: (date) =>
+                !isSameDay(date, new Date()) &&
                 getAppointmentsForDate(date).some(
                   (apt) => apt.status === 'confirmed' && apt.is_newly_accepted
                 ),
@@ -429,55 +453,88 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
                     ? apt.client?.full_name
                     : apt.expert?.full_name;
                 const badge = getAppointmentBadge(apt);
+                const status = String(apt.status || '');
+                const isCancellable =
+                  role === 'expert' &&
+                  status === 'confirmed';
 
                 return (
-                  <button
+                  <div
                     key={apt.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedAppointmentId(apt.id);
-                      setIsDetailModalOpen(true);
-                    }}
                     className={cn(
-                      'w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors hover:border-primary-blue',
-                      apt.status === 'confirmed' && apt.is_newly_accepted
+                      'flex items-center gap-0.5 rounded-lg border transition-colors hover:border-primary-blue',
+                      status === 'confirmed' && apt.is_newly_accepted
                         ? 'border-primary-green/50 bg-primary-green/5'
                         : 'border-gray-100 bg-white'
                     )}
                   >
-                    <div className="w-14 shrink-0">
-                      <p className="font-body font-semibold text-sm text-text-dark tabular-nums">
-                        {formatTime(apt.start_time)}
-                      </p>
-                      <p className="font-body text-xs text-gray-400 tabular-nums">
-                        {formatTime(apt.end_time)}
-                      </p>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      {role === 'expert' ? (
-                        <>
-                          <p className="font-heading font-semibold text-sm text-text-dark truncate">
-                            {partnerName || 'Klient:in'}
-                          </p>
-                          <p className="font-body text-xs text-gray-500 truncate mt-0.5">
-                            {apt.offer.title}
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="font-heading font-semibold text-sm text-text-dark truncate">
-                            {apt.offer.title}
-                          </p>
-                          {partnerName && (
-                            <p className="font-body text-xs text-gray-500 truncate mt-0.5">
-                              {partnerName}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAppointmentId(apt.id);
+                        setIsDetailModalOpen(true);
+                      }}
+                      className="min-w-0 flex-1 text-left flex items-center gap-3 px-3 py-2.5"
+                    >
+                      <div className="w-14 shrink-0">
+                        <p className="font-body font-semibold text-sm text-text-dark tabular-nums">
+                          {formatTime(apt.start_time)}
+                        </p>
+                        <p className="font-body text-xs text-gray-400 tabular-nums">
+                          {formatTime(apt.end_time)}
+                        </p>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        {role === 'expert' ? (
+                          <>
+                            <p className="font-heading font-semibold text-sm text-text-dark truncate">
+                              {partnerName || 'Klient:in'}
                             </p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                    {badge}
-                  </button>
+                            <p className="font-body text-xs text-gray-500 truncate mt-0.5">
+                              {apt.offer.title}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-heading font-semibold text-sm text-text-dark truncate">
+                              {apt.offer.title}
+                            </p>
+                            {partnerName && (
+                              <p className="font-body text-xs text-gray-500 truncate mt-0.5">
+                                {partnerName}
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {badge}
+                    </button>
+                    {role === 'expert' && isCancellable ? (
+                      <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md mr-1.5 text-gray-600 hover:bg-gray-100 hover:text-text-dark"
+                            aria-label="Terminoptionen"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                            }}
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-[11rem] font-body z-[80]">
+                          <DropdownMenuItem
+                            className="text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer"
+                            onSelect={() => openCancel(apt.id)}
+                          >
+                            Termin absagen
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>

@@ -64,10 +64,39 @@ export const reviewService = {
       const {
         mockPendingReviewAppointments,
         mockSubmittedReviewAppointmentIds,
+        mockClientAppointments,
       } = await import('@/lib/backend/mock/data');
-      return mockPendingReviewAppointments.filter(
+
+      const fromPending = mockPendingReviewAppointments.filter(
         (apt) => !mockSubmittedReviewAppointmentIds.has(apt.id)
       );
+
+      const fromCompleted = mockClientAppointments
+        .filter(
+          (apt) =>
+            !mockSubmittedReviewAppointmentIds.has(apt.id) &&
+            !fromPending.some((p) => p.id === apt.id) &&
+            (apt.status === 'completed' ||
+              (apt.status === 'confirmed' &&
+                new Date(apt.end_time).getTime() < Date.now()))
+        )
+        .map((apt) => ({
+          id: apt.id,
+          expert_id: apt.expert_id || apt.expert?.id || '',
+          start_time: apt.start_time,
+          end_time: apt.end_time,
+          total_price: apt.total_price,
+          expert: {
+            full_name: apt.expert?.full_name || '',
+            avatar_url: apt.expert?.avatar_url || '',
+          },
+          offer: {
+            title: apt.offer?.title || 'Session',
+            format: apt.offer?.format || '',
+          },
+        }));
+
+      return [...fromPending, ...fromCompleted];
     }
 
     const { data: completed, error } = await supabase
@@ -78,6 +107,7 @@ export const reviewService = {
         start_time,
         end_time,
         total_price,
+        status,
         expert_profiles:expert_id (
           profiles:user_id (
             full_name,
@@ -90,13 +120,21 @@ export const reviewService = {
         )
       `)
       .eq('client_id', userId)
-      .eq('status', 'completed')
+      .in('status', ['completed', 'confirmed'])
       .order('end_time', { ascending: false });
 
     if (error || !completed?.length) return [];
 
+    const now = Date.now();
+    const candidates = completed.filter((apt: { status: string; end_time: string }) => {
+      if (apt.status === 'completed') return true;
+      return apt.status === 'confirmed' && new Date(apt.end_time).getTime() < now;
+    });
+
+    if (!candidates.length) return [];
+
     const pending = await Promise.all(
-      completed.map(async (apt: any) => {
+      candidates.map(async (apt: any) => {
         const can = await this.canReviewAppointment(apt.id, userId);
         if (!can) return null;
 
@@ -129,6 +167,8 @@ export const reviewService = {
   },
 
   async getExpertReviews(expertProfileId: string) {
+    if (!expertProfileId) return [];
+
     if (isMockMode()) {
       const { mockExpertReviews } = await import('@/lib/backend/mock/data');
       return mockExpertReviews
@@ -159,7 +199,10 @@ export const reviewService = {
       .eq('expert_profile_id', expertProfileId)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.warn('[elu] getExpertReviews failed', error);
+      return [];
+    }
 
     return (data || []).map((review: any) => ({
       ...review,
@@ -198,16 +241,22 @@ export const reviewService = {
       const {
         mockPendingReviewAppointments,
         mockSubmittedReviewAppointmentIds,
+        mockClientAppointments,
       } = await import('@/lib/backend/mock/data');
-      return (
-        mockPendingReviewAppointments.some((apt) => apt.id === appointmentId) &&
-        !mockSubmittedReviewAppointmentIds.has(appointmentId)
+      if (mockSubmittedReviewAppointmentIds.has(appointmentId)) return false;
+      if (mockPendingReviewAppointments.some((apt) => apt.id === appointmentId)) return true;
+      return mockClientAppointments.some(
+        (apt) =>
+          apt.id === appointmentId &&
+          (apt.status === 'completed' ||
+            (apt.status === 'confirmed' &&
+              new Date(apt.end_time).getTime() < Date.now()))
       );
     }
 
     const { data: appointment } = await supabase
       .from('appointments')
-      .select('status, client_id')
+      .select('status, client_id, end_time')
       .eq('id', appointmentId)
       .single();
 
@@ -215,7 +264,12 @@ export const reviewService = {
       return false;
     }
 
-    if (appointment.status !== 'completed') {
+    const ended = new Date(appointment.end_time).getTime() < Date.now();
+    const eligibleStatus =
+      appointment.status === 'completed' ||
+      (appointment.status === 'confirmed' && ended);
+
+    if (!eligibleStatus) {
       return false;
     }
 
@@ -227,6 +281,49 @@ export const reviewService = {
       .maybeSingle();
 
     return !existingReview;
+  },
+
+  /** Existing client review for an appointment, if any */
+  async getClientReviewForAppointment(
+    appointmentId: string,
+    userId: string
+  ): Promise<Pick<Review, 'id' | 'rating' | 'title' | 'created_at'> | null> {
+    if (isMockMode()) {
+      const {
+        mockSubmittedReviewAppointmentIds,
+        mockExpertReviews,
+      } = await import('@/lib/backend/mock/data');
+      const fromList = mockExpertReviews.find(
+        (r) => r.appointment_id === appointmentId && r.client_id === userId
+      );
+      if (fromList) {
+        return {
+          id: fromList.id,
+          rating: fromList.rating,
+          title: fromList.title,
+          created_at: fromList.created_at,
+        };
+      }
+      if (mockSubmittedReviewAppointmentIds.has(appointmentId)) {
+        return {
+          id: `review-${appointmentId}`,
+          rating: 5,
+          title: 'Bewertung abgegeben',
+          created_at: new Date().toISOString(),
+        };
+      }
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('id, rating, title, created_at')
+      .eq('appointment_id', appointmentId)
+      .eq('client_id', userId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return data;
   },
 
   async createReview(
@@ -246,11 +343,19 @@ export const reviewService = {
         mockPendingReviewAppointments,
         mockSubmittedReviewAppointmentIds,
         mockNotifications,
+        mockClientAppointments,
       } = await import('@/lib/backend/mock/data');
 
       const canReview =
-        mockPendingReviewAppointments.some((apt) => apt.id === appointmentId) &&
-        !mockSubmittedReviewAppointmentIds.has(appointmentId);
+        !mockSubmittedReviewAppointmentIds.has(appointmentId) &&
+        (mockPendingReviewAppointments.some((apt) => apt.id === appointmentId) ||
+          mockClientAppointments.some(
+            (apt) =>
+              apt.id === appointmentId &&
+              (apt.status === 'completed' ||
+                (apt.status === 'confirmed' &&
+                  new Date(apt.end_time).getTime() < Date.now()))
+          ));
 
       if (!canReview) {
         throw new Error('Du kannst diesen Termin nicht bewerten');

@@ -58,6 +58,7 @@ export interface ExpertOffer {
 export interface Appointment {
   id: string;
   expert: {
+    id?: string;
     full_name: string;
     avatar_url: string;
   };
