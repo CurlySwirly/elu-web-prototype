@@ -894,7 +894,7 @@ export default function AppointmentsPage() {
                     </p>
                   </div>
                 ) : (
-                  list.map(renderAppointmentCard)
+                  list.map((appointment) => renderAppointmentCard(appointment))
                 )}
               </TabsContent>
             );
@@ -947,7 +947,11 @@ export default function AppointmentsPage() {
             const next = await reviewService.getPendingReviewAppointments(userId);
             setPendingReviews(next);
             if (reviewAppointmentId) {
-              setReviewedIds((prev) => new Set([...prev, reviewAppointmentId]));
+              setReviewedIds((prev) => {
+                const next = new Set(prev);
+                next.add(reviewAppointmentId);
+                return next;
+              });
             }
             await loadAppointments();
           }}
