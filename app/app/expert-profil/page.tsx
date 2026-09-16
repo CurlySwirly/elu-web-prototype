@@ -2,6 +2,7 @@
 
 import { getBackendMode } from '@/lib/backend/mode';
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,10 +23,10 @@ import {
   Globe,
   MessageSquare,
   Pencil,
+  CreditCard,
   Landmark,
   Plus,
   Star,
-  Trash2,
   UserRound,
   X,
 } from 'lucide-react';
@@ -33,9 +34,12 @@ import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { QualificationsSection } from '@/components/QualificationsSection';
 import { ExpertSedcard, type ExpertSedcardData } from '@/components/ExpertSedcard';
+import { ExpertAboManage } from '@/components/ExpertAboManage';
+import { StripeConnectOnboarding } from '@/components/StripeConnectOnboarding';
 import { AppPageHeader, AppPageShell } from '@/components/AppPageHeader';
 import { fetchExpertById, fetchExpertOffers, type ExpertOffer } from '@/lib/api';
 import { reviewService, type Review } from '@/lib/services/review';
+import { ensureMockExpertDemoState } from '@/lib/backend/mock/expert-demo-state';
 
 type ExpertProfileFields = {
   fullName: string;
@@ -45,13 +49,12 @@ type ExpertProfileFields = {
   verifiedProfessions: string[];
   yearsExperience: string;
   avatarUrl: string;
-};
-
-type PayoutAccount = {
-  accountHolder: string;
-  iban: string;
-  bic: string;
-  bankName: string;
+  vatId: string;
+  businessAddress: string;
+  businessPostalCode: string;
+  businessCity: string;
+  commercialRegister: string;
+  vatStatus: 'kleinunternehmer' | 'heilbehandlung' | 'regelbesteuerung';
 };
 
 const EMPTY_PROFILE: ExpertProfileFields = {
@@ -62,13 +65,12 @@ const EMPTY_PROFILE: ExpertProfileFields = {
   verifiedProfessions: [],
   yearsExperience: '',
   avatarUrl: '',
-};
-
-const EMPTY_PAYOUT: PayoutAccount = {
-  accountHolder: '',
-  iban: '',
-  bic: '',
-  bankName: '',
+  vatId: '',
+  businessAddress: '',
+  businessPostalCode: '',
+  businessCity: '',
+  commercialRegister: '',
+  vatStatus: 'kleinunternehmer',
 };
 
 const PROFESSION_SUGGESTIONS = [
@@ -106,16 +108,19 @@ function splitName(fullName: string) {
   return { first: parts[0], last: parts.slice(1).join(' ') };
 }
 
-function maskIban(iban: string) {
-  const compact = iban.replace(/\s+/g, '').toUpperCase();
-  if (compact.length < 8) return compact || '—';
-  const country = compact.slice(0, 4);
-  const last4 = compact.slice(-4);
-  return `${country} **** **** ${last4}`;
+function businessStorageKey(userId: string) {
+  return `elu-expert-business:v1:${userId}`;
 }
 
-function payoutStorageKey(userId: string) {
-  return `elu-expert-payout:v2:${userId}`;
+function loadBusinessFields(userId: string | null): Partial<ExpertProfileFields> {
+  if (!userId || typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(businessStorageKey(userId));
+    if (!raw) return {};
+    return JSON.parse(raw) as Partial<ExpertProfileFields>;
+  } catch {
+    return {};
+  }
 }
 
 function TagField({
@@ -238,17 +243,13 @@ function TagField({
 
 export default function ExpertProfilePage() {
   const { user, userId } = useAuth();
+  const searchParams = useSearchParams();
   const [expertProfileId, setExpertProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<ExpertProfileFields>(EMPTY_PROFILE);
   const [draft, setDraft] = useState<ExpertProfileFields>(EMPTY_PROFILE);
-  const [payout, setPayout] = useState<PayoutAccount>(EMPTY_PAYOUT);
-  const [payoutDraft, setPayoutDraft] = useState<PayoutAccount>(EMPTY_PAYOUT);
-  const [editingPayout, setEditingPayout] = useState(false);
-  const [savingPayout, setSavingPayout] = useState(false);
-  const [payoutSaved, setPayoutSaved] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [sedcardOffers, setSedcardOffers] = useState<ExpertOffer[]>([]);
   const [sedcardReviews, setSedcardReviews] = useState<Review[]>([]);
@@ -262,10 +263,21 @@ export default function ExpertProfilePage() {
   } | null>(null);
 
   useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (
+      tab &&
+      ['overview', 'stammdaten', 'qualifications', 'sedcard', 'reviews', 'konto', 'abo'].includes(tab)
+    ) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     const fetchExpertProfile = async () => {
       const backendMode = getBackendMode();
 
       if (backendMode === 'mock') {
+        ensureMockExpertDemoState(userId);
         const {
           mockExperts,
           mockOnboardingExpertProfile,
@@ -273,31 +285,42 @@ export default function ExpertProfilePage() {
         } = await import('@/lib/backend/mock/data');
 
         const isOnboardingDemo = userId === MOCK_ONBOARDING_EXPERT_USER_ID;
-        const next: ExpertProfileFields = isOnboardingDemo
-          ? {
-              fullName: mockOnboardingExpertProfile.full_name,
-              bio: mockOnboardingExpertProfile.bio || '',
-              professions: ['Physiotherapie'],
-              specializations: [],
-              verifiedProfessions: [],
-              yearsExperience: '',
-              avatarUrl: mockOnboardingExpertProfile.avatar_url || '',
-            }
-          : {
-              fullName: mockExperts[0].full_name,
-              bio: mockExperts[0].bio || '',
-              professions: mockExperts[0].professions?.length
-                ? mockExperts[0].professions
-                : [mockExperts[0].specializations[0]].filter(Boolean),
-              specializations: mockExperts[0].specializations || [],
-              verifiedProfessions: mockExperts[0].is_verified
-                ? mockExperts[0].professions?.length
+        const business = loadBusinessFields(userId);
+        const next: ExpertProfileFields = {
+          ...EMPTY_PROFILE,
+          ...(isOnboardingDemo
+            ? {
+                fullName: mockOnboardingExpertProfile.full_name,
+                bio: mockOnboardingExpertProfile.bio || '',
+                professions: [],
+                specializations: [],
+                verifiedProfessions: [],
+                yearsExperience: '',
+                avatarUrl: mockOnboardingExpertProfile.avatar_url || '',
+              }
+            : {
+                fullName: mockExperts[0].full_name,
+                bio: mockExperts[0].bio || '',
+                professions: mockExperts[0].professions?.length
                   ? mockExperts[0].professions
-                  : [mockExperts[0].specializations[0]].filter(Boolean)
-                : [],
-              yearsExperience: String(mockExperts[0].years_experience ?? ''),
-              avatarUrl: mockExperts[0].avatar_url || '',
-            };
+                  : [mockExperts[0].specializations[0]].filter(Boolean),
+                specializations: mockExperts[0].specializations || [],
+                verifiedProfessions: mockExperts[0].is_verified
+                  ? mockExperts[0].professions?.length
+                    ? mockExperts[0].professions
+                    : [mockExperts[0].specializations[0]].filter(Boolean)
+                  : [],
+                yearsExperience: String(mockExperts[0].years_experience ?? ''),
+                avatarUrl: mockExperts[0].avatar_url || '',
+                vatId: 'ATU12345678',
+                businessAddress: 'Beispielgasse 12',
+                businessPostalCode: '1010',
+                businessCity: 'Wien',
+                commercialRegister: 'FN 123456a',
+                vatStatus: 'regelbesteuerung',
+              }),
+          ...business,
+        };
         setProfile(next);
         setDraft(next);
         setExpertProfileId(
@@ -362,6 +385,8 @@ export default function ExpertProfilePage() {
           }
 
           const next: ExpertProfileFields = {
+            ...EMPTY_PROFILE,
+            ...loadBusinessFields(userId),
             fullName: profileRow?.full_name || '',
             bio: data.bio || '',
             professions,
@@ -380,6 +405,8 @@ export default function ExpertProfilePage() {
           const { mockExperts } = await import('@/lib/backend/mock/data');
           const demo = mockExperts[0];
           const next: ExpertProfileFields = {
+            ...EMPTY_PROFILE,
+            ...loadBusinessFields(userId),
             fullName: demo.full_name,
             bio: demo.bio || '',
             professions: demo.professions?.length
@@ -400,6 +427,8 @@ export default function ExpertProfilePage() {
           const { mockExperts } = await import('@/lib/backend/mock/data');
           const demo = mockExperts[0];
           const next: ExpertProfileFields = {
+            ...EMPTY_PROFILE,
+            ...loadBusinessFields(userId),
             fullName: demo.full_name,
             bio: demo.bio || '',
             professions: demo.professions?.length
@@ -425,36 +454,6 @@ export default function ExpertProfilePage() {
       void fetchExpertProfile();
     }
   }, [userId]);
-
-  useEffect(() => {
-    if (!userId) return;
-    try {
-      const raw = localStorage.getItem(payoutStorageKey(userId));
-      if (raw) {
-        const parsed = JSON.parse(raw) as PayoutAccount;
-        // Upgrade incomplete/empty saves with demo kontodaten
-        if (parsed.iban?.trim() && parsed.accountHolder?.trim()) {
-          setPayout(parsed);
-          setPayoutDraft(parsed);
-          return;
-        }
-      }
-
-      void import('@/lib/backend/mock/data').then(({ mockExpertPayoutAccount }) => {
-          const seed: PayoutAccount = {
-            accountHolder: mockExpertPayoutAccount.accountHolder,
-            iban: mockExpertPayoutAccount.iban,
-            bic: mockExpertPayoutAccount.bic,
-            bankName: mockExpertPayoutAccount.bankName,
-          };
-          setPayout(seed);
-          setPayoutDraft(seed);
-          localStorage.setItem(payoutStorageKey(userId), JSON.stringify(seed));
-        });
-    } catch {
-      /* ignore */
-    }
-  }, [userId, profile.fullName]);
 
   useEffect(() => {
     if (!expertProfileId) return;
@@ -583,8 +582,6 @@ export default function ExpertProfilePage() {
     return displayName.slice(0, 2).toUpperCase();
   }, [displayName]);
 
-  const payoutConfigured = Boolean(payout.iban.trim() && payout.accountHolder.trim());
-
   const startEditing = () => {
     setDraft(profile);
     setEditing(true);
@@ -623,34 +620,28 @@ export default function ExpertProfilePage() {
 
       setProfile(draft);
       setEditing(false);
+      if (userId) {
+        try {
+          localStorage.setItem(
+            businessStorageKey(userId),
+            JSON.stringify({
+              vatId: draft.vatId,
+              businessAddress: draft.businessAddress,
+              businessPostalCode: draft.businessPostalCode,
+              businessCity: draft.businessCity,
+              commercialRegister: draft.commercialRegister,
+              vatStatus: draft.vatStatus,
+            })
+          );
+          localStorage.setItem('elu-expert-vat-status', draft.vatStatus);
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (error) {
       console.error('Error saving expert profile:', error);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleSavePayout = async () => {
-    if (!userId) return;
-    setSavingPayout(true);
-    setPayoutSaved(false);
-    try {
-      const next = {
-        accountHolder: payoutDraft.accountHolder.trim(),
-        iban: payoutDraft.iban.trim(),
-        bic: payoutDraft.bic.trim(),
-        bankName: payoutDraft.bankName.trim(),
-      };
-      localStorage.setItem(payoutStorageKey(userId), JSON.stringify(next));
-      setPayout(next);
-      setPayoutDraft(next);
-      setEditingPayout(false);
-      setPayoutSaved(true);
-      window.setTimeout(() => setPayoutSaved(false), 2500);
-    } catch (error) {
-      console.error('Error saving payout account:', error);
-    } finally {
-      setSavingPayout(false);
     }
   };
 
@@ -682,7 +673,7 @@ export default function ExpertProfilePage() {
                 className="gap-1 rounded-full px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
               >
                 <Eye className="w-3 h-3" />
-                Profilübersicht
+                Übersicht
               </TabsTrigger>
               <TabsTrigger
                 value="stammdaten"
@@ -703,7 +694,7 @@ export default function ExpertProfilePage() {
                 className="gap-1 rounded-full px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
               >
                 <Globe className="w-3 h-3" />
-                Sedcard
+                Profil
               </TabsTrigger>
               <TabsTrigger
                 value="reviews"
@@ -718,6 +709,13 @@ export default function ExpertProfilePage() {
               >
                 <Landmark className="w-3 h-3" />
                 Konto
+              </TabsTrigger>
+              <TabsTrigger
+                value="abo"
+                className="gap-1 rounded-full px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+              >
+                <CreditCard className="w-3 h-3" />
+                Abo
               </TabsTrigger>
             </TabsList>
           </div>
@@ -964,6 +962,129 @@ export default function ExpertProfilePage() {
                     </div>
                   )}
                 </section>
+
+                <div className="border-t border-gray-100" />
+
+                <section className="space-y-3">
+                  <div>
+                    <h3 className="font-heading font-semibold text-sm text-text-dark">
+                      Unternehmensinformationen
+                    </h3>
+                    <p className="text-xs text-gray-500 font-body mt-0.5">
+                      Steuer- und Firmendaten für Auszahlung und Honorarnoten (getrennt von
+                      Privatadresse).
+                    </p>
+                  </div>
+                  {!editing ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                      <div>
+                        <p className="text-xs text-gray-500 font-body mb-0.5">USt-Status</p>
+                        <p className="font-body text-sm text-text-dark">
+                          {profile.vatStatus === 'regelbesteuerung'
+                            ? 'Regelbesteuerung'
+                            : profile.vatStatus === 'heilbehandlung'
+                              ? 'Heilbehandlung (befreit)'
+                              : 'Kleinunternehmer'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 font-body mb-0.5">USt-IdNr.</p>
+                        <p className="font-body text-sm text-text-dark">
+                          {displayValue(profile.vatId)}
+                        </p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <p className="text-xs text-gray-500 font-body mb-0.5">Firmenadresse</p>
+                        <p className="font-body text-sm text-text-dark">
+                          {[profile.businessAddress, profile.businessPostalCode, profile.businessCity]
+                            .filter(Boolean)
+                            .join(', ') || '—'}
+                        </p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <p className="text-xs text-gray-500 font-body mb-0.5">
+                          Handelsregister-Eintrag
+                        </p>
+                        <p className="font-body text-sm text-text-dark">
+                          {displayValue(profile.commercialRegister)}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label className="font-body text-sm">USt-Status</Label>
+                        <select
+                          value={draft.vatStatus}
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              vatStatus: e.target.value as ExpertProfileFields['vatStatus'],
+                            }))
+                          }
+                          className="w-full h-9 rounded-md border border-gray-200 bg-white px-3 text-sm font-body"
+                        >
+                          <option value="kleinunternehmer">Kleinunternehmer</option>
+                          <option value="heilbehandlung">Heilbehandlung (befreit)</option>
+                          <option value="regelbesteuerung">Regelbesteuerung</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label className="font-body text-sm">USt-IdNr.</Label>
+                        <Input
+                          value={draft.vatId}
+                          onChange={(e) => setDraft((d) => ({ ...d, vatId: e.target.value }))}
+                          className="font-body h-9 text-sm"
+                          placeholder="ATU12345678"
+                        />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label className="font-body text-sm">Firmenadresse</Label>
+                        <Input
+                          value={draft.businessAddress}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, businessAddress: e.target.value }))
+                          }
+                          className="font-body h-9 text-sm"
+                          placeholder="Straße und Hausnummer"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="font-body text-sm">PLZ</Label>
+                        <Input
+                          value={draft.businessPostalCode}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, businessPostalCode: e.target.value }))
+                          }
+                          className="font-body h-9 text-sm"
+                          placeholder="1010"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="font-body text-sm">Ort</Label>
+                        <Input
+                          value={draft.businessCity}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, businessCity: e.target.value }))
+                          }
+                          className="font-body h-9 text-sm"
+                          placeholder="Wien"
+                        />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <Label className="font-body text-sm">Handelsregister-Eintrag</Label>
+                        <Input
+                          value={draft.commercialRegister}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, commercialRegister: e.target.value }))
+                          }
+                          className="font-body h-9 text-sm"
+                          placeholder="FN 123456a, HG Wien"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </section>
               </CardContent>
             </Card>
           </TabsContent>
@@ -1081,9 +1202,15 @@ export default function ExpertProfilePage() {
                 </CardHeader>
                 <CardContent className="px-4 sm:px-5 pb-6">
                   {sedcardReviews.length === 0 ? (
-                    <p className="text-sm text-gray-500 font-body text-center py-6">
-                      Noch keine Bewertungen vorhanden.
-                    </p>
+                    <div className="flex flex-col items-center text-center py-10 px-4">
+                      <Star className="w-10 h-10 text-gray-300 mb-3" strokeWidth={1.5} />
+                      <h3 className="font-heading font-semibold text-base text-text-dark">
+                        Noch keine Bewertungen
+                      </h3>
+                      <p className="mt-1.5 text-sm text-gray-500 font-body max-w-sm leading-relaxed">
+                        Sobald Kund:innen Sessions abgeschlossen haben, erscheinen Bewertungen hier.
+                      </p>
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       {sedcardReviews.map((review) => (
@@ -1161,205 +1288,29 @@ export default function ExpertProfilePage() {
             </div>
           </TabsContent>
 
+          <TabsContent value="abo" className="mt-4 space-y-4">
+            <ExpertAboManage userId={userId} />
+          </TabsContent>
+
           <TabsContent value="konto" className="mt-4 space-y-4">
-            <Card className="border border-gray-200 shadow-sm">
-              <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 px-4 sm:px-5 pt-4 pb-3">
-                <div className="min-w-0">
-                  <CardTitle className="font-heading text-base sm:text-lg text-text-dark">
-                    Auszahlungskonto
-                  </CardTitle>
-                  <CardDescription className="font-body text-xs sm:text-sm mt-1 max-w-xl">
-                    Deine Honorare werden per SEPA auf dieses Konto überwiesen. elu speichert keine
-                    Kreditkarte für Expert:innen – Auszahlungen laufen nur auf eine verifizierte
-                    IBAN.
-                  </CardDescription>
-                </div>
-                {!editingPayout && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => {
-                      setPayoutDraft(
-                        payoutConfigured
-                          ? payout
-                          : {
-                              accountHolder: '',
-                              iban: '',
-                              bic: '',
-                              bankName: '',
-                            }
-                      );
-                      setEditingPayout(true);
-                      setPayoutSaved(false);
-                    }}
-                    className="font-body shrink-0 h-8 text-xs bg-primary-blue text-white hover:bg-primary-blue/90"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1.5" />
-                    Konto hinterlegen
-                  </Button>
-                )}
-              </CardHeader>
-              <CardContent className="px-4 sm:px-5 pb-5 space-y-4">
-                {payoutSaved && (
-                  <Alert className="border-primary-green/40 bg-primary-green/10 py-2">
-                    <Check className="h-4 w-4 text-text-dark" />
-                    <AlertDescription className="font-body text-sm text-text-dark">
-                      Kontodaten gespeichert.
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {editingPayout ? (
-                  <div className="rounded-xl border border-gray-200 p-4 space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <Label htmlFor="accountHolder" className="font-body text-sm">
-                          Kontoinhaber *
-                        </Label>
-                        <Input
-                          id="accountHolder"
-                          value={payoutDraft.accountHolder}
-                          onChange={(e) =>
-                            setPayoutDraft((d) => ({ ...d, accountHolder: e.target.value }))
-                          }
-                          className="font-body h-9 text-sm"
-                          placeholder="Demo Expert GmbH"
-                        />
-                      </div>
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <Label htmlFor="iban" className="font-body text-sm">
-                          IBAN *
-                        </Label>
-                        <Input
-                          id="iban"
-                          value={payoutDraft.iban}
-                          onChange={(e) =>
-                            setPayoutDraft((d) => ({ ...d, iban: e.target.value }))
-                          }
-                          className="font-body h-9 text-sm"
-                          placeholder="AT12 1234 5678 9078 90"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="bic" className="font-body text-sm">
-                          BIC
-                        </Label>
-                        <Input
-                          id="bic"
-                          value={payoutDraft.bic}
-                          onChange={(e) =>
-                            setPayoutDraft((d) => ({ ...d, bic: e.target.value }))
-                          }
-                          className="font-body h-9 text-sm"
-                          placeholder="GIBAATWWXXX"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="bankName" className="font-body text-sm">
-                          Bank
-                        </Label>
-                        <Input
-                          id="bankName"
-                          value={payoutDraft.bankName}
-                          onChange={(e) =>
-                            setPayoutDraft((d) => ({ ...d, bankName: e.target.value }))
-                          }
-                          className="font-body h-9 text-sm"
-                          placeholder="Erste Bank"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setPayoutDraft(payout);
-                          setEditingPayout(false);
-                        }}
-                        disabled={savingPayout}
-                        className="font-body h-8 text-xs"
-                      >
-                        Abbrechen
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void handleSavePayout()}
-                        disabled={
-                          savingPayout ||
-                          !payoutDraft.accountHolder.trim() ||
-                          !payoutDraft.iban.trim()
-                        }
-                        className="font-body h-8 text-xs bg-primary-blue text-white hover:bg-primary-blue/90"
-                      >
-                        {savingPayout ? 'Speichern…' : 'Speichern'}
-                      </Button>
-                    </div>
-                  </div>
-                ) : payoutConfigured ? (
-                  <div className="rounded-xl border border-gray-200 bg-white p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-50">
-                      <Landmark className="h-5 w-5 text-gray-600" />
-                    </div>
-
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <p className="font-heading font-semibold text-text-dark text-sm tabular-nums">
-                        {maskIban(payout.iban)}
-                      </p>
-                      <p className="text-xs text-gray-500 font-body">
-                        Kontoinhaber: {displayValue(payout.accountHolder)}
-                      </p>
-                      <p className="text-xs text-gray-500 font-body">
-                        BIC: {displayValue(payout.bic)}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setPayoutDraft(payout);
-                          setEditingPayout(true);
-                          setPayoutSaved(false);
-                        }}
-                        className="font-body h-8 text-xs"
-                      >
-                        Bearbeiten
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (!userId) return;
-                          const cleared = { ...EMPTY_PAYOUT };
-                          setPayout(cleared);
-                          setPayoutDraft(cleared);
-                          setEditingPayout(false);
-                          setPayoutSaved(false);
-                          localStorage.removeItem(payoutStorageKey(userId));
-                        }}
-                        className="font-body h-8 w-8 p-0 text-red-600 border-gray-200 hover:bg-red-50 hover:text-red-700"
-                        aria-label="Konto löschen"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center">
-                    <Landmark className="mx-auto h-8 w-8 text-gray-300 mb-2" />
-                    <p className="text-sm text-gray-500 font-body">
-                      Noch kein Auszahlungskonto hinterlegt.
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <StripeConnectOnboarding
+              userId={userId}
+              email={user?.email}
+              returnPath="/app/expert-profil?tab=konto&stripe=return"
+              refreshPath="/app/expert-profil?tab=konto&stripe=refresh"
+              onCompleted={() => {
+                try {
+                  const raw = sessionStorage.getItem('elu-mock-expert-checklist');
+                  const prev = raw ? JSON.parse(raw) : {};
+                  sessionStorage.setItem(
+                    'elu-mock-expert-checklist',
+                    JSON.stringify({ ...prev, checklist_stripe_connected: true })
+                  );
+                } catch {
+                  /* ignore */
+                }
+              }}
+            />
           </TabsContent>
         </Tabs>
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { getBackendMode } from '@/lib/backend/mode';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -13,6 +13,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { DocumentUpload } from '@/components/DocumentUpload';
+import { ExpertAboWall } from '@/components/ExpertAboWall';
+import { StripeConnectOnboarding } from '@/components/StripeConnectOnboarding';
 import { AlertCircle } from 'lucide-react';
 
 const GENDER_OPTIONS = [
@@ -36,11 +38,12 @@ const LANGUAGES = ['Deutsch', 'Englisch', 'Spanisch', 'Französisch'];
 
 export default function ExpertOnboardingPage() {
   const router = useRouter();
-  const { userId } = useAuth();
+  const { userId, user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [expertProfileId, setExpertProfileId] = useState<string | null>(null);
+  const [aboActive, setAboActive] = useState(false);
 
   const [gender, setGender] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
@@ -50,6 +53,14 @@ export default function ExpertOnboardingPage() {
   const [languages, setLanguages] = useState<string[]>(['Deutsch']);
   const [profession, setProfession] = useState('');
   const [highestDegree, setHighestDegree] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('stripe') === 'return' || params.get('stripe') === 'refresh') {
+      setStep(5);
+    }
+  }, []);
 
   const toggleArrayItem = (arr: string[], item: string, setter: (val: string[]) => void) => {
     if (arr.includes(item)) {
@@ -128,13 +139,15 @@ export default function ExpertOnboardingPage() {
     setStep(step - 1);
   };
 
-  const handleSubmit = async () => {
+  const finishOnboarding = (opts: { aboActive: boolean; stripeConnected: boolean }) => {
     try {
       sessionStorage.setItem('elu-mock-expert-onboarding-done', '1');
       sessionStorage.setItem(
         'elu-mock-expert-checklist',
         JSON.stringify({
           checklist_stammdaten_completed: true,
+          checklist_abo_active: opts.aboActive,
+          checklist_stripe_connected: opts.stripeConnected,
           verification_status: 'not_verified_incomplete',
         })
       );
@@ -155,7 +168,7 @@ export default function ExpertOnboardingPage() {
             Vervollständige dein Profil, um loszulegen
           </CardDescription>
           <div className="flex gap-1.5 pt-1">
-            {[1, 2, 3].map((s) => (
+            {[1, 2, 3, 4, 5].map((s) => (
               <div
                 key={s}
                 className={`h-1.5 flex-1 rounded-full transition-colors ${
@@ -334,16 +347,47 @@ export default function ExpertOnboardingPage() {
                 </h4>
                 <ul className="text-xs text-gray-600 font-body space-y-1 list-disc list-inside leading-relaxed">
                   <li>Dokumente werden von unserem Team geprüft</li>
-                  <li>E-Mail über den Verifizierungsstatus</li>
-                  <li>Danach ist dein Profil für Kund:innen sichtbar</li>
-                  <li>Du kannst Buchungen entgegennehmen</li>
+                  <li>Abo aktivieren</li>
+                  <li>Stripe Connect für Auszahlungen einrichten</li>
                 </ul>
               </div>
             </div>
           )}
 
+          {step === 4 && (
+            <ExpertAboWall
+              userId={userId}
+              title="Abo aktivieren"
+              description="Aktiviere dein Abo, um Angebote anzulegen und buchbar zu sein."
+              skipLabel="Später im Profil"
+              onActivated={() => {
+                setAboActive(true);
+                setStep(5);
+              }}
+              onSkip={() => {
+                setAboActive(false);
+                setStep(5);
+              }}
+            />
+          )}
+
+          {step === 5 && (
+            <StripeConnectOnboarding
+              variant="embedded"
+              userId={userId}
+              email={user?.email}
+              returnPath="/onboarding/expert?stripe=return"
+              refreshPath="/onboarding/expert?stripe=refresh"
+              skipLabel="Später im Profil"
+              onCompleted={() =>
+                finishOnboarding({ aboActive, stripeConnected: true })
+              }
+              onSkip={() => finishOnboarding({ aboActive, stripeConnected: false })}
+            />
+          )}
+
           <div className="flex justify-between gap-2 pt-2 border-t border-gray-100">
-            {step > 1 && (
+            {step > 1 && step < 4 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -363,16 +407,16 @@ export default function ExpertOnboardingPage() {
               >
                 {loading ? 'Speichern…' : 'Weiter'}
               </Button>
-            ) : (
+            ) : step === 3 ? (
               <Button
-                onClick={handleSubmit}
+                onClick={handleNext}
                 disabled={loading}
                 size="sm"
                 className="ml-auto h-9 bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 font-body text-sm"
               >
-                Dashboard öffnen
+                Weiter zum Abo
               </Button>
-            )}
+            ) : null}
           </div>
         </CardContent>
       </Card>

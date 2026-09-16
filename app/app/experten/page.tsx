@@ -13,6 +13,8 @@ import { ExpertFilters } from '@/components/ExpertFilters';
 import { Search, MapPin, CheckCircle2, Star } from 'lucide-react';
 import type { ExpertFilters as ExpertFiltersType } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
+import { AppPageHeader, AppPageShell } from '@/components/AppPageHeader';
+import { getAppPageMeta } from '@/lib/app-page-meta';
 
 function normalizeOfferFormat(format: string): 'online' | 'in_person' | null {
   const value = format.trim().toLowerCase();
@@ -198,16 +200,17 @@ export default function ExpertsPage() {
     );
   }
 
+  const pageMeta = getAppPageMeta('/app/experten');
+
   return (
-    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
-      <div>
-        <h1 className="text-lg sm:text-xl font-heading font-bold text-text-dark">
-          Expert:innen finden
-        </h1>
-        <p className="text-sm text-gray-500 font-body mt-1">
-          Durchsuche unser Netzwerk von zertifizierten Wellness-Expert:innen
-        </p>
-      </div>
+    <AppPageShell>
+      <AppPageHeader
+        title={pageMeta?.title || 'Expert:innen finden'}
+        description={
+          pageMeta?.description ||
+          'Durchsuche unser Netzwerk von zertifizierten Wellness-Expert:innen'
+        }
+      />
 
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
@@ -330,6 +333,6 @@ export default function ExpertsPage() {
           </div>
         </div>
       )}
-    </div>
+    </AppPageShell>
   );
 }

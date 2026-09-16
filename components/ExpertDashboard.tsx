@@ -38,6 +38,12 @@ import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import {
+  hasActiveSubscriptionAccess,
+  loadExpertSubscription,
+} from '@/lib/utils/subscription';
+import { loadStripeConnectStatus } from '@/lib/utils/stripe-connect';
+import { ensureMockExpertDemoState } from '@/lib/backend/mock/expert-demo-state';
 
 interface ExpertProfile {
   id: string;
@@ -47,6 +53,7 @@ interface ExpertProfile {
   checklist_offers_created: boolean;
   checklist_availability_set: boolean;
   checklist_stripe_connected: boolean;
+  checklist_abo_active?: boolean;
   qualification_verified: boolean;
   bio: string;
   profile_image_url: string;
@@ -105,6 +112,8 @@ export default function ExpertDashboard() {
       
       if (backendMode === 'mock') {
         await new Promise(resolve => setTimeout(resolve, 300));
+        ensureMockExpertDemoState(user?.id);
+
         const {
           mockExperts,
           mockExpertAppointments,
@@ -149,7 +158,11 @@ export default function ExpertDashboard() {
               mockOnboardingExpertProfile.checklist_availability_set,
             checklist_stripe_connected:
               checklistOverrides.checklist_stripe_connected ??
+              loadStripeConnectStatus(user?.id).completed ??
               mockOnboardingExpertProfile.checklist_stripe_connected,
+            checklist_abo_active:
+              (checklistOverrides as { checklist_abo_active?: boolean }).checklist_abo_active ??
+              hasActiveSubscriptionAccess(loadExpertSubscription(user?.id)),
             qualification_verified:
               checklistOverrides.qualification_verified ??
               mockOnboardingExpertProfile.qualification_verified,
@@ -173,6 +186,7 @@ export default function ExpertDashboard() {
           checklist_offers_created: true,
           checklist_availability_set: true,
           checklist_stripe_connected: true,
+          checklist_abo_active: true,
           qualification_verified: true,
           bio: 'Zertifizierte Physiotherapeutin mit 8 Jahren Erfahrung',
           profile_image_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
@@ -411,6 +425,18 @@ export default function ExpertDashboard() {
         key: 'offers'
       },
       {
+        title: 'elu Abo aktivieren',
+        description: 'Erforderlich, um neue Angebote anzulegen',
+        status:
+          expertProfile?.checklist_abo_active ||
+          hasActiveSubscriptionAccess(loadExpertSubscription(user?.id))
+            ? 'completed'
+            : 'pending',
+        link: '/app/expert-profil?tab=abo',
+        icon: CreditCard,
+        key: 'abo'
+      },
+      {
         title: 'Verfügbarkeit anlegen',
         description: 'Mind. 1 wiederkehrender Zeitblock',
         status: expertProfile?.checklist_availability_set ? 'completed' : 'pending',
@@ -420,9 +446,9 @@ export default function ExpertDashboard() {
       },
       {
         title: 'Stripe Connect verknüpfen',
-        description: 'Via Stripe-Onboarding für Auszahlungen',
+        description: 'Auszahlungen einrichten',
         status: expertProfile?.checklist_stripe_connected ? 'completed' : 'pending',
-        link: '/app/finanzen',
+        link: '/app/expert-profil?tab=konto',
         icon: CreditCard,
         key: 'stripe'
       }
@@ -452,10 +478,7 @@ export default function ExpertDashboard() {
   const getStatusBadge = () => {
     if (isProfileOnline) {
       return (
-        <Badge
-          className="text-text-dark text-sm px-3 py-1.5 font-body"
-          style={{ backgroundColor: '#E2E8FB', borderColor: '#6D8EEC', borderWidth: '1px' }}
-        >
+        <Badge className="text-text-dark text-sm px-3 py-1.5 font-body bg-info-bg border border-primary-blue">
           <CheckCircle2 className="w-4 h-4 mr-1.5" style={{ color: '#6D8EEC' }} />
           <span style={{ color: '#6D8EEC' }}>Profil: online</span>
         </Badge>
@@ -473,7 +496,7 @@ export default function ExpertDashboard() {
     if (isVerified) {
       if (!showVerifiedToast) return null;
       return (
-        <Alert className="border-2" style={{ backgroundColor: '#E2E8FB', borderColor: '#6D8EEC' }}>
+        <Alert className="border-2 border-primary-blue bg-info-bg">
           <CheckCircle2 className="h-5 w-5" style={{ color: '#6D8EEC' }} />
           <AlertDescription className="ml-2 text-text-dark flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <span>
@@ -507,7 +530,14 @@ export default function ExpertDashboard() {
       <Alert className="border-2 border-info-text bg-info-bg">
         <AlertCircle className="h-5 w-5 text-info-text" />
         <AlertDescription className="ml-2 text-info-text">
-          <strong className="font-semibold">Du bist noch nicht verifiziert.</strong> Bitte schließe alle 5 Schritte unten ab und warte auf unsere Qualifikationsprüfung.
+          <strong className="font-semibold">Du bist noch nicht verifiziert.</strong> Bitte schließe
+          den Registrierungs-Wizard sowie Abo und Stripe ab und warte auf unsere
+          Qualifikationsprüfung.
+          <div className="mt-2">
+            <Button asChild size="sm" className="h-8 font-body text-xs bg-primary-blue text-white">
+              <Link href="/onboarding/expert">Registrierung fortsetzen</Link>
+            </Button>
+          </div>
         </AlertDescription>
       </Alert>
     );
@@ -599,26 +629,28 @@ export default function ExpertDashboard() {
                       )}
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-heading font-semibold text-sm text-text-dark">
-                            {item.title}
-                          </h3>
-                          <p className="text-gray-500 font-body text-xs mt-0.5 leading-relaxed">
-                            {item.description}
-                          </p>
-                          {isInReview && (
-                            <p className="text-[11px] text-yellow-700 font-medium mt-1">
-                              Dokument hochgeladen – warte auf Freigabe
+                    <div className="flex-1 min-w-0 flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-heading font-semibold text-sm text-text-dark">
+                              {item.title}
+                            </h3>
+                            <p className="text-gray-500 font-body text-xs mt-0.5 leading-relaxed">
+                              {item.description}
                             </p>
-                          )}
+                            {isInReview && (
+                              <p className="text-[11px] text-yellow-700 font-medium mt-1">
+                                Dokument hochgeladen – warte auf Freigabe
+                              </p>
+                            )}
+                          </div>
+                          <Icon className="w-4 h-4 text-primary-blue shrink-0 mt-0.5" />
                         </div>
-                        <Icon className="w-4 h-4 text-primary-blue shrink-0 mt-0.5" />
                       </div>
 
                       {!isInReview && (
-                        <Link href={item.link} className="inline-block mt-2">
+                        <Link href={item.link} className="shrink-0 self-center">
                           <Button
                             variant={isComplete ? 'outline' : 'default'}
                             size="sm"

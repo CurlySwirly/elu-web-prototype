@@ -11,24 +11,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CheckCircle2, ChevronDown, Download, FileText, ListFilter } from 'lucide-react';
-import { addMinutes, format, parseISO, getYear, getMonth } from 'date-fns';
+import { CheckCircle2, ChevronDown, Download, FileText, ListFilter, RotateCcw } from 'lucide-react';
+import {
+  addMinutes,
+  format,
+  parseISO,
+  getYear,
+  getMonth,
+  getISOWeek,
+  getISOWeekYear,
+  startOfISOWeek,
+  endOfISOWeek,
+} from 'date-fns';
 import { de } from 'date-fns/locale';
 import { AppPageHeader, AppPageShell } from '@/components/AppPageHeader';
-import { FinanceOverviewChart } from '@/components/FinanceOverviewChart';
+import {
+  FinanceOverviewChart,
+  type FinanceChartMode,
+} from '@/components/FinanceOverviewChart';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAuth } from '@/contexts/AuthContext';
 import type { InvoiceData } from '@/lib/utils/invoice';
-import {
-  PLATFORM_FEE_RATE,
-  VAT_RATE,
-  getSessionPriceBreakdown,
-} from '@/lib/utils/pricing';
+import { VAT_RATE, getSessionPriceBreakdown } from '@/lib/utils/pricing';
 import { cn } from '@/lib/utils';
-import { mockExpertFinanceTransactions } from '@/lib/backend/mock/finance-data';
+import {
+  mockExpertFinanceTransactions,
+  type MockFinanceBookingStatus,
+} from '@/lib/backend/mock/finance-data';
 
 type HistoryStatusFilter = 'all' | 'pending' | 'paid';
+type ExpertVatStatus = 'kleinunternehmer' | 'regelbesteuerung';
+
+const VAT_STATUS_KEY = 'elu-expert-vat-status';
 
 interface Transaction {
   id: string;
@@ -37,6 +52,9 @@ interface Transaction {
   amount: number;
   status: string;
   date: string;
+  booking_status?: MockFinanceBookingStatus;
+  payout_date?: string;
+  clawback_date?: string;
 }
 
 const MONTH_LABELS = [
@@ -69,12 +87,17 @@ const MONTH_TITLE = [
   'Dezember',
 ];
 
+/** Expert payout = full session amount (0 % provision). */
 function netAmount(gross: number) {
   return getSessionPriceBreakdown(gross).expertPayout;
 }
 
-function feeAmount(gross: number) {
-  return getSessionPriceBreakdown(gross).platformFeeGross;
+function isClawback(t: Transaction) {
+  return t.booking_status === 'REFUNDED_CLAWBACK';
+}
+
+function isRevenueTransaction(t: Transaction) {
+  return !isClawback(t) && t.booking_status !== 'REFUNDED';
 }
 
 function formatEuroDe(amount: number) {
@@ -85,6 +108,32 @@ function formatEuroDe(amount: number) {
   });
 }
 
+function loadVatStatus(): ExpertVatStatus {
+  if (typeof window === 'undefined') return 'kleinunternehmer';
+  try {
+    const raw = localStorage.getItem(VAT_STATUS_KEY);
+    if (raw === 'regelbesteuerung') return 'regelbesteuerung';
+    return 'kleinunternehmer';
+  } catch {
+    return 'kleinunternehmer';
+  }
+}
+
+function vatBreakdown(grossTotal: number, vatStatus: ExpertVatStatus) {
+  if (vatStatus === 'regelbesteuerung') {
+    const netto = Math.round((grossTotal / (1 + VAT_RATE)) * 100) / 100;
+    const ust = Math.round((grossTotal - netto) * 100) / 100;
+    return {
+      netto,
+      ust,
+      brutto: Math.round(grossTotal * 100) / 100,
+      vatApplies: true,
+    };
+  }
+  const amount = Math.round(grossTotal * 100) / 100;
+  return { netto: amount, ust: 0, brutto: amount, vatApplies: false };
+}
+
 const INITIAL_TRANSACTIONS: Transaction[] = mockExpertFinanceTransactions.map((t) => ({
   id: t.id,
   client_name: t.client_name,
@@ -92,19 +141,32 @@ const INITIAL_TRANSACTIONS: Transaction[] = mockExpertFinanceTransactions.map((t
   amount: t.amount,
   status: t.status,
   date: t.date,
+  booking_status: t.booking_status,
+  payout_date: t.payout_date,
+  clawback_date: t.clawback_date,
 }));
 
 export default function FinancesPage() {
-  const { user } = useAuth();
+  const { user, userId } = useAuth();
   const [transactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
   const [selectedYear, setSelectedYear] = useState('2026');
   const [historyYear, setHistoryYear] = useState('2026');
   const [historyStatus, setHistoryStatus] = useState<HistoryStatusFilter>('all');
   const [historyFilterOpen, setHistoryFilterOpen] = useState(false);
+  const [chartMode, setChartMode] = useState<FinanceChartMode>('month');
   const [selectedMonthIndex, setSelectedMonthIndex] = useState(4); // Mai – mixed demo
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState(0);
   const [breakdownOpen, setBreakdownOpen] = useState(true);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
+  const [vatStatus, setVatStatus] = useState<ExpertVatStatus>('kleinunternehmer');
+  const now = new Date();
+  const [honorarMonth, setHonorarMonth] = useState<number | 'all'>(now.getMonth());
+  const [honorarYear, setHonorarYear] = useState(String(now.getFullYear()));
+
+  useEffect(() => {
+    setVatStatus(loadVatStatus());
+  }, []);
 
   const availableYears = useMemo(() => {
     const years = new Set<number>();
@@ -147,9 +209,11 @@ export default function FinancesPage() {
     [transactions, year]
   );
 
-  const chartData = useMemo(() => {
+  const monthChartData = useMemo(() => {
     return MONTH_LABELS.map((label, monthIndex) => {
-      const monthTx = yearTransactions.filter((t) => getMonth(parseISO(t.date)) === monthIndex);
+      const monthTx = yearTransactions.filter(
+        (t) => isRevenueTransaction(t) && getMonth(parseISO(t.date)) === monthIndex
+      );
       const paid = monthTx
         .filter((t) => t.status === 'completed')
         .reduce((sum, t) => sum + netAmount(t.amount), 0);
@@ -157,71 +221,165 @@ export default function FinancesPage() {
         .filter((t) => t.status === 'confirmed')
         .reduce((sum, t) => sum + netAmount(t.amount), 0);
       return {
-        month: label,
+        label,
         paid: Math.round(paid * 100) / 100,
         expected: Math.round(expected * 100) / 100,
       };
     });
   }, [yearTransactions]);
 
-  // When year changes, pick the latest month that has activity
+  const weekMeta = useMemo(() => {
+    const weeks: { week: number; label: string; start: Date; end: Date }[] = [];
+    // Walk all ISO weeks that touch this calendar year
+    for (let month = 0; month < 12; month++) {
+      for (let day = 1; day <= 28; day += 7) {
+        const d = new Date(year, month, day, 12);
+        const isoYear = getISOWeekYear(d);
+        if (isoYear !== year) continue;
+        const week = getISOWeek(d);
+        if (weeks.some((w) => w.week === week)) continue;
+        weeks.push({
+          week,
+          label: `KW ${week}`,
+          start: startOfISOWeek(d),
+          end: endOfISOWeek(d),
+        });
+      }
+    }
+    // Ensure late Dec weeks
+    for (let day = 1; day <= 31; day++) {
+      const d = new Date(year, 11, day, 12);
+      if (getISOWeekYear(d) !== year) continue;
+      const week = getISOWeek(d);
+      if (weeks.some((w) => w.week === week)) continue;
+      weeks.push({
+        week,
+        label: `KW ${week}`,
+        start: startOfISOWeek(d),
+        end: endOfISOWeek(d),
+      });
+    }
+    return weeks.sort((a, b) => a.week - b.week);
+  }, [year]);
+
+  const weekChartData = useMemo(() => {
+    return weekMeta.map((meta) => {
+      const weekTx = yearTransactions.filter((t) => {
+        if (!isRevenueTransaction(t)) return false;
+        try {
+          const d = parseISO(t.date);
+          return getISOWeekYear(d) === year && getISOWeek(d) === meta.week;
+        } catch {
+          return false;
+        }
+      });
+      const paid = weekTx
+        .filter((t) => t.status === 'completed')
+        .reduce((sum, t) => sum + netAmount(t.amount), 0);
+      const expected = weekTx
+        .filter((t) => t.status === 'confirmed')
+        .reduce((sum, t) => sum + netAmount(t.amount), 0);
+      return {
+        label: meta.label,
+        paid: Math.round(paid * 100) / 100,
+        expected: Math.round(expected * 100) / 100,
+      };
+    });
+  }, [yearTransactions, weekMeta, year]);
+
+  const chartData = chartMode === 'month' ? monthChartData : weekChartData;
+  const selectedPeriodIndex = chartMode === 'month' ? selectedMonthIndex : selectedWeekIndex;
+  const setSelectedPeriodIndex =
+    chartMode === 'month' ? setSelectedMonthIndex : setSelectedWeekIndex;
+
+  // When year/mode changes, pick the latest period that has activity
   useEffect(() => {
     const withData = chartData
       .map((row, i) => ({ i, total: row.paid + row.expected }))
       .filter((r) => r.total > 0);
     if (withData.length === 0) return;
     const last = withData[withData.length - 1].i;
-    setSelectedMonthIndex((prev) =>
-      chartData[prev] && chartData[prev].paid + chartData[prev].expected > 0 ? prev : last
-    );
-  }, [year, chartData]);
+    if (chartMode === 'month') {
+      setSelectedMonthIndex((prev) =>
+        chartData[prev] && chartData[prev].paid + chartData[prev].expected > 0 ? prev : last
+      );
+    } else {
+      setSelectedWeekIndex((prev) =>
+        chartData[prev] && chartData[prev].paid + chartData[prev].expected > 0 ? prev : last
+      );
+    }
+  }, [year, chartMode, chartData]);
 
-  const monthTransactions = useMemo(
-    () => yearTransactions.filter((t) => getMonth(parseISO(t.date)) === selectedMonthIndex),
-    [yearTransactions, selectedMonthIndex]
-  );
+  const periodTransactions = useMemo(() => {
+    if (chartMode === 'month') {
+      return yearTransactions.filter((t) => getMonth(parseISO(t.date)) === selectedMonthIndex);
+    }
+    const meta = weekMeta[selectedWeekIndex];
+    if (!meta) return [];
+    return yearTransactions.filter((t) => {
+      try {
+        const d = parseISO(t.date);
+        return getISOWeekYear(d) === year && getISOWeek(d) === meta.week;
+      } catch {
+        return false;
+      }
+    });
+  }, [
+    chartMode,
+    yearTransactions,
+    selectedMonthIndex,
+    selectedWeekIndex,
+    weekMeta,
+    year,
+  ]);
 
   const monthSummary = useMemo(() => {
-    const paidGross = monthTransactions
+    const revenueTx = periodTransactions.filter(isRevenueTransaction);
+    const paidGross = revenueTx
       .filter((t) => t.status === 'completed')
       .reduce((sum, t) => sum + t.amount, 0);
-    const pendingGross = monthTransactions
+    const pendingGross = revenueTx
       .filter((t) => t.status === 'confirmed')
       .reduce((sum, t) => sum + t.amount, 0);
-    const paidNet = monthTransactions
+    const paidNet = revenueTx
       .filter((t) => t.status === 'completed')
       .reduce((sum, t) => sum + netAmount(t.amount), 0);
-    const pendingNet = monthTransactions
+    const pendingNet = revenueTx
       .filter((t) => t.status === 'confirmed')
       .reduce((sum, t) => sum + netAmount(t.amount), 0);
     const serviceGross = paidGross + pendingGross;
-    // Demo: Expert:innen nutzen die Kleinunternehmerregelung → keine USt auf den Servicepreis
-    const vatApplies = false;
-    const serviceVat = vatApplies
-      ? Math.round((serviceGross - serviceGross / (1 + VAT_RATE)) * 100) / 100
-      : 0;
-    const serviceNet = vatApplies
-      ? Math.round((serviceGross - serviceVat) * 100) / 100
-      : Math.round(serviceGross * 100) / 100;
-    const platformFee = monthTransactions.reduce((sum, t) => sum + feeAmount(t.amount), 0);
+    const vat = vatBreakdown(serviceGross, vatStatus);
     const payout = paidNet + pendingNet;
     return {
       paidNet: Math.round(paidNet * 100) / 100,
       pendingNet: Math.round(pendingNet * 100) / 100,
       totalNet: Math.round(payout * 100) / 100,
-      serviceNet,
-      serviceVat: Math.round(serviceVat * 100) / 100,
-      serviceGross: Math.round(serviceGross * 100) / 100,
-      vatApplies,
-      platformFee: Math.round(platformFee * 100) / 100,
+      serviceNet: vat.netto,
+      serviceVat: vat.ust,
+      serviceGross: vat.brutto,
+      vatApplies: vat.vatApplies,
       payout: Math.round(payout * 100) / 100,
     };
-  }, [monthTransactions]);
+  }, [periodTransactions, vatStatus]);
+
+  const vatOverviewByMonth = useMemo(() => {
+    return MONTH_TITLE.map((title, monthIndex) => {
+      const monthTx = yearTransactions.filter(
+        (t) =>
+          isRevenueTransaction(t) &&
+          t.status === 'completed' &&
+          getMonth(parseISO(t.date)) === monthIndex
+      );
+      const gross = monthTx.reduce((sum, t) => sum + t.amount, 0);
+      const vat = vatBreakdown(gross, vatStatus);
+      return { monthIndex, title, ...vat, hasData: gross > 0 };
+    }).filter((row) => row.hasData);
+  }, [yearTransactions, vatStatus]);
 
   const offerBreakdown = useMemo(() => {
     const map = new Map<string, number>();
     yearTransactions
-      .filter((t) => t.status === 'completed')
+      .filter((t) => isRevenueTransaction(t) && t.status === 'completed')
       .forEach((t) => {
         map.set(t.offer_title, (map.get(t.offer_title) || 0) + netAmount(t.amount));
       });
@@ -260,6 +418,10 @@ export default function FinancesPage() {
           } catch {
             return false;
           }
+          if (isClawback(t)) {
+            if (historyStatus === 'pending') return false;
+            return true;
+          }
           if (historyStatus === 'paid') return t.status === 'completed';
           if (historyStatus === 'pending') return t.status === 'confirmed';
           return true;
@@ -268,12 +430,32 @@ export default function FinancesPage() {
     [transactions, historyYearNum, historyStatus]
   );
 
+  const honorarnoten = useMemo(() => {
+    const yearNum = Number(honorarYear);
+    return transactions
+      .filter((t) => {
+        if (t.status !== 'completed' || isClawback(t) || t.booking_status === 'REFUNDED') {
+          return false;
+        }
+        try {
+          const d = parseISO(t.date);
+          if (getYear(d) !== yearNum) return false;
+          if (honorarMonth !== 'all' && getMonth(d) !== honorarMonth) return false;
+          return true;
+        } catch {
+          return false;
+        }
+      })
+      .sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
+  }, [transactions, honorarYear, honorarMonth]);
+
   const historyFilterActive = historyStatus !== 'all';
 
   const handlePdfDownload = () => {
     const rows = history
       .map((t) => {
-        const status = t.status === 'completed' ? 'Ausbezahlt' : 'Erwartet';
+        let status = t.status === 'completed' ? 'Ausbezahlt' : 'Erwartet';
+        if (isClawback(t)) status = 'Rückbuchung';
         return `<tr>
           <td>${format(parseISO(t.date), 'd. MMMM yyyy, HH:mm', { locale: de })} Uhr</td>
           <td>${t.offer_title}</td>
@@ -295,7 +477,7 @@ export default function FinancesPage() {
   th{font-size:11px;text-transform:uppercase;color:#888}
 </style></head><body>
   <h1>Zahlungshistorie ${historyYearNum}</h1>
-  <p>Netto-Auszahlungen nach Abzug der Vermittlungsprovision (${Math.round(PLATFORM_FEE_RATE * 100)}&nbsp;%)</p>
+  <p>Netto-Auszahlungen</p>
   <table>
     <thead><tr><th>Datum</th><th>Angebot</th><th>Klient:in</th><th>Status</th><th>Betrag</th></tr></thead>
     <tbody>${rows}</tbody>
@@ -313,7 +495,12 @@ export default function FinancesPage() {
     URL.revokeObjectURL(url);
   };
 
-  const monthTitle = `${MONTH_TITLE[selectedMonthIndex]} ${year}`;
+  const periodTitle =
+    chartMode === 'month'
+      ? `${MONTH_TITLE[selectedMonthIndex]} ${year}`
+      : weekMeta[selectedWeekIndex]
+        ? `${weekMeta[selectedWeekIndex].label} ${year}`
+        : `Jahr ${year}`;
 
   const openInvoice = (t: Transaction) => {
     const start = parseISO(t.date);
@@ -331,11 +518,27 @@ export default function FinancesPage() {
     setInvoiceOpen(true);
   };
 
+  const statusBadge = (t: Transaction) => {
+    if (isClawback(t)) {
+      return (
+        <Badge className="bg-amber-100 text-amber-800 border-none font-body text-[10px] px-2 py-0 shrink-0">
+          Rückbuchung
+        </Badge>
+      );
+    }
+    const isPaid = t.status === 'completed';
+    return (
+      <Badge className="bg-info-bg text-info-text border-none font-body text-[10px] px-2 py-0 shrink-0">
+        {isPaid ? 'Ausbezahlt' : 'Erwartet'}
+      </Badge>
+    );
+  };
+
   return (
     <AppPageShell>
       <AppPageHeader
         title="Finanzen"
-        description="Auszahlung (Netto) nach Abzug der Vermittlungsprovision"
+        description="Einnahmen, Auszahlungen und Honorarnoten"
       />
 
       <Card className="border border-gray-200 shadow-sm">
@@ -361,8 +564,10 @@ export default function FinancesPage() {
         <CardContent className="px-2 sm:px-4 pb-4">
           <FinanceOverviewChart
             data={chartData}
-            selectedMonthIndex={selectedMonthIndex}
-            onSelectMonth={setSelectedMonthIndex}
+            selectedIndex={selectedPeriodIndex}
+            onSelectIndex={setSelectedPeriodIndex}
+            mode={chartMode}
+            onModeChange={setChartMode}
           />
         </CardContent>
       </Card>
@@ -371,7 +576,7 @@ export default function FinancesPage() {
         <CardContent className="px-4 sm:px-5 py-5 space-y-5">
           <div>
             <h2 className="font-heading text-base sm:text-lg font-bold text-text-dark">
-              {monthTitle}
+              {periodTitle}
             </h2>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6">
               <div>
@@ -447,14 +652,6 @@ export default function FinancesPage() {
                     {formatEuroDe(monthSummary.serviceGross)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between gap-4 py-2.5 text-sm font-body">
-                  <span className="text-text-dark">
-                    Plattformabgabe ({Math.round(PLATFORM_FEE_RATE * 100)}&nbsp;%)
-                  </span>
-                  <span className="tabular-nums text-text-dark shrink-0">
-                    −{formatEuroDe(monthSummary.platformFee)}
-                  </span>
-                </div>
                 <div className="flex items-center justify-between gap-4 py-3 mt-1 border-t border-gray-200 text-sm font-body">
                   <span className="font-heading font-semibold text-text-dark">
                     Deine Auszahlung
@@ -466,6 +663,62 @@ export default function FinancesPage() {
               </div>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border border-gray-200 shadow-sm">
+        <CardHeader className="px-4 sm:px-5 pt-4 pb-2 space-y-1">
+          <CardTitle className="font-heading text-base sm:text-lg text-text-dark">
+            USt-Übersicht
+          </CardTitle>
+          <CardDescription className="font-body text-xs sm:text-sm">
+            {selectedYear} ·{' '}
+            {vatStatus === 'regelbesteuerung'
+              ? `${Math.round(VAT_RATE * 100)} % Umsatzsteuer`
+              : 'Kleinunternehmerregelung (USt 0 %)'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="px-4 sm:px-5 pb-4">
+          {vatOverviewByMonth.length === 0 ? (
+            <p className="text-sm text-gray-500 font-body py-4 text-center">
+              Keine ausgezahlten Einnahmen in diesem Jahr
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-3 px-2.5 text-[11px] font-body text-gray-500 uppercase tracking-wide">
+                <span>Monat</span>
+                <span className="text-right w-[5.5rem]">Netto</span>
+                <span className="text-right w-[5.5rem]">USt</span>
+                <span className="text-right w-[5.5rem]">Brutto</span>
+              </div>
+              {vatOverviewByMonth.map((row) => (
+                <div
+                  key={row.monthIndex}
+                  className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-1 sm:gap-3 p-2.5 rounded-lg border border-gray-200 bg-white"
+                >
+                  <p className="font-heading font-semibold text-sm text-text-dark">{row.title}</p>
+                  <div className="flex sm:contents justify-between gap-3 text-sm font-body">
+                    <span className="text-gray-500 sm:hidden">Netto</span>
+                    <span className="tabular-nums text-text-dark text-right sm:w-[5.5rem]">
+                      {formatEuroDe(row.netto)}
+                    </span>
+                  </div>
+                  <div className="flex sm:contents justify-between gap-3 text-sm font-body">
+                    <span className="text-gray-500 sm:hidden">USt</span>
+                    <span className="tabular-nums text-text-dark text-right sm:w-[5.5rem]">
+                      {formatEuroDe(row.ust)}
+                    </span>
+                  </div>
+                  <div className="flex sm:contents justify-between gap-3 text-sm font-body">
+                    <span className="text-gray-500 sm:hidden">Brutto</span>
+                    <span className="tabular-nums font-heading font-semibold text-text-dark text-right sm:w-[5.5rem]">
+                      {formatEuroDe(row.brutto)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -621,30 +874,37 @@ export default function FinancesPage() {
           ) : (
             <div className="max-h-[360px] sm:max-h-[420px] overflow-y-auto overscroll-contain pr-1 -mr-1 space-y-2">
               {history.map((t) => {
-                const isPaid = t.status === 'completed';
+                const clawback = isClawback(t);
+                const isPaid = t.status === 'completed' && !clawback;
                 return (
                   <div
                     key={t.id}
-                    className="flex items-center gap-3 p-2.5 sm:p-3 rounded-lg border border-gray-200 bg-white"
+                    className="flex items-start gap-3 p-2.5 sm:p-3 rounded-lg border border-gray-200 bg-white"
                   >
                     <div
                       className={cn(
-                        'w-9 h-9 rounded-full flex items-center justify-center shrink-0',
-                        isPaid ? 'bg-primary-green/30' : 'bg-gray-100'
+                        'w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5',
+                        clawback
+                          ? 'bg-amber-100'
+                          : isPaid
+                            ? 'bg-primary-green/30'
+                            : 'bg-gray-100'
                       )}
                     >
-                      <CheckCircle2
-                        className={cn('w-4 h-4', isPaid ? 'text-text-dark' : 'text-gray-400')}
-                      />
+                      {clawback ? (
+                        <RotateCcw className="w-4 h-4 text-amber-700" />
+                      ) : (
+                        <CheckCircle2
+                          className={cn('w-4 h-4', isPaid ? 'text-text-dark' : 'text-gray-400')}
+                        />
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0 flex-wrap">
                         <p className="font-heading font-semibold text-sm text-text-dark truncate">
                           {t.offer_title}
                         </p>
-                        <Badge className="bg-info-bg text-info-text border-none font-body text-[10px] px-2 py-0 shrink-0">
-                          {isPaid ? 'Ausbezahlt' : 'Erwartet'}
-                        </Badge>
+                        {statusBadge(t)}
                       </div>
                       <p className="text-xs text-gray-500 font-body truncate mt-0.5">
                         mit {t.client_name}
@@ -652,6 +912,28 @@ export default function FinancesPage() {
                       <p className="text-xs text-gray-400 font-body mt-0.5">
                         {format(parseISO(t.date), 'd. MMMM yyyy, HH:mm', { locale: de })} Uhr
                       </p>
+                      {clawback && (
+                        <div className="mt-1.5 space-y-1">
+                          <p className="text-xs text-amber-800 font-body leading-snug">
+                            Der Kunde hat fristgerecht storniert. Da dein Konto den Betrag bereits
+                            erhalten hatte, wurde er zurückgezogen.
+                          </p>
+                          <div className="text-xs text-gray-500 font-body space-y-0.5">
+                            {t.payout_date && (
+                              <p>
+                                Ausgezahlt:{' '}
+                                {format(parseISO(t.payout_date), 'd. MMM yyyy', { locale: de })}
+                              </p>
+                            )}
+                            {t.clawback_date && (
+                              <p>
+                                Rückbuchung:{' '}
+                                {format(parseISO(t.clawback_date), 'd. MMM yyyy', { locale: de })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                       {isPaid && (
                         <Button
                           type="button"
@@ -666,13 +948,116 @@ export default function FinancesPage() {
                       )}
                     </div>
                     <div className="text-right shrink-0 self-start pt-0.5">
-                      <p className="font-heading font-bold text-sm sm:text-base text-text-dark tabular-nums">
+                      <p
+                        className={cn(
+                          'font-heading font-bold text-sm sm:text-base tabular-nums',
+                          clawback ? 'text-amber-800' : 'text-text-dark'
+                        )}
+                      >
+                        {clawback ? '−' : ''}
                         {formatEuroDe(netAmount(t.amount))}
                       </p>
                     </div>
                   </div>
                 );
               })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border border-gray-200 shadow-sm">
+        <CardHeader className="px-4 sm:px-5 pt-4 pb-2 space-y-3">
+          <div>
+            <CardTitle className="font-heading text-base sm:text-lg text-text-dark">
+              Honorarnoten
+            </CardTitle>
+            <CardDescription className="font-body text-xs sm:text-sm mt-1">
+              Abgeschlossene Sessions – unabhängig vom Historie-Filter
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setHonorarMonth('all')}
+              className={cn(
+                'px-2.5 py-1 rounded-full text-xs font-body transition-colors border',
+                honorarMonth === 'all'
+                  ? 'bg-primary-blue text-white border-primary-blue'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-primary-blue'
+              )}
+            >
+              Alle
+            </button>
+            <Select
+              value={honorarMonth === 'all' ? 'all' : String(honorarMonth)}
+              onValueChange={(v) => setHonorarMonth(v === 'all' ? 'all' : Number(v))}
+            >
+              <SelectTrigger className="w-[140px] h-8 font-body text-xs">
+                <SelectValue placeholder="Monat" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="font-body">
+                  Alle Monate
+                </SelectItem>
+                {MONTH_TITLE.map((label, i) => (
+                  <SelectItem key={label} value={String(i)} className="font-body">
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={honorarYear} onValueChange={setHonorarYear}>
+              <SelectTrigger className="w-[100px] h-8 font-body text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableYears.map((y) => (
+                  <SelectItem key={y} value={String(y)} className="font-body">
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent className="px-4 sm:px-5 pb-4">
+          {honorarnoten.length === 0 ? (
+            <div className="text-center py-8">
+              <FileText className="w-9 h-9 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-600 font-body">Keine Honorarnoten für diesen Zeitraum</p>
+            </div>
+          ) : (
+            <div className="max-h-[320px] overflow-y-auto overscroll-contain space-y-2 pr-1 -mr-1">
+              {honorarnoten.map((t) => (
+                <div
+                  key={`hn-${t.id}`}
+                  className="flex items-center gap-3 p-2.5 sm:p-3 rounded-lg border border-gray-200 bg-white"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-heading font-semibold text-sm text-text-dark truncate">
+                      {t.offer_title}
+                    </p>
+                    <p className="text-xs text-gray-500 font-body truncate mt-0.5">
+                      {t.client_name} ·{' '}
+                      {format(parseISO(t.date), 'd. MMM yyyy', { locale: de })}
+                    </p>
+                  </div>
+                  <p className="font-heading font-bold text-sm text-text-dark tabular-nums shrink-0">
+                    {formatEuroDe(netAmount(t.amount))}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 shrink-0 font-body text-xs"
+                    onClick={() => openInvoice(t)}
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1.5" />
+                    PDF
+                  </Button>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -686,4 +1071,3 @@ export default function FinancesPage() {
     </AppPageShell>
   );
 }
-

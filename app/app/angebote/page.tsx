@@ -13,14 +13,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Plus, Clock, MapPin, Video, Edit, Trash2, AlertCircle } from 'lucide-react';
+import { Plus, Clock, MapPin, Video, Edit, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { AppPageHeader, AppPageShell } from '@/components/AppPageHeader';
+import { ExpertAboWall } from '@/components/ExpertAboWall';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import {
   formatOfferLocation,
   isOnlineOfferFormat,
 } from '@/lib/utils/offer-location';
+import {
+  hasActiveSubscriptionAccess,
+  loadExpertSubscription,
+} from '@/lib/utils/subscription';
+import { ensureMockExpertDemoState } from '@/lib/backend/mock/expert-demo-state';
 
 interface ExpertOffer {
   id: string;
@@ -73,6 +79,7 @@ export default function OffersPage() {
   const [success, setSuccess] = useState('');
 
   const [formData, setFormData] = useState(emptyForm);
+  const [showAboWall, setShowAboWall] = useState(false);
   const [profileAddress, setProfileAddress] = useState({
     address: '',
     postal_code: '',
@@ -155,6 +162,20 @@ export default function OffersPage() {
   }, [userId, loadExpertProfile]);
 
   const handleOpenDialog = (offer?: ExpertOffer) => {
+    // New offers require an active Abo; editing existing ones stays allowed.
+    if (!offer) {
+      if (getBackendMode() === 'mock') {
+        ensureMockExpertDemoState(userId);
+      }
+      const sub = loadExpertSubscription(userId);
+      if (!hasActiveSubscriptionAccess(sub)) {
+        setShowAboWall(true);
+        setError('');
+        setSuccess('');
+        return;
+      }
+    }
+
     if (offer) {
       setEditingOffer(offer);
       const formatValue = isOnlineOfferFormat(offer.format) ? 'online' : 'in-person';
@@ -422,29 +443,36 @@ export default function OffersPage() {
                 !offer.is_active && 'opacity-70'
               )}
             >
-              <CardHeader className="px-4 sm:px-5 pt-4 pb-2 space-y-2">
+              <CardHeader className="px-4 sm:px-5 pt-4 pb-3 space-y-1.5">
                 <div className="flex items-start justify-between gap-2">
                   <CardTitle className="font-heading text-base sm:text-lg text-text-dark leading-snug min-w-0">
                     {offer.title}
                   </CardTitle>
                   <Badge
                     className={cn(
-                      'shrink-0 text-[11px] font-body border-none',
+                      'shrink-0 text-[11px] font-body px-2 py-0.5 flex items-center gap-1',
                       offer.is_active
-                        ? 'bg-primary-green/30 text-text-dark'
-                        : 'bg-gray-100 text-gray-600'
+                        ? 'bg-primary-green/20 text-text-dark border border-primary-green/35'
+                        : 'bg-gray-100 text-gray-600 border-none'
                     )}
                   >
-                    {offer.is_active ? 'Aktiv' : 'Inaktiv'}
+                    {offer.is_active ? (
+                      <>
+                        <CheckCircle2 className="w-3 h-3" />
+                        Aktiv
+                      </>
+                    ) : (
+                      'Inaktiv'
+                    )}
                   </Badge>
                 </div>
                 {offer.description ? (
-                  <CardDescription className="font-body text-xs sm:text-sm text-gray-500 line-clamp-3 leading-relaxed">
+                  <CardDescription className="font-body text-xs sm:text-sm text-gray-500 line-clamp-2 leading-relaxed">
                     {offer.description}
                   </CardDescription>
                 ) : null}
 
-                <div className="flex flex-wrap gap-1.5 pt-1">
+                <div className="flex flex-wrap gap-1.5">
                   <Badge className="bg-info-bg text-info-text border-none font-body text-[11px] px-2 py-0.5">
                     {offer.category}
                   </Badge>
@@ -463,37 +491,38 @@ export default function OffersPage() {
                 </div>
 
                 {!isOnlineOfferFormat(offer.format) && formatOfferLocation(offer) ? (
-                  <p className="pt-1 text-xs text-gray-500 font-body flex items-start gap-1.5">
+                  <p className="text-xs text-gray-500 font-body flex items-start gap-1.5">
                     <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                     <span>{formatOfferLocation(offer)}</span>
                   </p>
                 ) : null}
-
-                <p className="pt-2 border-t border-gray-100 text-xl font-heading font-bold text-text-dark">
-                  €{offer.price}
-                </p>
               </CardHeader>
 
-              <CardContent className="px-4 sm:px-5 pb-4 pt-0 mt-auto">
-                <div className="grid grid-cols-[1fr_auto] gap-1.5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleOpenDialog(offer)}
-                    className="h-8 text-xs font-body px-2.5 min-w-0"
-                  >
-                    <Edit className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-                    <span className="truncate">Bearbeiten</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDeleteOffer(offer.id)}
-                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 font-body"
-                    title="Löschen"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+              <CardContent className="px-4 sm:px-5 pb-4 pt-3 mt-auto border-t border-gray-100">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOpenDialog(offer)}
+                      className="h-8 text-xs font-body px-2.5 min-w-0"
+                    >
+                      <Edit className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                      <span className="truncate">Bearbeiten</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteOffer(offer.id)}
+                      className="h-8 w-8 p-0 shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50 font-body"
+                      title="Löschen"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  <p className="text-lg sm:text-xl font-heading font-bold text-text-dark tabular-nums shrink-0">
+                    €{offer.price}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -709,6 +738,27 @@ export default function OffersPage() {
               {editingOffer ? 'Aktualisieren' : 'Erstellen'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAboWall} onOpenChange={setShowAboWall}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-text-dark">Abo erforderlich</DialogTitle>
+            <DialogDescription className="font-body text-sm">
+              Neue Angebote kannst du erst mit aktivem Abo anlegen.
+            </DialogDescription>
+          </DialogHeader>
+          <ExpertAboWall
+            userId={userId}
+            compact
+            title="Abo aktivieren"
+            description="Aktiviere dein Abo, um Angebote anzulegen und buchbar zu sein."
+            onActivated={() => {
+              setShowAboWall(false);
+              handleOpenDialog();
+            }}
+          />
         </DialogContent>
       </Dialog>
     </AppPageShell>

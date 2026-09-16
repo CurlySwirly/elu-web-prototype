@@ -28,6 +28,8 @@ import { format, parseISO, isSameDay, startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { chatService } from '@/lib/services/chat';
 import AppointmentDetailModal from '@/components/AppointmentDetailModal';
+import { AppPageHeader, AppPageShell } from '@/components/AppPageHeader';
+import { getAppPageMeta } from '@/lib/app-page-meta';
 import {
   useAppointmentManageFlow,
   type ManageableAppointment,
@@ -503,6 +505,8 @@ export default function AppointmentsPage() {
   const {
     openReschedule,
     openCancel,
+    openRescheduleRequestReview,
+    pendingRequests,
     actionMessage,
     actionError,
     dialogs: appointmentManageDialogs,
@@ -510,6 +514,7 @@ export default function AppointmentsPage() {
   } = useAppointmentManageFlow({
     appointments,
     actor: role === 'expert' ? 'expert' : 'client',
+    rescheduleUserId: userId,
     onCancelled: async (appointmentId) => {
       const backendMode = getBackendMode();
       if (backendMode === 'mock') {
@@ -517,6 +522,15 @@ export default function AppointmentsPage() {
         return;
       }
       await loadAppointments();
+    },
+    onRescheduled: async (appointmentId, newStart, newEnd) => {
+      setAppointments((prev) =>
+        prev.map((apt) =>
+          apt.id === appointmentId
+            ? { ...apt, start_time: newStart, end_time: newEnd }
+            : apt
+        )
+      );
     },
     successAction: { label: 'Schließen' },
   });
@@ -668,18 +682,18 @@ export default function AppointmentsPage() {
     );
   };
 
+  const pageMeta = getAppPageMeta('/app/termine');
+
   return (
-    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
-      <div>
-        <h1 className="text-lg sm:text-xl font-heading font-bold text-text-dark">
-          {isExpert ? 'Meine Buchungen' : 'Meine Termine'}
-        </h1>
-        <p className="text-sm text-gray-500 font-body mt-1">
-          {isExpert
+    <AppPageShell>
+      <AppPageHeader
+        title={isExpert ? 'Meine Buchungen' : pageMeta?.title || 'Meine Termine'}
+        description={
+          isExpert
             ? 'Verwalte deine gebuchten Termine'
-            : 'Übersicht deiner gebuchten Wellness-Sessions'}
-        </p>
-      </div>
+            : pageMeta?.description || 'Übersicht deiner gebuchten Wellness-Sessions'
+        }
+      />
 
       {error && (
         <Alert variant="destructive">
@@ -692,6 +706,32 @@ export default function AppointmentsPage() {
         <Alert className="border-primary-green bg-primary-green/20">
           <AlertDescription className="text-text-dark font-body">{actionMessage}</AlertDescription>
         </Alert>
+      )}
+
+      {role === 'client' && pendingRequests.length > 0 && (
+        <div className="space-y-2">
+          {pendingRequests.map((req) => (
+            <Alert
+              key={req.id}
+              className="border-primary-blue/30 bg-primary-blue/5"
+            >
+              <AlertDescription className="text-text-dark font-body text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <span>
+                  Verschiebungsanfrage
+                  {req.offerTitle ? ` für „${req.offerTitle}“` : ''}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-body shrink-0"
+                  onClick={() => openRescheduleRequestReview(req)}
+                >
+                  Anfrage prüfen
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ))}
+        </div>
       )}
 
       {actionError && !isFlowOpen && (
@@ -916,7 +956,7 @@ export default function AppointmentsPage() {
         hideChat={role === 'client'}
         forcePastSession={isClient && detailFromPastTab}
         onReschedule={
-          role === 'client'
+          role === 'client' || role === 'expert'
             ? async (id) => {
                 setIsDetailModalOpen(false);
                 await openReschedule(id);
@@ -960,6 +1000,6 @@ export default function AppointmentsPage() {
 
       {appointmentManageDialogs}
 
-    </div>
+    </AppPageShell>
   );
 }

@@ -82,7 +82,7 @@ function asDocumentType(value: string): DocumentType {
 function statusBadge(status: string) {
   if (status === 'approved') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+      <span className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
         <CheckCircle2 className="h-3.5 w-3.5" />
         Verifiziert
       </span>
@@ -90,14 +90,14 @@ function statusBadge(status: string) {
   }
   if (status === 'rejected') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+      <span className="inline-flex w-fit items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
         <XCircle className="h-3.5 w-3.5" />
         Abgelehnt
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
       <Clock className="h-3.5 w-3.5" />
       Prüfung
     </span>
@@ -233,22 +233,44 @@ export function QualificationsSection({
               const pending = pendingFor(item.id);
               return (
                 <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <FileText className="h-5 w-5 shrink-0 text-gray-400" />
-                      <span className="truncate font-medium text-gray-900">{item.fileName}</span>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex min-w-0 items-start gap-2 flex-1">
+                      <FileText className="h-5 w-5 shrink-0 text-gray-400 mt-0.5" />
+                      <div className="min-w-0 flex flex-col items-start text-left">
+                        <span className="block w-full truncate font-medium text-gray-900 text-left">
+                          {item.fileName}
+                        </span>
+                        <p className="mt-1 w-full text-sm text-gray-500 text-left">
+                          Hochgeladen: {item.issueDate}
+                        </p>
+                        <div className="mt-1.5 flex w-full justify-start">
+                          {statusBadge(item.status)}
+                        </div>
+                      </div>
                     </div>
-                    {statusBadge(item.status)}
-                  </div>
 
-                  <div className="mt-3 space-y-1 text-sm text-gray-600">
-                    <p>{TYPE_LABELS[item.documentType]}</p>
-                    <p>
-                      Beruf:{' '}
-                      <span className="font-medium text-gray-800">{item.profession}</span>
-                    </p>
-                    <p>Ausgestellt von: {item.issuer}</p>
-                    <p>Ausstellungsdatum: {item.issueDate}</p>
+                    <div className="flex shrink-0 flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 whitespace-nowrap"
+                        onClick={() => openRequest(item, 'change')}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Änderung anfragen
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 whitespace-nowrap border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => openRequest(item, 'delete')}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Löschung anfragen
+                      </Button>
+                    </div>
                   </div>
 
                   {pending && (
@@ -257,29 +279,6 @@ export function QualificationsSection({
                       {new Date(pending.createdAt).toLocaleDateString('de-DE')}
                     </p>
                   )}
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={() => openRequest(item, 'change')}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      Änderung anfragen
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                      onClick={() => openRequest(item, 'delete')}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Löschung anfragen
-                    </Button>
-                  </div>
                 </div>
               );
             })}

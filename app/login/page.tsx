@@ -18,13 +18,13 @@ const DEMO_ACCOUNTS = [
   },
   {
     email: 'onboarding@test.com',
-    label: 'Expert:in · Verifizierung',
-    hint: 'Offene Checkliste, Profil offline',
+    label: 'Expert:in · Neu',
+    hint: 'Registrierungs-Wizard, Abo & Stripe noch offen',
   },
   {
     email: 'expert@test.com',
     label: 'Expert:in · Aktiv',
-    hint: 'Verifiziertes, buchbares Profil',
+    hint: 'Vollständiges Profil, aktives Abo, Stripe verbunden',
   },
 ] as const;
 
@@ -37,9 +37,14 @@ export default function LoginPage() {
   const isMock = getBackendMode() === 'mock';
   const demoPassword = isMock ? 'beliebig' : 'Test1234!';
 
-  const resolvePostLoginPath = (role: string) => {
-    if (role === 'admin') return '/admin';
-    // client → ClientDashboard, expert (verified or open verification) → ExpertDashboard
+  const resolvePostLoginPath = async (user: { id: string; role: string }) => {
+    if (user.role === 'admin') return '/admin';
+    if (user.role === 'expert' && getBackendMode() === 'mock') {
+      const { resolveMockExpertPostLoginPath } = await import(
+        '@/lib/backend/mock/expert-demo-state'
+      );
+      return resolveMockExpertPostLoginPath(user.id);
+    }
     return '/app';
   };
 
@@ -56,7 +61,7 @@ export default function LoginPage() {
 
     try {
       const user = await signIn(email.trim(), password);
-      window.location.assign(resolvePostLoginPath(user.role));
+      window.location.assign(await resolvePostLoginPath(user));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Anmeldung fehlgeschlagen';
       setError(message);

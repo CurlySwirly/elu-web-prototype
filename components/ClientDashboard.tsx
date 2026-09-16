@@ -335,12 +335,16 @@ export default function ClientDashboard() {
   const {
     openReschedule,
     openCancel,
+    openRescheduleRequestReview,
+    pendingRequests,
     actionMessage,
     actionError,
     dialogs: appointmentManageDialogs,
     isFlowOpen,
   } = useAppointmentManageFlow({
     appointments,
+    actor: 'client',
+    rescheduleUserId: userId,
     onCancelled: async (appointmentId) => {
       const backendMode = getBackendMode();
       if (backendMode === 'mock') {
@@ -348,6 +352,15 @@ export default function ClientDashboard() {
         return;
       }
       await loadData();
+    },
+    onRescheduled: async (appointmentId, newStart, newEnd) => {
+      setAppointments((prev) =>
+        prev.map((apt) =>
+          apt.id === appointmentId
+            ? { ...apt, start_time: newStart, end_time: newEnd }
+            : apt
+        )
+      );
     },
     successAction: { label: 'Zum Dashboard', href: '/app' },
   });
@@ -449,6 +462,37 @@ export default function ClientDashboard() {
         <Alert className="border-primary-green bg-primary-green/20">
           <AlertDescription className="text-text-dark font-body">{actionMessage}</AlertDescription>
         </Alert>
+      )}
+
+      {pendingRequests.length > 0 && (
+        <div className="space-y-2">
+          {pendingRequests.map((req) => (
+            <Alert
+              key={req.id}
+              className="border-primary-blue/30 bg-primary-blue/5 cursor-pointer"
+              onClick={() => openRescheduleRequestReview(req)}
+            >
+              <AlertDescription className="text-text-dark font-body text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <span>
+                  Verschiebungsanfrage
+                  {req.offerTitle ? ` für „${req.offerTitle}“` : ''} – bitte annehmen oder
+                  ablehnen.
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-body shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openRescheduleRequestReview(req);
+                  }}
+                >
+                  Anfrage prüfen
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ))}
+        </div>
       )}
 
       {actionError && !isFlowOpen && (

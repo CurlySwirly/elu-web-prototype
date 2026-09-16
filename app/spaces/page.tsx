@@ -13,7 +13,8 @@ export default function SpacesPage() {
       <Header />
 
       <main className="pt-16">
-        <section className="relative pt-20 pb-16" style={{background: 'linear-gradient(135deg, #F8F4F4 0%, #E2E8FB 100%)'}}>          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <section className="relative pt-20 pb-16 bg-gradient-to-br from-bg-light to-info-bg">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid md:grid-cols-2 gap-16 items-center">
               <div className="space-y-8">
                 <div className="inline-block">

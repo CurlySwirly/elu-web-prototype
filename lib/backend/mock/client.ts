@@ -57,8 +57,8 @@ class MockAuthService implements IAuthService {
 
     // Development helper: detect role from email pattern
     // - client@test.com or any email -> client
-    // - expert@test.com -> verified expert
-    // - onboarding@test.com -> onboarding/verification demo expert
+    // - expert@test.com -> verified expert (full data, active Abo, Stripe)
+    // - onboarding@test.com -> onboarding demo (wizard / Abo / Stripe open)
     // - admin@test.com -> admin
     const emailLower = data.email.toLowerCase();
     let role: 'client' | 'expert' | 'admin' = 'client';
@@ -91,6 +91,14 @@ class MockAuthService implements IAuthService {
     };
 
     this.persistUser(user);
+
+    if (role === 'expert') {
+      const { ensureMockExpertDemoState } = await import('./expert-demo-state');
+      ensureMockExpertDemoState(id, {
+        forceResetOnboarding: id === 'mock-user-expert-onboarding',
+      });
+    }
+
     this.notifyListeners();
     return user;
   }

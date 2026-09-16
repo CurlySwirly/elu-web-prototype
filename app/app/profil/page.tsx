@@ -38,6 +38,8 @@ import {
   Trash2,
   ChevronDown,
 } from 'lucide-react';
+import { AppPageHeader, AppPageShell } from '@/components/AppPageHeader';
+import { getAppPageMeta } from '@/lib/app-page-meta';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { formatEuro, getClientPriceBreakdown } from '@/lib/utils/pricing';
@@ -664,21 +666,18 @@ export default function ProfilePage() {
 
   // Expert: keep a compact edit form
   if (role !== 'client') {
+    const pageMeta = getAppPageMeta('/app/profil');
     return (
-      <div className="p-3 sm:p-4 lg:p-5 space-y-4">
-        <div>
-          <h1 className="text-lg sm:text-xl font-heading font-bold text-text-dark">
-            Mein Profil
-          </h1>
-          <p className="text-sm text-gray-500 font-body mt-1">
-            Verwalte deine persönlichen Informationen.
-          </p>
-        </div>
+      <AppPageShell>
+        <AppPageHeader
+          title={pageMeta?.title || 'Mein Profil'}
+          description={pageMeta?.description || 'Verwalte deine persönlichen Informationen.'}
+        />
         <Card className="border-2 max-w-xl">
           <CardHeader>
-            <CardTitle className="font-heading text-xl">Profil</CardTitle>
+            <CardTitle className="font-heading text-xl">Kontaktdaten</CardTitle>
             <CardDescription className="font-body">
-              Name und Kontaktdaten
+              Name und E-Mail
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -713,20 +712,18 @@ export default function ProfilePage() {
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </AppPageShell>
     );
   }
 
+  const pageMeta = getAppPageMeta('/app/profil');
+
   return (
-    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
-      <div>
-        <h1 className="text-lg sm:text-xl font-heading font-bold text-text-dark">
-          Mein Profil
-        </h1>
-        <p className="text-sm text-gray-500 font-body mt-1">
-          Verwalte deine persönlichen Informationen.
-        </p>
-      </div>
+    <AppPageShell>
+      <AppPageHeader
+        title={pageMeta?.title || 'Mein Profil'}
+        description={pageMeta?.description || 'Verwalte deine persönlichen Informationen.'}
+      />
 
       <div className="max-w-4xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -1184,6 +1181,6 @@ export default function ProfilePage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </AppPageShell>
   );
 }

@@ -413,6 +413,14 @@ export default function NachrichtenPage() {
             </div>
           ) : (
             <>
+              <div className="shrink-0 border-b border-gray-100 px-3 sm:px-5 py-3">
+                <p className="font-heading font-semibold text-text-dark truncate">
+                  {activeThread.offerTitle || 'Termin'}
+                </p>
+                <p className="text-xs text-gray-500 font-body truncate mt-0.5">
+                  {activeThread.partnerName}
+                </p>
+              </div>
               <div
                 key={activeThread.id}
                 className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 flex flex-col min-h-0"

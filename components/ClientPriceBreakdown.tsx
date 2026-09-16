@@ -181,12 +181,6 @@ export function ExpertPriceBreakdownView({
             </span>
           </div>
           <PriceRow label="Servicepreis netto" value={sessionNet} className="px-0 py-1" />
-          <PriceRow
-            label={`Plattformprovision (${Math.round(breakdown.feeRate * 100)}\u00a0%)`}
-            value={breakdown.platformFeeGross}
-            valuePrefix="−"
-            className="px-0 py-1"
-          />
           <div className="flex items-center justify-between gap-3 py-1">
             <span className="text-sm font-heading font-semibold text-text-dark">Auszahlung</span>
             <span className="text-sm font-heading font-semibold text-text-dark tabular-nums">

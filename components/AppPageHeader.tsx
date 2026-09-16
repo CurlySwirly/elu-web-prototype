@@ -16,26 +16,26 @@ export function AppPageShell({
   );
 }
 
+/**
+ * Page chrome under the global AppHeader.
+ * Title + subtitle live in AppHeader (getAppPageMeta) – do not duplicate them here.
+ */
 export function AppPageHeader({
-  title,
-  description,
+  title: _title,
+  description: _description,
   action,
 }: {
-  title: string;
+  /** @deprecated Visual title is in AppHeader; kept for call-site compatibility */
+  title?: string;
+  /** @deprecated Visual subtitle is in AppHeader; kept for call-site compatibility */
   description?: string;
   action?: ReactNode;
 }) {
+  if (!action) return null;
+
   return (
-    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-      <div className="min-w-0 space-y-1">
-        <h1 className="font-heading text-lg sm:text-xl font-bold text-text-dark leading-tight">
-          {title}
-        </h1>
-        {description ? (
-          <p className="font-body text-gray-500 text-sm leading-relaxed">{description}</p>
-        ) : null}
-      </div>
-      {action ? <div className="shrink-0 w-full sm:w-auto">{action}</div> : null}
+    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-end gap-3">
+      <div className="shrink-0 w-full sm:w-auto">{action}</div>
     </div>
   );
 }

@@ -3,8 +3,10 @@
 import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 
-type ChartRow = {
-  month: string;
+export type FinanceChartMode = 'month' | 'week';
+
+export type FinanceChartRow = {
+  label: string;
   paid: number;
   expected: number;
 };
@@ -19,17 +21,20 @@ function formatEuroDe(amount: number) {
 
 export function FinanceOverviewChart({
   data,
-  selectedMonthIndex,
-  onSelectMonth,
+  selectedIndex,
+  onSelectIndex,
+  mode = 'month',
+  onModeChange,
 }: {
-  data: ChartRow[];
-  selectedMonthIndex: number;
-  onSelectMonth: (monthIndex: number) => void;
+  data: FinanceChartRow[];
+  selectedIndex: number;
+  onSelectIndex: (index: number) => void;
+  mode?: FinanceChartMode;
+  onModeChange?: (mode: FinanceChartMode) => void;
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const maxValue = useMemo(() => {
-    // Stacked: scale by total height (paid + expected) per month
     const peak = Math.max(0, ...data.map((d) => d.paid + d.expected));
     return peak > 0 ? peak : 1;
   }, [data]);
@@ -40,9 +45,37 @@ export function FinanceOverviewChart({
   }, [maxValue]);
 
   const hovered = hoverIndex !== null ? data[hoverIndex] : null;
+  const isWeek = mode === 'week';
 
   return (
     <div className="w-full">
+      {onModeChange && (
+        <div className="flex justify-end mb-3 px-1">
+          <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+            {(
+              [
+                { id: 'week' as const, label: 'Woche' },
+                { id: 'month' as const, label: 'Monat' },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => onModeChange(opt.id)}
+                className={cn(
+                  'px-3 py-1.5 text-xs sm:text-sm font-body rounded-md transition-colors',
+                  mode === opt.id
+                    ? 'bg-white text-text-dark font-medium shadow-sm'
+                    : 'text-gray-500 hover:text-text-dark'
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="relative h-[220px] sm:h-[260px] w-full flex">
         <div className="w-10 sm:w-12 shrink-0 flex flex-col justify-between py-1 pr-1">
           {[...yTicks].reverse().map((tick) => (
@@ -62,29 +95,39 @@ export function FinanceOverviewChart({
             ))}
           </div>
 
-          <div className="absolute inset-0 flex items-end gap-1.5 sm:gap-2 px-0.5">
+          <div
+            className={cn(
+              'absolute inset-0 flex items-end px-0.5',
+              isWeek ? 'gap-0.5 sm:gap-1 overflow-x-auto' : 'gap-1.5 sm:gap-2'
+            )}
+          >
             {data.map((row, index) => {
               const total = row.paid + row.expected;
               const totalH = total > 0 ? `${(total / maxValue) * 100}%` : '0%';
               const paidShare = total > 0 ? (row.paid / total) * 100 : 0;
               const expectedShare = total > 0 ? (row.expected / total) * 100 : 0;
-              const isSelected = index === selectedMonthIndex;
+              const isSelected = index === selectedIndex;
               const dimmed = hoverIndex !== null && hoverIndex !== index;
               return (
                 <button
-                  key={row.month}
+                  key={`${row.label}-${index}`}
                   type="button"
-                  className="flex-1 min-w-0 h-full flex items-end justify-center cursor-pointer bg-transparent border-0 p-0"
+                  className={cn(
+                    'h-full flex items-end justify-center cursor-pointer bg-transparent border-0 p-0',
+                    isWeek ? 'min-w-[14px] flex-1' : 'flex-1 min-w-0'
+                  )}
                   onMouseEnter={() => setHoverIndex(index)}
                   onMouseLeave={() => setHoverIndex(null)}
-                  onClick={() => onSelectMonth(index)}
+                  onClick={() => onSelectIndex(index)}
                   aria-pressed={isSelected}
-                  aria-label={`${row.month} auswählen`}
+                  aria-label={`${row.label} auswählen`}
                 >
-                  {/* One bar: green (paid) at bottom, grey (expected) on top */}
                   <div
                     className={cn(
-                      'w-[70%] max-w-[22px] sm:max-w-[28px] flex flex-col justify-end overflow-hidden rounded-t-sm transition-opacity',
+                      'flex flex-col justify-end overflow-hidden rounded-t-sm transition-opacity',
+                      isWeek
+                        ? 'w-[80%] max-w-[16px]'
+                        : 'w-[70%] max-w-[22px] sm:max-w-[28px]',
                       dimmed && 'opacity-40'
                     )}
                     style={{ height: totalH, minHeight: total > 0 ? 2 : 0 }}
@@ -122,7 +165,7 @@ export function FinanceOverviewChart({
 
           {hovered && (
             <div className="absolute left-1/2 top-2 z-10 -translate-x-1/2 rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-md font-body text-xs pointer-events-none">
-              <p className="font-heading font-semibold text-text-dark mb-1">{hovered.month}</p>
+              <p className="font-heading font-semibold text-text-dark mb-1">{hovered.label}</p>
               <p className="text-gray-600">
                 Ausgezahlt:{' '}
                 <span className="font-medium text-text-dark">{formatEuroDe(hovered.paid)}</span>
@@ -138,22 +181,28 @@ export function FinanceOverviewChart({
         </div>
       </div>
 
-      <div className="flex ml-10 sm:ml-12 mt-2 gap-1.5 sm:gap-2">
+      <div
+        className={cn(
+          'flex ml-10 sm:ml-12 mt-2',
+          isWeek ? 'gap-0.5 sm:gap-1 overflow-x-auto' : 'gap-1.5 sm:gap-2'
+        )}
+      >
         {data.map((row, index) => {
-          const isSelected = index === selectedMonthIndex;
+          const isSelected = index === selectedIndex;
           return (
             <button
-              key={row.month}
+              key={`${row.label}-lbl-${index}`}
               type="button"
-              onClick={() => onSelectMonth(index)}
+              onClick={() => onSelectIndex(index)}
               className={cn(
-                'flex-1 min-w-0 text-center text-[10px] sm:text-[11px] font-body truncate py-0.5 rounded-full transition-colors',
+                'min-w-0 text-center text-[9px] sm:text-[11px] font-body truncate py-0.5 rounded-full transition-colors',
+                isWeek ? 'flex-1 min-w-[14px]' : 'flex-1',
                 isSelected
                   ? 'bg-text-dark text-white font-medium'
                   : 'text-gray-400 hover:text-text-dark'
               )}
             >
-              {row.month}
+              {isWeek ? row.label.replace('KW ', '') : row.label}
             </button>
           );
         })}

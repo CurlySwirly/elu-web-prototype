@@ -887,6 +887,7 @@ export const mockOnboardingExpertProfile = {
   checklist_offers_created: false,
   checklist_availability_set: false,
   checklist_stripe_connected: false,
+  checklist_abo_active: false,
   qualification_verified: false,
   bio: '',
   profile_image_url: '',

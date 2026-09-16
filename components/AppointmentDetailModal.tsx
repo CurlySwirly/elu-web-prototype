@@ -499,7 +499,6 @@ export default function AppointmentDetailModal({
       : startsInFuture && !isPastSession);
   const showReschedule =
     Boolean(onReschedule) &&
-    userRole === 'client' &&
     appointment.status === 'confirmed' &&
     startsInFuture &&
     !isPastSession;
@@ -589,10 +588,11 @@ export default function AppointmentDetailModal({
               </Avatar>
               <div className="min-w-0 space-y-0.5">
                 <p className="font-heading font-semibold text-text-dark text-lg leading-snug truncate">
-                  {person.name}
+                  {appointment.offer.title || 'Termin'}
                 </p>
                 <p className="font-body text-sm text-gray-600 leading-snug truncate">
-                  {appointment.offer.title}
+                  {sessionIsOnline ? 'Online' : 'Vor Ort'}
+                  {person.name ? ` · ${person.name}` : ''}
                 </p>
               </div>
             </div>
@@ -618,9 +618,11 @@ export default function AppointmentDetailModal({
           </div>
 
           {appointment.notes ? (
-            <div>
-              <p className="text-xs text-gray-500 font-body mb-1">Notizen</p>
-              <p className="text-sm text-gray-700 font-body">{appointment.notes}</p>
+            <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5">
+              <p className="text-xs text-gray-500 font-body mb-1">Notiz zur Buchung</p>
+              <p className="text-sm text-gray-700 font-body whitespace-pre-wrap">
+                {appointment.notes}
+              </p>
             </div>
           ) : null}
 
@@ -672,7 +674,7 @@ export default function AppointmentDetailModal({
                   onClick={() => onReschedule!(appointment.id)}
                 >
                   <CalendarClock className="w-4 h-4 mr-2 text-primary-blue" />
-                  Verschieben
+                  {userRole === 'expert' ? 'Verschiebung anfragen' : 'Verschieben'}
                 </Button>
               )}
               {showCancel && (

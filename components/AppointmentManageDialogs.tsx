@@ -27,7 +27,7 @@ import {
   Trash2,
   Video,
 } from 'lucide-react';
-import { format, isBefore, parseISO, startOfDay, startOfToday } from 'date-fns';
+import { addMinutes, format, isBefore, parseISO, startOfDay, startOfToday } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { formatEuro, getClientPriceBreakdown } from '@/lib/utils/pricing';
@@ -40,10 +40,20 @@ import {
   type ExpertAbsence,
   type ExpertAvailabilitySlot,
 } from '@/lib/services/availability';
+import {
+  addRescheduleRequest,
+  getAllPendingRescheduleRequests,
+  getPendingRescheduleRequests,
+  updateRescheduleRequest,
+  type RescheduleRequest,
+} from '@/lib/utils/reschedule-requests';
+
+export { getPendingRescheduleRequests };
 
 export type ManageableAppointment = {
   id: string;
   expert_id?: string;
+  client_id?: string;
   start_time: string;
   end_time: string;
   status: string;
@@ -53,6 +63,7 @@ export type ManageableAppointment = {
     avatar_url: string;
   };
   client?: {
+    id?: string;
     full_name: string;
     avatar_url: string;
   };
@@ -73,7 +84,16 @@ export type UseAppointmentManageFlowOptions = {
   appointments: ManageableAppointment[];
   /** Who is cancelling — defaults to client */
   actor?: 'client' | 'expert';
+  /** Display name of the acting expert (for request metadata) */
+  actorDisplayName?: string | null;
+  /** Storage namespace / client filter for reschedule requests */
+  rescheduleUserId?: string | null;
   onCancelled?: (appointmentId: string) => void | Promise<void>;
+  onRescheduled?: (
+    appointmentId: string,
+    proposedStart: string,
+    proposedEnd: string
+  ) => void | Promise<void>;
   onRescheduleSuccessClose?: () => void;
   successAction?: AppointmentManageSuccessAction;
 };
@@ -81,7 +101,10 @@ export type UseAppointmentManageFlowOptions = {
 export function useAppointmentManageFlow({
   appointments,
   actor = 'client',
+  actorDisplayName = null,
+  rescheduleUserId = null,
   onCancelled,
+  onRescheduled,
   onRescheduleSuccessClose,
   successAction = { label: 'Schließen' },
 }: UseAppointmentManageFlowOptions) {
@@ -93,6 +116,7 @@ export function useAppointmentManageFlow({
     date: Date;
     time: string;
     appointment: ManageableAppointment;
+    asRequest?: boolean;
   } | null>(null);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState<Date | undefined>(undefined);
@@ -104,6 +128,17 @@ export function useAppointmentManageFlow({
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
   const [actionError, setActionError] = useState('');
+  const [pendingRequests, setPendingRequests] = useState<RescheduleRequest[]>([]);
+  const [activeRequest, setActiveRequest] = useState<RescheduleRequest | null>(null);
+  const [isRequestReviewOpen, setIsRequestReviewOpen] = useState(false);
+
+  const refreshPendingRequests = useCallback(() => {
+    setPendingRequests(getAllPendingRescheduleRequests(rescheduleUserId));
+  }, [rescheduleUserId]);
+
+  useEffect(() => {
+    refreshPendingRequests();
+  }, [refreshPendingRequests, appointments]);
 
   const selectedAppointment = useMemo(
     () => appointments.find((apt) => apt.id === selectedAppointmentId) || null,
@@ -319,12 +354,51 @@ export function useAppointmentManageFlow({
     setActionLoading(true);
     setActionError('');
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      setRescheduleSuccess({
-        date: rescheduleDate,
-        time: rescheduleTime,
-        appointment: selectedAppointment,
-      });
+      const [hours, minutes] = rescheduleTime.split(':').map(Number);
+      const proposedStart = new Date(rescheduleDate);
+      proposedStart.setHours(hours, minutes, 0, 0);
+      const proposedEnd = addMinutes(proposedStart, rescheduleDurationMinutes);
+
+      if (actor === 'expert') {
+        addRescheduleRequest(
+          {
+            appointmentId: selectedAppointmentId,
+            proposedStart: proposedStart.toISOString(),
+            proposedEnd: proposedEnd.toISOString(),
+            expertName:
+              actorDisplayName ||
+              selectedAppointment.expert?.full_name ||
+              'Expert:in',
+            offerTitle: selectedAppointment.offer.title,
+            clientId:
+              selectedAppointment.client_id ||
+              selectedAppointment.client?.id ||
+              undefined,
+          },
+          rescheduleUserId
+        );
+        refreshPendingRequests();
+        setRescheduleSuccess({
+          date: rescheduleDate,
+          time: rescheduleTime,
+          appointment: selectedAppointment,
+          asRequest: true,
+        });
+      } else {
+        await onRescheduled?.(
+          selectedAppointmentId,
+          proposedStart.toISOString(),
+          proposedEnd.toISOString()
+        );
+        setRescheduleSuccess({
+          date: rescheduleDate,
+          time: rescheduleTime,
+          appointment: selectedAppointment,
+          asRequest: false,
+        });
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 400));
       setIsRescheduleConfirmOpen(false);
       setIsRescheduleOpen(false);
       setSelectedAppointmentId(null);
@@ -334,6 +408,83 @@ export function useAppointmentManageFlow({
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Fehler beim Speichern der Terminverschiebung';
+      setActionError(message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openRescheduleRequestReview = useCallback(
+    (request: RescheduleRequest) => {
+      setActiveRequest(request);
+      setActionError('');
+      setIsRequestReviewOpen(true);
+    },
+    []
+  );
+
+  const handleAcceptRescheduleRequest = async () => {
+    if (!activeRequest) return;
+    setActionLoading(true);
+    setActionError('');
+    try {
+      updateRescheduleRequest(activeRequest.id, { status: 'accepted' }, rescheduleUserId);
+      await onRescheduled?.(
+        activeRequest.appointmentId,
+        activeRequest.proposedStart,
+        activeRequest.proposedEnd
+      );
+      const apt =
+        appointments.find((a) => a.id === activeRequest.appointmentId) ||
+        ({
+          id: activeRequest.appointmentId,
+          start_time: activeRequest.proposedStart,
+          end_time: activeRequest.proposedEnd,
+          status: 'confirmed',
+          total_price: 0,
+          offer: {
+            title: activeRequest.offerTitle || 'Termin',
+            format: 'online',
+          },
+          expert: activeRequest.expertName
+            ? { full_name: activeRequest.expertName, avatar_url: '' }
+            : undefined,
+        } satisfies ManageableAppointment);
+
+      const start = parseISO(activeRequest.proposedStart);
+      setRescheduleSuccess({
+        date: start,
+        time: format(start, 'HH:mm'),
+        appointment: apt,
+        asRequest: false,
+      });
+      setIsRequestReviewOpen(false);
+      setActiveRequest(null);
+      refreshPendingRequests();
+      setIsRescheduleSuccessOpen(true);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Fehler beim Annehmen der Verschiebungsanfrage';
+      setActionError(message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectRescheduleRequest = async () => {
+    if (!activeRequest) return;
+    setActionLoading(true);
+    setActionError('');
+    try {
+      updateRescheduleRequest(activeRequest.id, { status: 'rejected' }, rescheduleUserId);
+      setIsRequestReviewOpen(false);
+      setActiveRequest(null);
+      refreshPendingRequests();
+      setActionMessage('Verschiebungsanfrage abgelehnt.');
+      setTimeout(() => setActionMessage(''), 4000);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Fehler beim Ablehnen der Anfrage';
       setActionError(message);
     } finally {
       setActionLoading(false);
@@ -367,22 +518,24 @@ export function useAppointmentManageFlow({
         const startTime = appointment ? parseISO(appointment.start_time) : new Date();
         const hoursUntilStart = (startTime.getTime() - Date.now()) / (1000 * 60 * 60);
         const servicePrice = appointment?.total_price || 0;
-        const clientTotal = getClientPriceBreakdown(servicePrice).clientTotal;
-        // Expert cancel: client always gets a full refund. Client cancel: only ≥48h.
+        const breakdown = getClientPriceBreakdown(servicePrice);
+        // Expert cancel: full refund incl. Servicegebühr.
+        // Client cancel ≥48h: session price only (Servicegebühr bleibt bei elu).
+        // Client cancel <48h: no refund.
         const refundAmount = isExpert
-          ? clientTotal
+          ? breakdown.clientTotal
           : hoursUntilStart >= 48
-            ? clientTotal
+            ? breakdown.servicePrice
             : 0;
 
         if (isExpert) {
           setActionMessage(
-            `Termin abgesagt. Die Kund:in erhält €${refundAmount.toFixed(2)} zurück.`
+            `Termin abgesagt. Die Kund:in erhält €${refundAmount.toFixed(2)} zurück (inkl. Servicegebühr).`
           );
         } else {
           setActionMessage(
             refundAmount > 0
-              ? `Termin storniert. Du erhältst €${refundAmount.toFixed(2)} zurück.`
+              ? `Termin storniert. Du erhältst €${refundAmount.toFixed(2)} zurück. Die Servicegebühr wird nicht erstattet.`
               : 'Termin storniert. Da die Stornierung weniger als 48 Stunden vor dem Termin erfolgte, wird der Betrag nicht erstattet.'
           );
         }
@@ -436,7 +589,8 @@ export function useAppointmentManageFlow({
     isRescheduleOpen ||
     isRescheduleConfirmOpen ||
     isRescheduleSuccessOpen ||
-    isCancelOpen;
+    isCancelOpen ||
+    isRequestReviewOpen;
 
   const isOnlineFormat = (formatValue?: string) =>
     formatValue === 'online' || formatValue === 'Online';
@@ -517,26 +671,33 @@ export function useAppointmentManageFlow({
                   An diesem Tag sind keine freien Zeiten mehr verfügbar.
                 </p>
               ) : (
-                <div className="grid grid-cols-2 gap-3 flex-1 content-start">
-                  {availableRescheduleSlots.map((slot) => {
-                    const selected = rescheduleTime === slot;
-                    return (
-                      <button
-                        key={slot}
-                        type="button"
-                        onClick={() => setRescheduleTime(slot)}
-                        className={cn(
-                          'rounded-xl border-2 px-4 py-3 text-sm font-body transition-colors',
-                          selected
-                            ? 'border-primary-green bg-primary-green/20 text-text-dark font-semibold'
-                            : 'border-gray-200 bg-white text-text-dark hover:border-primary-blue'
-                        )}
-                      >
-                        {slot} Uhr
-                      </button>
-                    );
-                  })}
-                </div>
+                <>
+                  <div className="grid grid-cols-2 gap-3 flex-1 content-start">
+                    {availableRescheduleSlots.map((slot) => {
+                      const selected = rescheduleTime === slot;
+                      return (
+                        <button
+                          key={slot}
+                          type="button"
+                          onClick={() => setRescheduleTime(slot)}
+                          className={cn(
+                            'rounded-xl border-2 px-4 py-3 text-sm font-body transition-colors',
+                            selected
+                              ? 'border-primary-blue bg-primary-blue/15 text-text-dark font-semibold'
+                              : 'border-gray-200 bg-white text-text-dark hover:border-primary-blue/60'
+                          )}
+                        >
+                          {slot} Uhr
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="font-body text-xs text-gray-500 mt-4">
+                    {actor === 'expert'
+                      ? 'Nur freie Zeiten'
+                      : 'Nur freie Zeiten deiner Expert:in'}
+                  </p>
+                </>
               )}
 
               {actionError && isRescheduleOpen && (
@@ -596,18 +757,27 @@ export function useAppointmentManageFlow({
                       : '–'}
                   </p>
                   <div className="flex items-center gap-1.5 text-sm font-body text-primary-blue">
-                    {isOnlineFormat(selectedAppointment?.offer.format) ? (
-                      <Video className="w-4 h-4" />
+                    {selectedAppointment?.offer.title ? (
+                      <span className="font-heading font-semibold underline truncate">
+                        {selectedAppointment.offer.title}
+                      </span>
+                    ) : isOnlineFormat(selectedAppointment?.offer.format) ? (
+                      <>
+                        <Video className="w-4 h-4" />
+                        <span className="underline">Online</span>
+                      </>
                     ) : (
-                      <MapPin className="w-4 h-4" />
+                      <>
+                        <MapPin className="w-4 h-4" />
+                        <span className="underline">Vor Ort</span>
+                      </>
                     )}
-                    <span className="underline">
-                      {isOnlineFormat(selectedAppointment?.offer.format) ? 'Online' : 'Vor Ort'}
-                    </span>
                   </div>
                   {selectedAppointment && (
                     <p className="mt-2 text-xs text-gray-400 font-body">
                       {format(parseISO(selectedAppointment.start_time), 'HH:mm', { locale: de })} Uhr
+                      {' · '}
+                      {isOnlineFormat(selectedAppointment.offer.format) ? 'Online' : 'Vor Ort'}
                     </p>
                   )}
                 </div>
@@ -627,19 +797,30 @@ export function useAppointmentManageFlow({
                       ? format(rescheduleDate, 'EEE., d MMMM yyyy', { locale: de })
                       : '–'}
                   </p>
-                  <div className="flex items-center gap-1.5 text-sm font-body text-text-dark">
-                    {isOnlineFormat(selectedAppointment?.offer.format) ? (
-                      <Video className="w-4 h-4" />
+                  <div className="flex items-center gap-1.5 text-sm font-body text-primary-blue">
+                    {selectedAppointment?.offer.title ? (
+                      <span className="font-heading font-semibold truncate">
+                        {selectedAppointment.offer.title}
+                      </span>
                     ) : (
-                      <MapPin className="w-4 h-4" />
+                      <>
+                        {isOnlineFormat(selectedAppointment?.offer.format) ? (
+                          <Video className="w-4 h-4" />
+                        ) : (
+                          <MapPin className="w-4 h-4" />
+                        )}
+                        <span>
+                          {isOnlineFormat(selectedAppointment?.offer.format) ? 'Online' : 'Vor Ort'}
+                        </span>
+                      </>
                     )}
-                    <span>
-                      {isOnlineFormat(selectedAppointment?.offer.format) ? 'Online' : 'Vor Ort'}
-                    </span>
                   </div>
                   {rescheduleTime && (
                     <p className="mt-2 text-xs text-text-dark font-body font-semibold">
                       {rescheduleTime} Uhr
+                      {selectedAppointment
+                        ? ` · ${isOnlineFormat(selectedAppointment.offer.format) ? 'Online' : 'Vor Ort'}`
+                        : ''}
                     </p>
                   )}
                 </div>
@@ -665,7 +846,13 @@ export function useAppointmentManageFlow({
               disabled={actionLoading}
               className="font-body rounded-xl py-5 sm:py-6 bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 shadow-md order-1 sm:order-2"
             >
-              {actionLoading ? 'Wird verschoben…' : 'Termin verschieben'}
+              {actionLoading
+                ? actor === 'expert'
+                  ? 'Anfrage wird gesendet…'
+                  : 'Wird verschoben…'
+                : actor === 'expert'
+                  ? 'Anfrage senden'
+                  : 'Termin verschieben'}
             </Button>
           </div>
         </DialogContent>
@@ -679,13 +866,22 @@ export function useAppointmentManageFlow({
             </div>
             <DialogHeader className="space-y-2">
               <DialogTitle className="font-heading text-xl sm:text-2xl font-bold text-text-dark text-center">
-                Termin erfolgreich verschoben
+                {rescheduleSuccess?.asRequest
+                  ? 'Anfrage an Klient:in gesendet'
+                  : 'Termin erfolgreich verschoben'}
               </DialogTitle>
               <DialogDescription className="font-body text-gray-500 text-center">
-                Dein neuer Termin ist am
+                {rescheduleSuccess?.asRequest
+                  ? 'Dein vorgeschlagener Termin'
+                  : 'Dein neuer Termin ist am'}
               </DialogDescription>
             </DialogHeader>
-            <p className="font-heading text-xl sm:text-2xl font-bold text-primary-blue mt-2 break-words">
+            {rescheduleSuccess?.appointment.offer.title && (
+              <p className="font-heading text-base sm:text-lg font-bold text-primary-blue mt-2 break-words">
+                {rescheduleSuccess.appointment.offer.title}
+              </p>
+            )}
+            <p className="font-heading text-xl sm:text-2xl font-bold text-text-dark mt-1 break-words">
               {rescheduleSuccess
                 ? format(rescheduleSuccess.date, 'EEE., d MMMM yyyy', { locale: de })
                 : '–'}
@@ -882,7 +1078,7 @@ export function useAppointmentManageFlow({
                 return (
                   <Alert className="border-primary-green/40 bg-primary-green/15">
                     <AlertDescription className="text-text-dark font-body text-sm text-left">
-                      Du stornierst rechtzeitig (mindestens 48 Stunden vorher) – der Betrag wird dir vollständig erstattet.
+                  Du stornierst rechtzeitig (mindestens 48 Stunden vorher) – der Sessionpreis wird dir erstattet. Die Servicegebühr wird nicht zurückgezahlt.
                     </AlertDescription>
                   </Alert>
                 );
@@ -905,7 +1101,7 @@ export function useAppointmentManageFlow({
           <div
             className={cn(
               'grid gap-3 pt-1',
-              actor === 'expert' ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'
+              actor === 'expert' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'
             )}
           >
             {actor === 'client' && (
@@ -923,6 +1119,23 @@ export function useAppointmentManageFlow({
               >
                 <CalendarClock className="w-4 h-4 mr-2 shrink-0" />
                 Termin verschieben
+              </Button>
+            )}
+            {actor === 'expert' && (
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  const appointmentId = selectedAppointmentId;
+                  setIsCancelOpen(false);
+                  setActionError('');
+                  if (appointmentId) {
+                    await openReschedule(appointmentId);
+                  }
+                }}
+                className="font-body border-2 rounded-xl py-5 sm:py-6 text-text-dark hover:bg-gray-50 text-sm"
+              >
+                <CalendarClock className="w-4 h-4 mr-2 shrink-0" />
+                Verschiebung anfragen
               </Button>
             )}
             <Button
@@ -945,12 +1158,83 @@ export function useAppointmentManageFlow({
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={isRequestReviewOpen}
+        onOpenChange={(open) => {
+          setIsRequestReviewOpen(open);
+          if (!open) setActiveRequest(null);
+        }}
+      >
+        <DialogContent className="font-body w-[calc(100vw-1.5rem)] sm:max-w-md rounded-2xl p-4 sm:p-6 gap-5">
+          <div className="flex flex-col items-center text-center pt-1">
+            <div className="w-14 h-14 rounded-full bg-primary-blue/15 flex items-center justify-center mb-3">
+              <CalendarClock className="w-6 h-6 text-primary-blue" />
+            </div>
+            <DialogHeader className="space-y-2">
+              <DialogTitle className="font-heading text-xl font-bold text-text-dark text-center">
+                Verschiebungsanfrage
+              </DialogTitle>
+              <DialogDescription className="font-body text-sm text-gray-500 text-center">
+                Deine Expert:in schlägt einen neuen Termin vor.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          {activeRequest && (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-gray-200 bg-bg-light px-3.5 py-3 space-y-1.5 text-left">
+                <p className="font-heading font-semibold text-primary-blue text-base">
+                  {activeRequest.offerTitle || 'Termin'}
+                </p>
+                <p className="text-xs text-gray-500 font-body">Vorgeschlagener neuer Termin</p>
+                <p className="font-heading font-semibold text-text-dark">
+                  {format(parseISO(activeRequest.proposedStart), 'EEE., d MMMM yyyy', {
+                    locale: de,
+                  })}
+                </p>
+                <p className="text-sm font-body text-gray-700">
+                  {format(parseISO(activeRequest.proposedStart), 'HH:mm', { locale: de })}–
+                  {format(parseISO(activeRequest.proposedEnd), 'HH:mm', { locale: de })} Uhr
+                </p>
+                <p className="text-xs text-gray-500 font-body pt-1">
+                  {activeRequest.expertName
+                    ? `Anfrage von ${activeRequest.expertName}`
+                    : 'Anfrage von deiner Expert:in'}
+                </p>
+              </div>
+              {actionError && (
+                <p className="text-sm text-red-600 font-body text-center">{actionError}</p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  disabled={actionLoading}
+                  onClick={() => void handleRejectRescheduleRequest()}
+                  className="font-body h-11 rounded-xl border-2"
+                >
+                  Ablehnen
+                </Button>
+                <Button
+                  disabled={actionLoading}
+                  onClick={() => void handleAcceptRescheduleRequest()}
+                  className="font-body h-11 rounded-xl bg-primary-blue hover:bg-primary-blue/90 text-white"
+                >
+                  {actionLoading ? 'Wird übernommen…' : 'Annehmen'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 
   return {
     openReschedule,
     openCancel,
+    openRescheduleRequestReview,
+    pendingRequests,
+    refreshPendingRequests,
     actionMessage,
     actionError,
     clearActionMessage,
