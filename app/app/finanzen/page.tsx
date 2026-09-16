@@ -32,7 +32,7 @@ import {
 import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAuth } from '@/contexts/AuthContext';
-import type { InvoiceData } from '@/lib/utils/invoice';
+import { downloadInvoiceBundle, type InvoiceData } from '@/lib/utils/invoice';
 import { VAT_RATE, getSessionPriceBreakdown } from '@/lib/utils/pricing';
 import { cn } from '@/lib/utils';
 import {
@@ -502,10 +502,10 @@ export default function FinancesPage() {
         ? `${weekMeta[selectedWeekIndex].label} ${year}`
         : `Jahr ${year}`;
 
-  const openInvoice = (t: Transaction) => {
+  const toInvoiceData = (t: Transaction): InvoiceData => {
     const start = parseISO(t.date);
     const end = addMinutes(start, 60);
-    setInvoiceData({
+    return {
       appointmentId: t.id,
       offerTitle: t.offer_title,
       sessionStart: start.toISOString(),
@@ -514,8 +514,33 @@ export default function FinancesPage() {
       expertName: user?.fullName || 'Expert:in',
       clientName: t.client_name,
       formatLabel: t.offer_title.toLowerCase().includes('online') ? 'Online' : 'Vor Ort',
-    });
+      forClient: false,
+    };
+  };
+
+  const openInvoice = (t: Transaction) => {
+    setInvoiceData(toInvoiceData(t));
     setInvoiceOpen(true);
+  };
+
+  const honorarPeriodLabel =
+    honorarMonth === 'all'
+      ? honorarYear
+      : `${MONTH_TITLE[honorarMonth]} ${honorarYear}`;
+
+  const handleHonorarnotenPdfDownload = () => {
+    if (honorarnoten.length === 0) return;
+    const slug =
+      honorarMonth === 'all'
+        ? honorarYear
+        : `${honorarYear}-${String(honorarMonth + 1).padStart(2, '0')}`;
+    downloadInvoiceBundle(
+      honorarnoten.map(toInvoiceData),
+      {
+        filename: `elu-honorarnoten-${slug}.html`,
+        title: `Honorarnoten ${honorarPeriodLabel}`,
+      }
+    );
   };
 
   const statusBadge = (t: Transaction) => {
@@ -968,13 +993,26 @@ export default function FinancesPage() {
 
       <Card className="border border-gray-200 shadow-sm">
         <CardHeader className="px-4 sm:px-5 pt-4 pb-2 space-y-3">
-          <div>
-            <CardTitle className="font-heading text-base sm:text-lg text-text-dark">
-              Honorarnoten
-            </CardTitle>
-            <CardDescription className="font-body text-xs sm:text-sm mt-1">
-              Abgeschlossene Sessions – unabhängig vom Historie-Filter
-            </CardDescription>
+          <div className="flex flex-row items-start justify-between gap-3">
+            <div className="min-w-0">
+              <CardTitle className="font-heading text-base sm:text-lg text-text-dark">
+                Honorarnoten
+              </CardTitle>
+              <CardDescription className="font-body text-xs sm:text-sm mt-1">
+                Abgeschlossene Sessions – unabhängig vom Historie-Filter
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 font-body text-xs shrink-0"
+              onClick={handleHonorarnotenPdfDownload}
+              disabled={honorarnoten.length === 0}
+            >
+              <Download className="w-3.5 h-3.5 mr-1.5" />
+              PDF Download
+            </Button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button

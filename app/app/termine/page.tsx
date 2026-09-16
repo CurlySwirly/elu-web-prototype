@@ -718,7 +718,8 @@ export default function AppointmentsPage() {
               <AlertDescription className="text-text-dark font-body text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <span>
                   Verschiebungsanfrage
-                  {req.offerTitle ? ` für „${req.offerTitle}“` : ''}
+                  {req.offerTitle ? ` für „${req.offerTitle}“` : ''} – bei Annahme wählst du
+                  einen neuen Termin.
                 </span>
                 <Button
                   size="sm"

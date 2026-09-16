@@ -6,7 +6,7 @@ export const mockExperts: Expert[] = [
     user_id: 'user-1',
     full_name: 'Sarah Müller',
     avatar_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
-    bio: 'Zertifizierte Physiotherapeutin mit 8 Jahren Erfahrung in manueller Therapie und Rehabilitation.',
+    bio: 'Zertifizierte Physiotherapeutin mit 8 Jahren Erfahrung in manueller Therapie und Rehabilitation. Ich begleite Menschen nach Verletzungen, Operationen und bei chronischen Beschwerden zurück in einen schmerzfreien Alltag.\n\nMein Ansatz verbindet fundierte Diagnostik mit individuellen Übungsprogrammen – abgestimmt auf Beruf, Sport und Alltag. Dabei nehme ich mir Zeit für eine gründliche Anamnese, erkläre Befunde verständlich und arbeite eng mit dir an realistischen Zielen.\n\nBesonders am Herzen liegen mir nachhaltige Ergebnisse: nicht nur Symptome lindern, sondern Ursachen verstehen und dich so stärken, dass Beschwerden langfristig seltener wiederkehren. Termine sind vor Ort in München oder online möglich.',
     specializations: ['Physiotherapie', 'Manuelle Therapie', 'Rehabilitation'],
     professions: ['Physiotherapie'],
     verified_professions: ['Physiotherapie'],
@@ -166,7 +166,8 @@ export const mockExpertOffers: ExpertOffer[] = [
     id: 'offer-1',
     expert_id: '1',
     title: 'Erstberatung & Analyse',
-    description: 'Umfassende Erstberatung mit Bewegungsanalyse und Behandlungsplan',
+    description:
+      'Umfassende Erstberatung mit Bewegungsanalyse, Anamnese und individuellem Behandlungsplan. Wir klären deine Beschwerden, Alltagsbelastung und Ziele, prüfen Haltung und Beweglichkeit und leiten daraus konkrete nächste Schritte ab – inklusive erster Übungen und Empfehlungen für den Zeitraum bis zur Folgesession.',
     category: 'Beratung',
     format: 'in-person',
     duration_minutes: 60,
@@ -180,7 +181,8 @@ export const mockExpertOffers: ExpertOffer[] = [
     id: 'offer-2',
     expert_id: '1',
     title: 'Manuelle Therapie',
-    description: 'Gezielte manuelle Behandlung bei Beschwerden',
+    description:
+      'Gezielte manuelle Behandlung bei Beschwerden an Wirbelsäule, Gelenken und Weichteilen. Die Session kombiniert Hands-on-Techniken mit angepassten Übungen und klaren Hinweisen für den Alltag, damit der Behandlungserfolg auch zwischen den Terminen stabil bleibt.',
     category: 'Behandlung',
     format: 'in-person',
     duration_minutes: 45,

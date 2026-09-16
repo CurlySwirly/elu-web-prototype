@@ -475,8 +475,8 @@ export default function ClientDashboard() {
               <AlertDescription className="text-text-dark font-body text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <span>
                   Verschiebungsanfrage
-                  {req.offerTitle ? ` für „${req.offerTitle}“` : ''} – bitte annehmen oder
-                  ablehnen.
+                  {req.offerTitle ? ` für „${req.offerTitle}“` : ''} – bitte prüfen und ggf. einen
+                  neuen Termin wählen.
                 </span>
                 <Button
                   size="sm"

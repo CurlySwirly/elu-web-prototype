@@ -13,10 +13,18 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { CheckCircle2, Clock, MapPin, Video, Star, ChevronDown } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+
+const BIO_COLLAPSE_CHARS = 180;
 
 export type ExpertSedcardData = Pick<
   Expert,
@@ -57,14 +65,21 @@ export function ExpertSedcard({
   className,
 }: ExpertSedcardProps) {
   const [reviewsOpen, setReviewsOpen] = useState(false);
+  const [bioOpen, setBioOpen] = useState(false);
+  const [selectedOffer, setSelectedOffer] = useState<ExpertOffer | null>(null);
   const isPreview = mode === 'preview';
   const location = expert.location || expert.city;
   const displayName = expert.full_name?.trim() || 'Expert:in';
+  const bio = expert.bio?.trim() || '';
+  const bioCollapsible = bio.length > BIO_COLLAPSE_CHARS;
 
   const initials = displayName
     .split(' ')
     .map((n) => n[0])
     .join('');
+
+  const offerFormatLabel = (offer: ExpertOffer) =>
+    offer.format === 'online' ? 'Online' : 'Vor Ort';
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -151,18 +166,49 @@ export function ExpertSedcard({
       </div>
 
       <div className="space-y-3 lg:space-y-4">
-        {(expert.bio || (expert.certifications && expert.certifications.length > 0)) && (
+        {(bio || (expert.certifications && expert.certifications.length > 0)) && (
           <Card className="border-2">
             <CardContent className="p-4 sm:p-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-8">
-                {expert.bio && (
+                {bio && (
                   <div>
-                    <h3 className="font-heading text-lg font-semibold text-text-dark mb-2">
-                      Über mich
-                    </h3>
-                    <p className="text-sm text-gray-600 font-body leading-relaxed whitespace-pre-wrap">
-                      {expert.bio}
-                    </p>
+                    {bioCollapsible ? (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setBioOpen((open) => !open)}
+                          className="w-full flex items-center justify-between gap-2 text-left mb-2"
+                          aria-expanded={bioOpen}
+                        >
+                          <h3 className="font-heading text-lg font-semibold text-text-dark">
+                            Über mich
+                          </h3>
+                          <ChevronDown
+                            className={cn(
+                              'w-5 h-5 text-gray-500 shrink-0 transition-transform duration-200',
+                              bioOpen && 'rotate-180'
+                            )}
+                          />
+                        </button>
+                        <p
+                          className={cn(
+                            'text-sm text-gray-600 font-body leading-relaxed whitespace-pre-wrap',
+                            !bioOpen && 'line-clamp-3'
+                          )}
+                        >
+                          {bio}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <h3 className="font-heading text-lg font-semibold text-text-dark mb-2">
+                          Über mich
+                        </h3>
+                        <p className="text-sm text-gray-600 font-body leading-relaxed whitespace-pre-wrap">
+                          {bio}
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -200,7 +246,16 @@ export function ExpertSedcard({
             {offers.map((offer) => (
               <Card
                 key={offer.id}
-                className="border-2 hover:border-primary-blue transition-colors h-full flex flex-col"
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedOffer(offer)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedOffer(offer);
+                  }
+                }}
+                className="border-2 hover:border-primary-blue transition-colors h-full flex flex-col cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-blue/40"
               >
                 <CardHeader className="pb-3 pt-4 px-4 flex-1">
                   <div className="flex items-start justify-between gap-3">
@@ -208,7 +263,7 @@ export function ExpertSedcard({
                       <CardTitle className="font-heading text-lg text-text-dark mb-1">
                         {offer.title}
                       </CardTitle>
-                      <CardDescription className="font-body line-clamp-3">
+                      <CardDescription className="font-body line-clamp-2">
                         {offer.description}
                       </CardDescription>
                     </div>
@@ -227,7 +282,7 @@ export function ExpertSedcard({
                       ) : (
                         <MapPin className="w-3 h-3" />
                       )}
-                      {offer.format === 'online' ? 'Online' : 'Vor Ort'}
+                      {offerFormatLabel(offer)}
                     </Badge>
                     <Badge className="bg-info-bg text-info-text border-none font-body flex items-center gap-1">
                       <Clock className="w-3 h-3" />
@@ -236,7 +291,11 @@ export function ExpertSedcard({
                   </div>
                 </CardHeader>
 
-                <CardContent className="px-4 pb-4 mt-auto">
+                <CardContent
+                  className="px-4 pb-4 mt-auto"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
                   {isPreview ? (
                     <Button
                       type="button"
@@ -258,6 +317,62 @@ export function ExpertSedcard({
           </div>
         )}
       </div>
+
+      <Dialog open={Boolean(selectedOffer)} onOpenChange={(open) => !open && setSelectedOffer(null)}>
+        {selectedOffer && (
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogHeader className="space-y-1.5 pr-6">
+              <DialogTitle className="font-heading text-xl text-text-dark leading-snug">
+                {selectedOffer.title}
+              </DialogTitle>
+              <p className="font-heading text-base font-semibold text-text-dark tabular-nums">
+                €{selectedOffer.price}
+              </p>
+            </DialogHeader>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge className="bg-info-bg text-info-text border-none font-body">
+                {selectedOffer.category}
+              </Badge>
+              <Badge className="bg-info-bg text-info-text border-none font-body flex items-center gap-1">
+                {selectedOffer.format === 'online' ? (
+                  <Video className="w-3 h-3" />
+                ) : (
+                  <MapPin className="w-3 h-3" />
+                )}
+                {offerFormatLabel(selectedOffer)}
+              </Badge>
+              <Badge className="bg-info-bg text-info-text border-none font-body flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {selectedOffer.duration_minutes} Min.
+              </Badge>
+            </div>
+
+            <p className="text-sm text-gray-600 font-body leading-relaxed whitespace-pre-wrap">
+              {selectedOffer.description}
+            </p>
+
+            {isPreview ? (
+              <Button
+                type="button"
+                disabled
+                className="w-full bg-gradient-to-r from-primary-blue to-primary-green text-white opacity-80 font-body"
+              >
+                Termin buchen
+              </Button>
+            ) : (
+              <Button
+                asChild
+                className="w-full bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 transition-opacity font-body"
+              >
+                <Link href={`/app/buchen/${expert.id}?offerId=${selectedOffer.id}`}>
+                  Termin buchen
+                </Link>
+              </Button>
+            )}
+          </DialogContent>
+        )}
+      </Dialog>
 
       {mode === 'public' && (
       <Collapsible open={reviewsOpen} onOpenChange={setReviewsOpen}>

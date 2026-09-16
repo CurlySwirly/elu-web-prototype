@@ -407,7 +407,7 @@ export function StripeConnectOnboarding({
                 <div className="flex justify-end">
                   <Button
                     type="button"
-                    className="h-9 font-body text-sm bg-primary-green hover:bg-primary-green/90 text-white"
+                    className="h-9 font-body text-sm bg-primary-blue hover:bg-primary-blue/90 text-white"
                     onClick={() => {
                       if (!industry) {
                         setError('Bitte eine Branche auswählen.');
@@ -466,7 +466,7 @@ export function StripeConnectOnboarding({
                   </Button>
                   <Button
                     type="button"
-                    className="h-9 font-body text-sm bg-primary-green hover:bg-primary-green/90 text-white"
+                    className="h-9 font-body text-sm bg-primary-blue hover:bg-primary-blue/90 text-white"
                     onClick={() => {
                       if (!legalName.trim() || !dob.trim()) {
                         setError('Bitte Name und Geburtsdatum ausfüllen.');
@@ -516,7 +516,7 @@ export function StripeConnectOnboarding({
                   </Button>
                   <Button
                     type="button"
-                    className="h-9 font-body text-sm bg-primary-green hover:bg-primary-green/90 text-white"
+                    className="h-9 font-body text-sm bg-primary-blue hover:bg-primary-blue/90 text-white"
                     onClick={finishMockMask}
                   >
                     Setup abschließen

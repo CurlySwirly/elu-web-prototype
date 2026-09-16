@@ -666,59 +666,57 @@ export default function ExpertProfilePage() {
 
       <div className="max-w-4xl space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="w-full overflow-x-auto">
-            <TabsList className="inline-flex h-auto min-w-full sm:min-w-0 w-max justify-start rounded-full bg-gray-100 p-0.5 gap-0.5">
-              <TabsTrigger
-                value="overview"
-                className="gap-1 rounded-full px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
-              >
-                <Eye className="w-3 h-3" />
-                Übersicht
-              </TabsTrigger>
-              <TabsTrigger
-                value="stammdaten"
-                className="gap-1 rounded-full px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
-              >
-                <UserRound className="w-3 h-3" />
-                Stammdaten verwalten
-              </TabsTrigger>
-              <TabsTrigger
-                value="qualifications"
-                className="gap-1 rounded-full px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
-              >
-                <FileText className="w-3 h-3" />
-                Qualifikationen
-              </TabsTrigger>
-              <TabsTrigger
-                value="sedcard"
-                className="gap-1 rounded-full px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
-              >
-                <Globe className="w-3 h-3" />
-                Profil
-              </TabsTrigger>
-              <TabsTrigger
-                value="reviews"
-                className="gap-1 rounded-full px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
-              >
-                <MessageSquare className="w-3 h-3" />
-                Bewertungen
-              </TabsTrigger>
-              <TabsTrigger
-                value="konto"
-                className="gap-1 rounded-full px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
-              >
-                <Landmark className="w-3 h-3" />
-                Konto
-              </TabsTrigger>
-              <TabsTrigger
-                value="abo"
-                className="gap-1 rounded-full px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
-              >
-                <CreditCard className="w-3 h-3" />
-                Abo
-              </TabsTrigger>
-            </TabsList>
-          </div>
+          <TabsList className="flex h-auto w-full justify-stretch rounded-full bg-gray-100 p-0.5 gap-0.5">
+            <TabsTrigger
+              value="overview"
+              className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+            >
+              <Eye className="w-3 h-3 shrink-0" />
+              <span className="truncate">Übersicht</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="stammdaten"
+              className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+            >
+              <UserRound className="w-3 h-3 shrink-0" />
+              <span className="truncate">Stammdaten verwalten</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="qualifications"
+              className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+            >
+              <FileText className="w-3 h-3 shrink-0" />
+              <span className="truncate">Qualifikationen</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="sedcard"
+              className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+            >
+              <Globe className="w-3 h-3 shrink-0" />
+              <span className="truncate">Profil</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="reviews"
+              className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+            >
+              <MessageSquare className="w-3 h-3 shrink-0" />
+              <span className="truncate">Bewertungen</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="konto"
+              className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+            >
+              <Landmark className="w-3 h-3 shrink-0" />
+              <span className="truncate">Konto</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="abo"
+              className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+            >
+              <CreditCard className="w-3 h-3 shrink-0" />
+              <span className="truncate">Abo</span>
+            </TabsTrigger>
+          </TabsList>
 
           <TabsContent value="overview" className="mt-4 space-y-4">
             <Card className="border border-gray-200 shadow-sm">

@@ -122,11 +122,74 @@ export function buildInvoiceHtml(data: InvoiceData) {
 export function downloadInvoice(data: InvoiceData) {
   const html = buildInvoiceHtml(data);
   const invoiceNumber = getInvoiceNumber(data.appointmentId);
+  triggerHtmlDownload(html, `Rechnung-${invoiceNumber}.html`);
+}
+
+/** Download multiple invoices as one HTML file (page breaks between notes). */
+export function downloadInvoiceBundle(
+  invoices: InvoiceData[],
+  options: { filename: string; title: string }
+) {
+  if (invoices.length === 0) return;
+  if (invoices.length === 1) {
+    downloadInvoice(invoices[0]);
+    return;
+  }
+
+  const sections = invoices
+    .map((data, index) => {
+      const full = buildInvoiceHtml(data);
+      const bodyMatch = full.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+      const inner = bodyMatch?.[1]?.trim() ?? '';
+      const pageBreak =
+        index < invoices.length - 1
+          ? 'page-break-after: always; margin-bottom: 48px; padding-bottom: 48px; border-bottom: 1px solid #ddd;'
+          : '';
+      return `<section class="invoice-page" style="${pageBreak}">${inner}</section>`;
+    })
+    .join('\n');
+
+  const html = `<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(options.title)}</title>
+  <style>
+    body { font-family: Georgia, 'Times New Roman', serif; color: #1a1a1a; margin: 0; padding: 40px; background: #fff; }
+    h1 { font-size: 28px; margin: 0 0 4px; }
+    .muted { color: #666; font-size: 13px; }
+    .row { display: flex; justify-content: space-between; gap: 32px; margin: 28px 0; }
+    .box h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #888; margin: 0 0 8px; font-family: system-ui, sans-serif; }
+    .box p { margin: 0; line-height: 1.45; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+    th { text-align: left; font-family: system-ui, sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #888; border-bottom: 1px solid #ddd; padding: 8px 0; }
+    td { padding: 14px 0; border-bottom: 1px solid #eee; font-size: 14px; vertical-align: top; }
+    td.amount, th.amount { text-align: right; }
+    .total { margin-top: 20px; display: flex; justify-content: flex-end; gap: 24px; font-size: 16px; }
+    .total strong { font-size: 18px; }
+    .footer { margin-top: 40px; font-size: 12px; color: #888; font-family: system-ui, sans-serif; }
+    .cover { margin-bottom: 40px; padding-bottom: 24px; border-bottom: 1px solid #ddd; font-family: system-ui, sans-serif; }
+    .cover h1 { font-family: Georgia, 'Times New Roman', serif; }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <h1>${escapeHtml(options.title)}</h1>
+    <p class="muted">${invoices.length} Honorarnoten</p>
+  </div>
+  ${sections}
+</body>
+</html>`;
+
+  triggerHtmlDownload(html, options.filename);
+}
+
+function triggerHtmlDownload(html: string, filename: string) {
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `Rechnung-${invoiceNumber}.html`;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();

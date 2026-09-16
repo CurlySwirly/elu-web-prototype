@@ -6,24 +6,32 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   SUBSCRIPTION_LIST_PRICES,
+  YEARLY_FREE_MONTH_PROMO_CODE,
   activateExpertSubscription,
   formatPlanPrice,
   getDefaultCohort,
   getDiscountedFirstPrice,
   getFirstInvoiceDiscountPercent,
   getListPriceLabel,
-  getPromoForCohort,
   getYearlyListSavings,
   type PricingCohort,
   type SubscriptionPlanId,
 } from '@/lib/utils/subscription';
 import { formatEuro } from '@/lib/utils/pricing';
 
-const BENEFITS = [
-  'Unbegrenzte Angebote & Buchungen',
-  'Kalender, Nachrichten & Profil-Tools inklusive',
-  'Jederzeit kündbar zum Periodenende',
-];
+const PLAN_BENEFITS: Record<SubscriptionPlanId, string[]> = {
+  monthly: [
+    'Unbegrenzte Angebote & Buchungen',
+    'Kalender, Nachrichten & Profil-Tools',
+    'Jederzeit kündbar zum Periodenende',
+  ],
+  yearly: [
+    'Unbegrenzte Angebote & Buchungen',
+    'Kalender, Nachrichten & Profil-Tools',
+    'Jederzeit kündbar zum Periodenende',
+    '1 Monat gratis mit Code bei Abschluss',
+  ],
+};
 
 type ExpertAboWallProps = {
   userId?: string | null;
@@ -36,6 +44,8 @@ type ExpertAboWallProps = {
   description?: string;
   className?: string;
   compact?: boolean;
+  /** Hide heading block (when parent card already titles the section) */
+  hideHeading?: boolean;
 };
 
 export function ExpertAboWall({
@@ -44,12 +54,12 @@ export function ExpertAboWall({
   onSkip,
   skipLabel = 'Später entscheiden',
   title = 'elu Abo',
-  description = 'Aktiviere dein Abo, um Angebote anzulegen und buchbar zu werden.',
+  description,
   className,
   compact = false,
+  hideHeading = false,
 }: ExpertAboWallProps) {
   const cohort = useMemo<PricingCohort>(() => getDefaultCohort(), []);
-  const promo = getPromoForCohort(cohort);
   const [planId, setPlanId] = useState<SubscriptionPlanId>('monthly');
   const [loading, setLoading] = useState(false);
 
@@ -66,27 +76,26 @@ export function ExpertAboWall({
 
   return (
     <div className={cn('space-y-4', className)}>
-      <div className="space-y-1.5">
-        <h3 className="font-heading text-lg sm:text-xl font-bold text-text-dark">{title}</h3>
-        <p className="text-sm text-gray-600 font-body leading-relaxed">{description}</p>
+      {!hideHeading && (
+        <div className="space-y-1.5">
+          <h3 className="font-heading text-lg sm:text-xl font-bold text-text-dark">{title}</h3>
+          {description ? (
+            <p className="text-sm text-gray-600 font-body leading-relaxed">{description}</p>
+          ) : null}
+        </div>
+      )}
+
+      <div className="rounded-xl border border-primary-blue/25 bg-primary-blue/5 px-3.5 py-3">
+        <p className="text-sm font-body text-text-dark leading-relaxed">
+          <span className="font-heading font-semibold text-primary-blue">Nur jetzt:</span> Teste
+          elu 1 Monat gratis bei Abschluss eines Jahresabos — nutze Code{' '}
+          <span className="font-heading font-bold tracking-wide text-text-dark">
+            {YEARLY_FREE_MONTH_PROMO_CODE}
+          </span>
+        </p>
       </div>
 
-      <p className="text-xs font-body text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 leading-relaxed">
-        Listenpreis: {formatEuro(SUBSCRIPTION_LIST_PRICES.monthly)}/Monat bzw.{' '}
-        {formatEuro(SUBSCRIPTION_LIST_PRICES.yearly)}/Jahr.
-        {promo ? (
-          <>
-            {' '}
-            <span className="text-primary-blue font-semibold">Aktion: {promo.label}</span>
-            {' — '}
-            {promo.description}.
-          </>
-        ) : (
-          <> Aktuell ohne Rabattaktion.</>
-        )}
-      </p>
-
-      <div className={cn('grid gap-2.5', compact ? 'grid-cols-1' : 'sm:grid-cols-2')}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {(['monthly', 'yearly'] as SubscriptionPlanId[]).map((id) => {
           const selected = planId === id;
           const isYearly = id === 'yearly';
@@ -101,18 +110,18 @@ export function ExpertAboWall({
               type="button"
               onClick={() => setPlanId(id)}
               className={cn(
-                'text-left rounded-xl border p-3.5 transition-colors',
+                'text-left rounded-xl border p-4 transition-colors flex flex-col h-full',
                 selected
                   ? 'border-primary-blue bg-primary-blue/5 ring-1 ring-primary-blue/30'
                   : 'border-gray-200 bg-white hover:border-gray-300'
               )}
             >
               <div className="flex items-start justify-between gap-2">
-                <div>
+                <div className="min-w-0">
                   <p className="font-heading font-semibold text-sm text-text-dark">
                     {isYearly ? 'Jahresabo' : 'Monatsabo'}
                   </p>
-                  <p className="font-heading font-bold text-base text-text-dark mt-1 tabular-nums">
+                  <p className="font-heading font-bold text-xl text-text-dark mt-1.5 tabular-nums">
                     {formatPlanPrice(id, cohort)}
                   </p>
                   {hasDiscount ? (
@@ -127,7 +136,7 @@ export function ExpertAboWall({
                     </p>
                   ) : (
                     <p className="text-[11px] text-gray-500 font-body mt-0.5">
-                      Listenpreis
+                      {isYearly ? 'pro Jahr' : 'pro Monat'} · Listenpreis
                     </p>
                   )}
                 </div>
@@ -140,24 +149,25 @@ export function ExpertAboWall({
                   {selected && <Check className="h-2.5 w-2.5 text-white" />}
                 </span>
               </div>
+
               {isYearly && (
                 <p className="text-[11px] text-primary-green font-body mt-2">
                   {formatEuro(getYearlyListSavings())} gespart ggü. 12× Monat (Listenpreis)
                 </p>
               )}
+
+              <ul className={cn('mt-3 space-y-1.5 border-t border-gray-100 pt-3', compact && 'mt-2.5 pt-2.5')}>
+                {PLAN_BENEFITS[id].map((b) => (
+                  <li key={b} className="flex items-start gap-2 text-xs sm:text-sm font-body text-gray-700">
+                    <Check className="w-3.5 h-3.5 text-primary-green shrink-0 mt-0.5" />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
             </button>
           );
         })}
       </div>
-
-      <ul className="space-y-1.5">
-        {BENEFITS.map((b) => (
-          <li key={b} className="flex items-start gap-2 text-sm font-body text-gray-700">
-            <Check className="w-4 h-4 text-primary-green shrink-0 mt-0.5" />
-            <span>{b}</span>
-          </li>
-        ))}
-      </ul>
 
       <div className="flex flex-col sm:flex-row gap-2 pt-1">
         <Button

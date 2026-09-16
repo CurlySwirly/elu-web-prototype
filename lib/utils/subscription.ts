@@ -57,6 +57,9 @@ export const SUBSCRIPTION_PROMOS: Record<Exclude<PricingCohort, 'standard'>, Sub
   },
 };
 
+/** Promo code: 1 Monat gratis bei Abschluss eines Jahresabos */
+export const YEARLY_FREE_MONTH_PROMO_CODE = 'ELUJAHR1';
+
 export const FOUNDER_SLOT_LIMIT = SUBSCRIPTION_PROMOS.founder.slotLimit ?? 10;
 export const LAUNCH_SLOT_LIMIT = SUBSCRIPTION_PROMOS.launch.slotLimit ?? 100;
 /** @deprecated use LAUNCH_SLOT_LIMIT */
