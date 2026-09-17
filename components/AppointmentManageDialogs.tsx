@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Calendar } from '@/components/ui/calendar';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -27,7 +29,7 @@ import {
   Trash2,
   Video,
 } from 'lucide-react';
-import { addMinutes, format, isBefore, parseISO, startOfDay, startOfToday } from 'date-fns';
+import { addMinutes, format, isBefore, isSameDay, parseISO, startOfToday } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { formatEuro, getClientPriceBreakdown } from '@/lib/utils/pricing';
@@ -122,6 +124,7 @@ export function useAppointmentManageFlow({
   const [isExpertRequestOpen, setIsExpertRequestOpen] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState<Date | undefined>(undefined);
   const [rescheduleTime, setRescheduleTime] = useState('');
+  const [rescheduleNotes, setRescheduleNotes] = useState('');
   const [expertAvailability, setExpertAvailability] = useState<ExpertAvailabilitySlot[]>([]);
   const [expertAbsences, setExpertAbsences] = useState<ExpertAbsence[]>([]);
   const [expertBusyIntervals, setExpertBusyIntervals] = useState<BusyInterval[]>([]);
@@ -144,11 +147,6 @@ export function useAppointmentManageFlow({
   const selectedAppointment = useMemo(
     () => appointments.find((apt) => apt.id === selectedAppointmentId) || null,
     [appointments, selectedAppointmentId]
-  );
-
-  const appointmentDates = useMemo(
-    () => appointments.map((apt) => startOfDay(parseISO(apt.start_time))),
-    [appointments]
   );
 
   const rescheduleDurationMinutes = useMemo(() => {
@@ -284,6 +282,7 @@ export function useAppointmentManageFlow({
 
       setSelectedAppointmentId(appointmentId);
       setRescheduleTime('');
+      setRescheduleNotes('');
       setActionError('');
       setIsRescheduleConfirmOpen(false);
 
@@ -382,6 +381,7 @@ export function useAppointmentManageFlow({
               selectedAppointment.client_id ||
               selectedAppointment.client?.id ||
               undefined,
+            notes: rescheduleNotes.trim() || undefined,
           },
           rescheduleUserId
         );
@@ -412,6 +412,7 @@ export function useAppointmentManageFlow({
       setSelectedAppointmentId(null);
       setRescheduleDate(undefined);
       setRescheduleTime('');
+      setRescheduleNotes('');
       setIsRescheduleSuccessOpen(true);
     } catch (err: unknown) {
       const message =
@@ -622,133 +623,127 @@ export function useAppointmentManageFlow({
     <>
       <Dialog open={isRescheduleOpen} onOpenChange={setIsRescheduleOpen}>
         <DialogContent className="font-body w-[calc(100vw-1.5rem)] sm:max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl p-0 gap-0">
-          <div className="px-4 sm:px-6 pt-6 pb-4 border-b">
-            <DialogHeader>
-              <DialogTitle className="font-heading text-xl sm:text-2xl font-bold text-text-dark">
-                Kalender
+          <div className="px-4 sm:px-6 pt-5 sm:pt-6 pb-3">
+            <DialogHeader className="space-y-1">
+              <DialogTitle className="font-heading text-lg sm:text-xl font-bold text-text-dark">
+                Wähle Datum und Uhrzeit
               </DialogTitle>
-              <DialogDescription className="font-body text-gray-500">
-                Neuen Termin auswählen
+              <DialogDescription className="font-body text-sm text-gray-500">
+                {selectedAppointment
+                  ? `${selectedAppointment.offer.title} · ${formatEuro(
+                      getClientPriceBreakdown(
+                        Number(selectedAppointment.total_price) || 0
+                      ).clientTotal
+                    )}`
+                  : 'Neuen Termin auswählen'}
               </DialogDescription>
             </DialogHeader>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
-            <div className="p-4 sm:p-6 md:border-r border-gray-100 overflow-x-auto">
-              <Calendar
-                mode="single"
-                selected={rescheduleDate}
-                onSelect={(date) => {
-                  setRescheduleDate(date);
-                  setRescheduleTime('');
-                }}
-                disabled={(date) => {
-                  if (isBefore(date, startOfToday())) return true;
-                  return !hasAvailabilityOnDate(date, expertAvailability, expertAbsences);
-                }}
-                locale={de}
-                className="rounded-md w-full"
-                modifiers={{
-                  appointment: appointmentDates,
-                  available: (date) =>
-                    !isBefore(date, startOfToday()) &&
-                    hasAvailabilityOnDate(date, expertAvailability, expertAbsences),
-                }}
-                modifiersClassNames={{
-                  appointment: 'bg-primary-blue/15 font-semibold',
-                  available: 'bg-primary-green/15',
-                }}
-              />
-              <div className="mt-4 flex items-center gap-4 text-xs text-gray-600 font-body">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded border-2 border-primary-green bg-primary-green/20" />
-                  <span>Verfügbar</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded border-2 border-primary-blue bg-primary-blue/10" />
-                  <span>Dein Termin</span>
+          <div className="px-4 sm:px-6 pb-4 sm:pb-5 space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6 items-start">
+              <div>
+                <Label className="font-body text-sm mb-2.5 block">Datum</Label>
+                <Calendar
+                  mode="single"
+                  selected={rescheduleDate}
+                  onSelect={(date) => {
+                    setRescheduleDate(date);
+                    setRescheduleTime('');
+                  }}
+                  disabled={(date) => {
+                    if (isBefore(date, startOfToday())) return true;
+                    return !hasAvailabilityOnDate(date, expertAvailability, expertAbsences);
+                  }}
+                  locale={de}
+                  className="rounded-md border w-full"
+                  classNames={{
+                    day_selected:
+                      '!bg-primary-blue !text-white hover:!bg-primary-blue hover:!text-white focus:!bg-primary-blue focus:!text-white font-semibold',
+                  }}
+                  modifiers={{
+                    currentAppointment: (date) =>
+                      Boolean(
+                        selectedAppointment &&
+                          isSameDay(date, parseISO(selectedAppointment.start_time))
+                      ),
+                  }}
+                  modifiersClassNames={{
+                    currentAppointment:
+                      '!bg-primary-blue/20 !border-2 !border-primary-blue font-semibold text-text-dark hover:!bg-primary-blue/30',
+                  }}
+                />
+                <div className="mt-3 flex items-center gap-2 text-xs text-gray-600 font-body">
+                  <div className="w-3 h-3 rounded border-2 border-primary-blue bg-primary-blue/20" />
+                  <span>Aktueller Termin</span>
                 </div>
               </div>
-            </div>
 
-            <div className="p-4 sm:p-6 flex flex-col">
-              <h3 className="font-heading text-lg sm:text-xl font-bold text-text-dark mb-1">
-                Zeitfenster auswählen
-              </h3>
-              <p className="font-body text-sm text-gray-500 mb-5">
-                {rescheduleDate
-                  ? format(rescheduleDate, 'd. MMM yyyy', { locale: de })
-                  : 'Bitte verfügbares Datum wählen'}
-              </p>
-
-              {loadingAvailability ? (
-                <div className="flex-1 flex items-center justify-center py-10">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-blue" />
-                </div>
-              ) : !rescheduleDate ? (
-                <p className="font-body text-sm text-gray-500 py-8 text-center">
-                  Wähle zuerst einen verfügbaren Tag im Kalender.
-                </p>
-              ) : availableRescheduleSlots.length === 0 ? (
-                <p className="font-body text-sm text-gray-500 py-8 text-center">
-                  An diesem Tag sind keine freien Zeiten mehr verfügbar.
-                </p>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3 flex-1 content-start">
+              <div>
+                <Label className="font-body text-sm mb-2.5 block">Verfügbare Zeiten</Label>
+                {loadingAvailability ? (
+                  <div className="flex items-center justify-center py-10">
+                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-blue" />
+                  </div>
+                ) : !rescheduleDate ? (
+                  <p className="text-sm text-gray-500 font-body pt-1">
+                    Bitte zuerst ein Datum wählen.
+                  </p>
+                ) : availableRescheduleSlots.length === 0 ? (
+                  <p className="text-sm text-gray-500 font-body pt-1">
+                    An diesem Tag sind keine freien Zeiten verfügbar. Bitte wähle ein anderes
+                    Datum.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 max-h-[320px] overflow-y-auto pr-1">
                     {availableRescheduleSlots.map((slot) => {
                       const selected = rescheduleTime === slot;
                       return (
-                        <button
+                        <Button
                           key={slot}
                           type="button"
+                          variant={selected ? 'default' : 'outline'}
                           onClick={() => setRescheduleTime(slot)}
                           className={cn(
-                            'rounded-xl border-2 px-4 py-3 text-sm font-body transition-colors',
-                            selected
-                              ? 'border-primary-blue bg-primary-blue/15 text-text-dark font-semibold'
-                              : 'border-gray-200 bg-white text-text-dark hover:border-primary-blue/60'
+                            'font-body text-sm',
+                            selected &&
+                              'bg-primary-blue text-white hover:bg-primary-blue hover:opacity-90'
                           )}
                         >
-                          {slot} Uhr
-                        </button>
+                          {slot}
+                        </Button>
                       );
                     })}
                   </div>
-                  <p className="font-body text-xs text-gray-500 mt-4">
-                    {actor === 'expert'
-                      ? 'Nur freie Zeiten'
-                      : 'Nur freie Zeiten deiner Expert:in'}
-                  </p>
-                </>
-              )}
-
-              {actionError && isRescheduleOpen && (
-                <p className="text-sm text-red-600 font-body mt-4">{actionError}</p>
-              )}
+                )}
+              </div>
             </div>
-          </div>
 
-          <div className="px-4 sm:px-6 py-4 border-t grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="reschedule-notes" className="font-body text-sm font-semibold text-text-dark">
+                Notizen (optional)
+              </Label>
+              <Textarea
+                id="reschedule-notes"
+                value={rescheduleNotes}
+                onChange={(e) => setRescheduleNotes(e.target.value)}
+                placeholder="Teile dem/der Expert:in zusätzliche Informationen mit..."
+                rows={4}
+                className="font-body text-sm"
+              />
+            </div>
+
+            {actionError && isRescheduleOpen && (
+              <p className="text-sm text-red-600 font-body">{actionError}</p>
+            )}
+
             <Button
-              variant="outline"
-              onClick={() => {
-                setIsRescheduleOpen(false);
-                setRescheduleDate(undefined);
-                setRescheduleTime('');
-                setSelectedAppointmentId(null);
-              }}
-              className="font-body border-2 rounded-xl py-5 sm:py-6 text-text-dark order-2 sm:order-1"
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Abbrechen
-            </Button>
-            <Button
+              type="button"
               onClick={handleContinueReschedule}
               disabled={!rescheduleDate || !rescheduleTime}
-              className="font-body rounded-xl py-5 sm:py-6 bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 shadow-md order-1 sm:order-2"
+              className="w-full h-11 font-body bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 disabled:opacity-40"
             >
-              Speichern & Weiter
+              Weiter
             </Button>
           </div>
         </DialogContent>
@@ -849,6 +844,15 @@ export function useAppointmentManageFlow({
                 </div>
               </div>
             </div>
+
+            {rescheduleNotes.trim() ? (
+              <div className="mt-4 rounded-xl border border-gray-200 bg-bg-light px-3.5 py-3 text-left">
+                <p className="text-xs text-gray-500 font-body mb-1">Notiz</p>
+                <p className="text-sm text-text-dark font-body whitespace-pre-wrap">
+                  {rescheduleNotes.trim()}
+                </p>
+              </div>
+            ) : null}
 
             {actionError && isRescheduleConfirmOpen && (
               <p className="text-sm text-red-600 font-body mt-4 text-center">{actionError}</p>

@@ -425,7 +425,7 @@ export default function ExpertDashboard() {
           hasActiveSubscriptionAccess(loadExpertSubscription(user?.id))
             ? 'completed'
             : 'pending',
-        link: '/app/expert-profil?tab=abo',
+        link: '/app/expert-profil?tab=konto',
         key: 'abo'
       },
       {

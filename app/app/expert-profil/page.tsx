@@ -23,7 +23,6 @@ import {
   Globe,
   MessageSquare,
   Pencil,
-  CreditCard,
   Landmark,
   Plus,
   Star,
@@ -264,10 +263,13 @@ export default function ExpertProfilePage() {
 
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (
-      tab &&
-      ['overview', 'stammdaten', 'qualifications', 'sedcard', 'reviews', 'konto', 'abo'].includes(tab)
-    ) {
+    if (!tab) return;
+    // Legacy: abo + konto were separate; both map to combined "konto"
+    if (tab === 'abo' || tab === 'konto') {
+      setActiveTab('konto');
+      return;
+    }
+    if (['overview', 'stammdaten', 'qualifications', 'sedcard', 'reviews', 'konto'].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -707,14 +709,7 @@ export default function ExpertProfilePage() {
               className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
             >
               <Landmark className="w-3 h-3 shrink-0" />
-              <span className="truncate">Konto</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="abo"
-              className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1 text-[11px] leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
-            >
-              <CreditCard className="w-3 h-3 shrink-0" />
-              <span className="truncate">Abo</span>
+              <span className="truncate">Konto & Abo</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1286,10 +1281,6 @@ export default function ExpertProfilePage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="abo" className="mt-4 space-y-4">
-            <ExpertAboManage userId={userId} />
-          </TabsContent>
-
           <TabsContent value="konto" className="mt-4 space-y-4">
             <StripeConnectOnboarding
               userId={userId}
@@ -1309,6 +1300,7 @@ export default function ExpertProfilePage() {
                 }
               }}
             />
+            <ExpertAboManage userId={userId} />
           </TabsContent>
         </Tabs>
       </div>

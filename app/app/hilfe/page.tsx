@@ -37,9 +37,11 @@ export default function HilfePage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
 
+  const canSubmit = subject.trim().length > 0 && message.trim().length > 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subject.trim() || !message.trim()) {
+    if (!canSubmit) {
       setError('Bitte Betreff und Nachricht ausfüllen.');
       return;
     }
@@ -62,94 +64,102 @@ export default function HilfePage() {
     <AppPageShell>
       <AppPageHeader title={meta?.title} description={meta?.description} />
 
-      <Card className="border border-gray-200 shadow-sm max-w-xl">
-        <CardHeader className="px-4 sm:px-5 pt-4 pb-2">
-          <CardTitle className="font-heading text-base sm:text-lg text-text-dark">
-            Kontaktformular
-          </CardTitle>
-          <CardDescription className="font-body text-xs sm:text-sm">
-            Schreib uns bei Fragen, Wünschen, Anregungen oder Beschwerden. Wir melden uns in der
-            Regel innerhalb von 1–2 Werktagen.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="px-4 sm:px-5 pb-5">
-          {sent ? (
-            <Alert className="border-primary-green/40 bg-primary-green/10">
-              <CheckCircle2 className="h-4 w-4 text-primary-green" />
-              <AlertDescription className="font-body text-sm text-text-dark">
-                Danke – deine Nachricht ist bei uns angekommen.
+      <div className="max-w-3xl">
+        <Card className="border-2">
+          <CardHeader className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 space-y-1.5">
+            <CardTitle className="font-heading text-lg sm:text-xl text-text-dark">
+              Kontaktformular
+            </CardTitle>
+            <CardDescription className="font-body text-sm leading-relaxed max-w-2xl">
+              Schreib uns bei Fragen, Wünschen, Anregungen oder Beschwerden. Wir melden uns in der
+              Regel innerhalb von 1–2 Werktagen.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-5 sm:px-6 pb-5 sm:pb-6">
+            {sent ? (
+              <Alert className="border-primary-green/40 bg-primary-green/10">
+                <CheckCircle2 className="h-4 w-4 text-primary-green" />
+                <AlertDescription className="font-body text-sm text-text-dark">
+                  Danke – deine Nachricht ist bei uns angekommen.
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0 ml-1 text-primary-blue"
+                    onClick={() => setSent(false)}
+                  >
+                    Weitere Nachricht senden
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <Label className="font-body text-sm font-medium text-text-dark">E-Mail</Label>
+                  <Input
+                    value={user?.email || ''}
+                    disabled
+                    className="font-body h-11 text-sm bg-gray-50"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <Label className="font-body text-sm font-medium text-text-dark">Thema</Label>
+                    <Select value={topic} onValueChange={setTopic}>
+                      <SelectTrigger className="h-11 font-body text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TOPICS.map((t) => (
+                          <SelectItem key={t.value} value={t.value} className="font-body text-sm">
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="help-subject" className="font-body text-sm font-medium text-text-dark">
+                      Betreff
+                    </Label>
+                    <Input
+                      id="help-subject"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      className="font-body h-11 text-sm"
+                      placeholder="Worum geht es?"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="help-message" className="font-body text-sm font-medium text-text-dark">
+                    Nachricht
+                  </Label>
+                  <Textarea
+                    id="help-message"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    rows={8}
+                    className="font-body text-sm min-h-[180px] resize-y"
+                    placeholder="Beschreibe dein Anliegen…"
+                  />
+                </div>
+
+                {error && <p className="text-sm text-red-600 font-body">{error}</p>}
+
                 <Button
-                  type="button"
-                  variant="link"
-                  className="h-auto p-0 ml-1 text-primary-blue"
-                  onClick={() => setSent(false)}
+                  type="submit"
+                  disabled={sending || !canSubmit}
+                  className="w-full sm:w-auto sm:min-w-[200px] h-11 font-body bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 disabled:opacity-40"
                 >
-                  Weitere Nachricht senden
+                  {sending ? 'Wird gesendet…' : 'Absenden'}
                 </Button>
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label className="font-body text-sm">E-Mail</Label>
-                <Input
-                  value={user?.email || ''}
-                  disabled
-                  className="font-body h-9 text-sm bg-gray-50"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="font-body text-sm">Thema</Label>
-                <Select value={topic} onValueChange={setTopic}>
-                  <SelectTrigger className="h-9 font-body text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TOPICS.map((t) => (
-                      <SelectItem key={t.value} value={t.value} className="font-body text-sm">
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="help-subject" className="font-body text-sm">
-                  Betreff
-                </Label>
-                <Input
-                  id="help-subject"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="font-body h-9 text-sm"
-                  placeholder="Worum geht es?"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="help-message" className="font-body text-sm">
-                  Nachricht
-                </Label>
-                <Textarea
-                  id="help-message"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  rows={5}
-                  className="font-body text-sm"
-                  placeholder="Beschreibe dein Anliegen…"
-                />
-              </div>
-              {error && <p className="text-sm text-red-600 font-body">{error}</p>}
-              <Button
-                type="submit"
-                disabled={sending}
-                className="h-9 font-body text-sm bg-gradient-to-r from-primary-blue to-primary-green text-white"
-              >
-                {sending ? 'Wird gesendet…' : 'Absenden'}
-              </Button>
-            </form>
-          )}
-        </CardContent>
-      </Card>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </AppPageShell>
   );
 }

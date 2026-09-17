@@ -784,7 +784,7 @@ export default function BookingPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="notes" className="font-body text-sm">
+              <Label htmlFor="notes" className="font-body text-sm font-semibold text-text-dark">
                 Notizen (optional)
               </Label>
               <Textarea

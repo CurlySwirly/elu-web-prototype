@@ -727,19 +727,28 @@ export default function ProfilePage() {
 
       <div className="max-w-4xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-5">
-            <TabsTrigger value="profile" className="py-2.5">
-              <User className="w-4 h-4 mr-2" />
-              Profil
+          <TabsList className="flex h-auto w-full justify-stretch rounded-full bg-gray-100 p-0.5 gap-0.5 mb-5">
+            <TabsTrigger
+              value="profile"
+              className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1.5 text-[11px] sm:text-xs leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+            >
+              <User className="w-3 h-3 shrink-0" />
+              <span className="truncate">Profil</span>
             </TabsTrigger>
-            <TabsTrigger value="goals" className="py-2.5">
-              <Target className="w-4 h-4 mr-2" />
-              Ziele
+            <TabsTrigger
+              value="goals"
+              className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1.5 text-[11px] sm:text-xs leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+            >
+              <Target className="w-3 h-3 shrink-0" />
+              <span className="truncate">Ziele</span>
             </TabsTrigger>
-            <TabsTrigger value="bookings" className="py-2.5">
-              <Calendar className="w-4 h-4 mr-2" />
-              <span className="hidden sm:inline">Vergangene Buchungen</span>
-              <span className="sm:hidden">Buchungen</span>
+            <TabsTrigger
+              value="bookings"
+              className="flex-1 min-w-0 gap-1 rounded-full px-1.5 sm:px-2.5 py-1.5 text-[11px] sm:text-xs leading-tight data-[state=active]:bg-white data-[state=active]:text-text-dark data-[state=active]:shadow-sm data-[state=active]:font-semibold"
+            >
+              <Calendar className="w-3 h-3 shrink-0" />
+              <span className="truncate hidden sm:inline">Vergangene Buchungen</span>
+              <span className="truncate sm:hidden">Buchungen</span>
             </TabsTrigger>
           </TabsList>
 

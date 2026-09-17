@@ -12,6 +12,7 @@ export type RescheduleRequest = {
   expertName?: string;
   offerTitle?: string;
   clientId?: string;
+  notes?: string;
 };
 
 const STORAGE_KEY = 'elu-reschedule-requests';
@@ -65,6 +66,7 @@ export function addRescheduleRequest(
     expertName: request.expertName,
     offerTitle: request.offerTitle,
     clientId: request.clientId,
+    notes: request.notes,
   };
   const all = loadRescheduleRequests(userId);
   saveRescheduleRequests([next, ...all], userId);
