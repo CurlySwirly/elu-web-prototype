@@ -1,29 +1,59 @@
+import { getClientPriceBreakdown } from '@/lib/utils/pricing';
 import { supabase } from '@/lib/supabase';
 
 export interface CancellationResult {
   success: boolean;
   refundEligible: boolean;
   refundAmount: number;
+  /** Service fee refunded only when expert cancels */
+  serviceFeeRefunded: boolean;
   message: string;
 }
+
+export type CancellationActor = 'client' | 'expert';
 
 export const cancellationService = {
   canCancelWithRefund(startTime: string): boolean {
     const appointmentTime = new Date(startTime);
     const now = new Date();
     const hoursUntil = (appointmentTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-
     return hoursUntil >= 48;
   },
 
-  calculateRefund(totalPrice: number, startTime: string): number {
-    return this.canCancelWithRefund(startTime) ? totalPrice : 0;
+  /**
+   * Client pays servicePrice + serviceFee.
+   * Expert cancel → full refund incl. fee.
+   * Client cancel ≥48h → servicePrice only (fee kept by elu).
+   * Client cancel <48h → 0.
+   */
+  calculateRefund(
+    totalPrice: number,
+    startTime: string,
+    actor: CancellationActor = 'client'
+  ): { refundAmount: number; serviceFeeRefunded: boolean; refundEligible: boolean } {
+    const breakdown = getClientPriceBreakdown(totalPrice);
+    if (actor === 'expert') {
+      return {
+        refundAmount: breakdown.clientTotal,
+        serviceFeeRefunded: true,
+        refundEligible: true,
+      };
+    }
+    if (this.canCancelWithRefund(startTime)) {
+      return {
+        refundAmount: breakdown.servicePrice,
+        serviceFeeRefunded: false,
+        refundEligible: true,
+      };
+    }
+    return { refundAmount: 0, serviceFeeRefunded: false, refundEligible: false };
   },
 
   async cancelAppointment(
     appointmentId: string,
     userId: string,
-    reason?: string
+    reason?: string,
+    actor: CancellationActor = 'client'
   ): Promise<CancellationResult> {
     const { data: appointment, error: fetchError } = await supabase
       .from('appointments')
@@ -38,12 +68,16 @@ export const cancellationService = {
         success: false,
         refundEligible: false,
         refundAmount: 0,
+        serviceFeeRefunded: false,
         message: 'Dieser Termin wurde bereits storniert',
       };
     }
 
-    const refundEligible = this.canCancelWithRefund(appointment.start_time);
-    const refundAmount = this.calculateRefund(appointment.total_price, appointment.start_time);
+    const { refundAmount, serviceFeeRefunded, refundEligible } = this.calculateRefund(
+      appointment.total_price,
+      appointment.start_time,
+      actor
+    );
 
     const { error: updateError } = await supabase
       .from('appointments')
@@ -56,26 +90,33 @@ export const cancellationService = {
 
     if (updateError) throw updateError;
 
-    const { error: logError } = await supabase
-      .from('cancellations')
-      .insert({
-        booking_type: 'appointment',
-        booking_id: appointmentId,
-        cancelled_by: userId,
-        reason,
-        refund_amount: refundAmount,
-        refund_eligible: refundEligible,
-      });
+    const { error: logError } = await supabase.from('cancellations').insert({
+      booking_type: 'appointment',
+      booking_id: appointmentId,
+      cancelled_by: userId,
+      reason,
+      refund_amount: refundAmount,
+      refund_eligible: refundEligible,
+    });
 
     if (logError) throw logError;
+
+    let message: string;
+    if (actor === 'expert') {
+      message = `Stornierung erfolgreich. Rückerstattung inkl. Servicegebühr: €${refundAmount.toFixed(2)}`;
+    } else if (refundEligible) {
+      message = `Stornierung erfolgreich. Rückerstattung: €${refundAmount.toFixed(2)} (Servicegebühr wird nicht erstattet).`;
+    } else {
+      message =
+        'Stornierung erfolgreich. Da weniger als 48 Stunden vor dem Termin storniert wurde, wird der Betrag nicht erstattet.';
+    }
 
     return {
       success: true,
       refundEligible,
       refundAmount,
-      message: refundEligible
-        ? `Stornierung erfolgreich. Rückerstattung: €${refundAmount.toFixed(2)}`
-        : 'Stornierung erfolgreich. Da weniger als 48 Stunden vor dem Termin storniert wurde, wird der Betrag nicht erstattet.',
+      serviceFeeRefunded,
+      message,
     };
   },
 
@@ -97,12 +138,13 @@ export const cancellationService = {
         success: false,
         refundEligible: false,
         refundAmount: 0,
+        serviceFeeRefunded: false,
         message: 'Diese Raumbuchung wurde bereits storniert',
       };
     }
 
     const refundEligible = this.canCancelWithRefund(booking.start_time);
-    const refundAmount = this.calculateRefund(booking.total_price, booking.start_time);
+    const refundAmount = refundEligible ? Number(booking.total_price) || 0 : 0;
 
     const { error: updateError } = await supabase
       .from('room_bookings')
@@ -115,16 +157,14 @@ export const cancellationService = {
 
     if (updateError) throw updateError;
 
-    const { error: logError } = await supabase
-      .from('cancellations')
-      .insert({
-        booking_type: 'room_booking',
-        booking_id: bookingId,
-        cancelled_by: userId,
-        reason,
-        refund_amount: refundAmount,
-        refund_eligible: refundEligible,
-      });
+    const { error: logError } = await supabase.from('cancellations').insert({
+      booking_type: 'room_booking',
+      booking_id: bookingId,
+      cancelled_by: userId,
+      reason,
+      refund_amount: refundAmount,
+      refund_eligible: refundEligible,
+    });
 
     if (logError) throw logError;
 
@@ -132,6 +172,7 @@ export const cancellationService = {
       success: true,
       refundEligible,
       refundAmount,
+      serviceFeeRefunded: false,
       message: refundEligible
         ? `Stornierung erfolgreich. Rückerstattung: €${refundAmount.toFixed(2)}`
         : 'Stornierung erfolgreich. Da weniger als 48 Stunden vor dem Termin storniert wurde, wird der Betrag nicht erstattet.',
@@ -149,7 +190,8 @@ export const cancellationService = {
 
     const { data: roomBooking } = await supabase
       .from('room_bookings')
-      .select(`
+      .select(
+        `
         id,
         start_time,
         total_price,
@@ -157,7 +199,8 @@ export const cancellationService = {
         rooms:room_id (
           name
         )
-      `)
+      `
+      )
       .eq('expert_id', appointment.expert_id)
       .eq('start_time', appointment.start_time)
       .neq('status', 'cancelled')

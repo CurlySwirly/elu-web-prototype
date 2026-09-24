@@ -3,28 +3,31 @@
 import { getBackendMode } from '@/lib/backend/mode';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import {
-  Bell,
-  CalendarCheck,
-  Camera,
-  Clock,
-  CreditCard,
-  Menu,
-  MessageCircle,
-  Star,
-  User,
-  X,
-} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { segmentButtonClass } from '@/components/ui/tabs';
 import type { BookingNotification } from '@/lib/services/booking';
+import { getAppPageMeta } from '@/lib/app-page-meta';
+import {
+  Bell,
+  CalendarCheck,
+  Camera,
+  Clock,
+  CreditCard,
+  LogOut,
+  Menu,
+  MessageCircle,
+  Star,
+  User,
+  X,
+} from 'lucide-react';
 
 type NotifFilter = 'all' | 'important' | 'appointments' | 'chat';
 
@@ -103,8 +106,12 @@ export function AppHeader({
   mobileNavOpen?: boolean;
   onToggleMobileNav?: () => void;
 }) {
-  const { userId, role, user } = useAuth();
+  const { userId, role, user, signOut } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const pageMeta = getAppPageMeta(pathname);
+  const pageTitle = pageMeta?.title || 'elu';
+  const pageDescription = pageMeta?.description;
   const [notifications, setNotifications] = useState<BookingNotification[]>([]);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
@@ -296,9 +303,9 @@ export function AppHeader({
   ];
 
   return (
-    <header className="sticky top-0 z-30 h-16 border-b border-gray-200 bg-white/95 backdrop-blur">
-      <div className="h-full px-4 sm:px-6 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
+    <header className="sticky top-0 z-30 min-h-16 border-b border-gray-200 bg-white/95 backdrop-blur">
+      <div className="min-h-16 px-4 sm:px-6 py-2 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           {onToggleMobileNav && (
             <Button
               type="button"
@@ -316,12 +323,16 @@ export function AppHeader({
               )}
             </Button>
           )}
-          <Link
-            href="/app"
-            className="text-xl font-heading font-bold text-text-dark lg:hidden truncate"
-          >
-            elu
-          </Link>
+          <div className="min-w-0 flex flex-col justify-center gap-px">
+            <h1 className="font-heading text-lg sm:text-xl font-bold text-text-dark truncate leading-tight">
+              {pageTitle}
+            </h1>
+            {pageDescription ? (
+              <p className="font-body text-[11px] sm:text-xs text-gray-500 truncate leading-tight">
+                {pageDescription}
+              </p>
+            ) : null}
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 sm:gap-3 shrink-0">
@@ -368,17 +379,15 @@ export function AppHeader({
             </div>
 
             <div className="px-3 sm:px-4 pb-3">
-              <div className="flex items-center gap-1 rounded-full bg-gray-100 p-1 overflow-x-auto">
+              <div className="flex items-center gap-0.5 rounded-full bg-gray-100 p-0.5 overflow-x-auto">
                 {filters.map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
                     onClick={() => setFilter(tab.id)}
                     className={cn(
-                      'flex-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] sm:text-xs font-body transition-all',
-                      filter === tab.id
-                        ? 'bg-text-dark text-white font-semibold shadow-sm'
-                        : 'text-gray-500 hover:text-text-dark'
+                      'flex-1 text-[11px] sm:text-xs',
+                      segmentButtonClass(filter === tab.id)
                     )}
                   >
                     {tab.label}
@@ -489,6 +498,15 @@ export function AppHeader({
                     <User className="w-4 h-4 mr-2 shrink-0" />
                     Zum Profil
                   </Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void signOut()}
+                  className="w-full font-body border-2 rounded-xl justify-center text-gray-700"
+                >
+                  <LogOut className="w-4 h-4 mr-2 shrink-0" />
+                  Abmelden
                 </Button>
               </div>
             </div>

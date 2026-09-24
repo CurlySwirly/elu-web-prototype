@@ -20,10 +20,7 @@ import {
   Users,
   CheckCircle2,
   Circle,
-  AlertCircle,
   Clock,
-  FileText,
-  Award,
   Briefcase,
   CalendarClock,
   CreditCard,
@@ -38,6 +35,12 @@ import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import {
+  hasActiveSubscriptionAccess,
+  loadExpertSubscription,
+} from '@/lib/utils/subscription';
+import { loadStripeConnectStatus } from '@/lib/utils/stripe-connect';
+import { ensureMockExpertDemoState } from '@/lib/backend/mock/expert-demo-state';
 
 interface ExpertProfile {
   id: string;
@@ -47,6 +50,7 @@ interface ExpertProfile {
   checklist_offers_created: boolean;
   checklist_availability_set: boolean;
   checklist_stripe_connected: boolean;
+  checklist_abo_active?: boolean;
   qualification_verified: boolean;
   bio: string;
   profile_image_url: string;
@@ -57,7 +61,6 @@ interface ChecklistItem {
   description: string;
   status: 'completed' | 'pending' | 'in_review';
   link: string;
-  icon: any;
   key: string;
 }
 
@@ -105,6 +108,8 @@ export default function ExpertDashboard() {
       
       if (backendMode === 'mock') {
         await new Promise(resolve => setTimeout(resolve, 300));
+        ensureMockExpertDemoState(user?.id);
+
         const {
           mockExperts,
           mockExpertAppointments,
@@ -149,7 +154,11 @@ export default function ExpertDashboard() {
               mockOnboardingExpertProfile.checklist_availability_set,
             checklist_stripe_connected:
               checklistOverrides.checklist_stripe_connected ??
+              loadStripeConnectStatus(user?.id).completed ??
               mockOnboardingExpertProfile.checklist_stripe_connected,
+            checklist_abo_active:
+              (checklistOverrides as { checklist_abo_active?: boolean }).checklist_abo_active ??
+              hasActiveSubscriptionAccess(loadExpertSubscription(user?.id)),
             qualification_verified:
               checklistOverrides.qualification_verified ??
               mockOnboardingExpertProfile.qualification_verified,
@@ -173,6 +182,7 @@ export default function ExpertDashboard() {
           checklist_offers_created: true,
           checklist_availability_set: true,
           checklist_stripe_connected: true,
+          checklist_abo_active: true,
           qualification_verified: true,
           bio: 'Zertifizierte Physiotherapeutin mit 8 Jahren Erfahrung',
           profile_image_url: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg',
@@ -391,7 +401,6 @@ export default function ExpertDashboard() {
         description: 'Name, Profilfoto, Adresse (Bezirk), kurze Bio',
         status: expertProfile?.checklist_stammdaten_completed ? 'completed' : 'pending',
         link: '/app/expert-profil',
-        icon: FileText,
         key: 'stammdaten'
       },
       {
@@ -399,7 +408,6 @@ export default function ExpertDashboard() {
         description: 'Mind. 1 anerkannte Ausbildung (PDF oder Bild)',
         status: qualStatus,
         link: '/app/expert-profil',
-        icon: Award,
         key: 'qualifications'
       },
       {
@@ -407,23 +415,31 @@ export default function ExpertDashboard() {
         description: 'Titel, Preis, Dauer, Format',
         status: expertProfile?.checklist_offers_created ? 'completed' : 'pending',
         link: '/app/angebote',
-        icon: Briefcase,
         key: 'offers'
+      },
+      {
+        title: 'elu Abo aktivieren',
+        description: 'Erforderlich, um neue Angebote anzulegen',
+        status:
+          expertProfile?.checklist_abo_active ||
+          hasActiveSubscriptionAccess(loadExpertSubscription(user?.id))
+            ? 'completed'
+            : 'pending',
+        link: '/app/expert-profil?tab=konto',
+        key: 'abo'
       },
       {
         title: 'Verfügbarkeit anlegen',
         description: 'Mind. 1 wiederkehrender Zeitblock',
         status: expertProfile?.checklist_availability_set ? 'completed' : 'pending',
         link: '/app/kalender',
-        icon: CalendarClock,
         key: 'availability'
       },
       {
         title: 'Stripe Connect verknüpfen',
-        description: 'Via Stripe-Onboarding für Auszahlungen',
+        description: 'Auszahlungen einrichten',
         status: expertProfile?.checklist_stripe_connected ? 'completed' : 'pending',
-        link: '/app/finanzen',
-        icon: CreditCard,
+        link: '/app/expert-profil?tab=konto',
         key: 'stripe'
       }
     ];
@@ -452,10 +468,7 @@ export default function ExpertDashboard() {
   const getStatusBadge = () => {
     if (isProfileOnline) {
       return (
-        <Badge
-          className="text-text-dark text-sm px-3 py-1.5 font-body"
-          style={{ backgroundColor: '#E2E8FB', borderColor: '#6D8EEC', borderWidth: '1px' }}
-        >
+        <Badge className="text-text-dark text-sm px-3 py-1.5 font-body bg-info-bg border border-primary-blue">
           <CheckCircle2 className="w-4 h-4 mr-1.5" style={{ color: '#6D8EEC' }} />
           <span style={{ color: '#6D8EEC' }}>Profil: online</span>
         </Badge>
@@ -473,45 +486,33 @@ export default function ExpertDashboard() {
     if (isVerified) {
       if (!showVerifiedToast) return null;
       return (
-        <Alert className="border-2" style={{ backgroundColor: '#E2E8FB', borderColor: '#6D8EEC' }}>
-          <CheckCircle2 className="h-5 w-5" style={{ color: '#6D8EEC' }} />
-          <AlertDescription className="ml-2 text-text-dark flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <span>
-              <strong className="font-semibold">Du bist verifiziert!</strong> Dein Profil ist jetzt
-              sichtbar und buchbar.
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="font-body shrink-0 bg-white"
-              onClick={dismissVerifiedToast}
-            >
-              Schließen
-            </Button>
+        <Alert
+          className="border border-primary-blue/40 bg-info-bg cursor-pointer"
+          onClick={dismissVerifiedToast}
+        >
+          <CheckCircle2 className="h-4 w-4 text-primary-blue" />
+          <AlertDescription className="ml-2 text-sm text-text-dark font-body">
+            Du bist verifiziert — dein Profil ist sichtbar und buchbar.
           </AlertDescription>
         </Alert>
       );
     }
     if (isPendingReview) {
       return (
-        <Alert className="border-2 border-yellow-200 bg-yellow-50">
-          <Clock className="h-5 w-5 text-yellow-600" />
-          <AlertDescription className="ml-2 text-yellow-900">
-            <strong className="font-semibold">Wir haben deine Dokumente erhalten und prüfen sie aktuell.</strong> Du erhältst eine Benachrichtigung, sobald dein Profil freigegeben ist. Dies dauert in der Regel 1-2 Werktage.
+        <Alert className="border border-yellow-200 bg-yellow-50">
+          <Clock className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="ml-2 text-sm text-yellow-900 font-body">
+            Dokumente in Prüfung — Freigabe in der Regel in 1–2 Werktagen.
           </AlertDescription>
         </Alert>
       );
     }
-    return (
-      <Alert className="border-2 border-info-text bg-info-bg">
-        <AlertCircle className="h-5 w-5 text-info-text" />
-        <AlertDescription className="ml-2 text-info-text">
-          <strong className="font-semibold">Du bist noch nicht verifiziert.</strong> Bitte schließe alle 5 Schritte unten ab und warte auf unsere Qualifikationsprüfung.
-        </AlertDescription>
-      </Alert>
-    );
+    return null;
   };
+
+  const welcomeSubtitle = isIncomplete
+    ? 'Du bist noch nicht verifiziert. Bitte schließe alle 5 Schritte unten ab und warte auf unsere Qualifikationsprüfung.'
+    : 'Verwalte deine Angebote, Termine und Finanzen.';
 
   return (
     <div className="p-3 sm:p-4 lg:p-5 space-y-4 max-w-7xl mx-auto">
@@ -535,7 +536,7 @@ export default function ExpertDashboard() {
               !
             </h1>
             <p className="font-body text-gray-600 text-sm leading-relaxed">
-              Verwalte deine Angebote, Termine und Finanzen.
+              {welcomeSubtitle}
             </p>
           </div>
 
@@ -566,29 +567,30 @@ export default function ExpertDashboard() {
 
             <div className="space-y-2">
               {checklist.map((item) => {
-                const Icon = item.icon;
                 const isComplete = item.status === 'completed';
                 const isInReview = item.status === 'in_review';
 
                 return (
                   <div
                     key={item.key}
-                    className={`flex items-start gap-2.5 p-2.5 sm:p-3 rounded-lg border transition-colors ${
+                    className={cn(
+                      'flex items-start gap-2.5 p-2.5 sm:p-3 rounded-lg border bg-white transition-colors',
                       isComplete
-                        ? 'bg-primary-green/10 border-primary-green/40'
+                        ? 'border-primary-blue/50'
                         : isInReview
-                          ? 'bg-yellow-50 border-yellow-200'
-                          : 'bg-white border-gray-200 hover:border-primary-blue/50'
-                    }`}
+                          ? 'border-yellow-200 bg-yellow-50/50'
+                          : 'border-gray-200 hover:border-primary-blue/40'
+                    )}
                   >
                     <div
-                      className={`mt-0.5 shrink-0 ${
+                      className={cn(
+                        'mt-0.5 shrink-0',
                         isComplete
-                          ? 'text-primary-green'
+                          ? 'text-primary-blue'
                           : isInReview
                             ? 'text-yellow-600'
                             : 'text-gray-400'
-                      }`}
+                      )}
                     >
                       {isComplete ? (
                         <CheckCircle2 className="w-4 h-4" />
@@ -599,31 +601,28 @@ export default function ExpertDashboard() {
                       )}
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-heading font-semibold text-sm text-text-dark">
-                            {item.title}
-                          </h3>
-                          <p className="text-gray-500 font-body text-xs mt-0.5 leading-relaxed">
-                            {item.description}
+                    <div className="flex-1 min-w-0 flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-heading font-semibold text-sm text-text-dark">
+                          {item.title}
+                        </h3>
+                        <p className="text-gray-500 font-body text-xs mt-0.5 leading-relaxed">
+                          {item.description}
+                        </p>
+                        {isInReview && (
+                          <p className="text-[11px] text-yellow-700 font-medium mt-1">
+                            Dokument hochgeladen – warte auf Freigabe
                           </p>
-                          {isInReview && (
-                            <p className="text-[11px] text-yellow-700 font-medium mt-1">
-                              Dokument hochgeladen – warte auf Freigabe
-                            </p>
-                          )}
-                        </div>
-                        <Icon className="w-4 h-4 text-primary-blue shrink-0 mt-0.5" />
+                        )}
                       </div>
 
                       {!isInReview && (
-                        <Link href={item.link} className="inline-block mt-2">
+                        <Link href={item.link} className="shrink-0">
                           <Button
                             variant={isComplete ? 'outline' : 'default'}
                             size="sm"
                             className={cn(
-                              'h-7 text-xs font-body px-2.5',
+                              'h-8 min-w-[7.5rem] text-xs font-body px-3',
                               isComplete ? '' : 'bg-primary-blue hover:bg-primary-blue/90'
                             )}
                           >

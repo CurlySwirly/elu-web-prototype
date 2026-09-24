@@ -6,7 +6,6 @@ const BACKEND_MODE: BackendMode = getBackendMode();
 function createBackendClient(): IBackendClient {
   if (BACKEND_MODE === 'mock') {
     // Lazy require keeps Supabase out of the mock login path
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { MockBackendClient } = require('./mock/client') as typeof import('./mock/client');
     if (typeof window !== 'undefined') {
       console.log('Using mock backend for development');
@@ -20,7 +19,6 @@ function createBackendClient(): IBackendClient {
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { SupabaseBackendClient } = require('./supabase/client') as typeof import('./supabase/client');
   return new SupabaseBackendClient();
 }

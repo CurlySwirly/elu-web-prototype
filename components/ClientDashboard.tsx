@@ -10,18 +10,7 @@ import { firstNameFrom } from '@/lib/utils/name';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,15 +33,9 @@ import {
   isToday,
   parseISO,
   startOfDay,
-  setHours,
-  setMinutes,
 } from 'date-fns';
 import { cn } from '@/lib/utils';
-import {
-  createPersonalEvent,
-  getMyPersonalEvents,
-  type PersonalCalendarEvent,
-} from '@/lib/services/personalCalendar';
+import { segmentButtonClass } from '@/components/ui/tabs';
 import {
   reviewService,
   type PendingReviewAppointment,
@@ -83,21 +66,12 @@ export default function ClientDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [appointments, setAppointments] = useState<DashboardAppointment[]>([]);
-  const [personalEvents, setPersonalEvents] = useState<PersonalCalendarEvent[]>([]);
   const [pendingReviews, setPendingReviews] = useState<PendingReviewAppointment[]>([]);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [reviewAppointmentId, setReviewAppointmentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>('all');
-  const [createOpen, setCreateOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState('');
-  const [eventTitle, setEventTitle] = useState('');
-  const [eventDate, setEventDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [eventStart, setEventStart] = useState('10:00');
-  const [eventEnd, setEventEnd] = useState('11:00');
-  const [eventNotes, setEventNotes] = useState('');
   const [greetingName, setGreetingName] = useState(() => firstNameFrom(user?.fullName));
   const [detailAppointmentId, setDetailAppointmentId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -235,9 +209,6 @@ export default function ClientDashboard() {
         );
       }
 
-      const { data: events } = await getMyPersonalEvents();
-      setPersonalEvents(events || []);
-
       const pending = await reviewService.getPendingReviewAppointments(userId);
       setPendingReviews(pending);
 
@@ -300,7 +271,7 @@ export default function ClientDashboard() {
   }, [upcomingAppointments, filter]);
 
   const calendarEvents = useMemo<ExpertCalendarEvent[]>(() => {
-    const bookingEvents: ExpertCalendarEvent[] = appointments.map((apt) => {
+    return appointments.map((apt) => {
       const formatLabel =
         apt.offer.format === 'online' || apt.offer.format === 'Online'
           ? 'Online'
@@ -310,8 +281,8 @@ export default function ClientDashboard() {
         title: apt.offer.title,
         start: parseISO(apt.start_time),
         end: parseISO(apt.end_time),
-        color: 'blue',
-        source: 'elu',
+        color: 'blue' as const,
+        source: 'elu' as const,
         meta: apt.expert?.full_name || 'Expert:in',
         hoverLines: [
           `mit ${apt.expert?.full_name || 'Expert:in'}`,
@@ -319,28 +290,21 @@ export default function ClientDashboard() {
         ],
       };
     });
-    const ownEvents: ExpertCalendarEvent[] = personalEvents.map((evt) => ({
-      id: `personal-${evt.id}`,
-      title: evt.title,
-      start: parseISO(evt.start_time),
-      end: parseISO(evt.end_time),
-      color: 'green',
-      source: 'elu',
-      meta: 'Eigener Termin',
-      hoverLines: ['Eigener Termin'],
-    }));
-    return [...bookingEvents, ...ownEvents];
-  }, [appointments, personalEvents]);
+  }, [appointments]);
 
   const {
     openReschedule,
     openCancel,
+    openRescheduleRequestReview,
+    pendingRequests,
     actionMessage,
     actionError,
     dialogs: appointmentManageDialogs,
     isFlowOpen,
   } = useAppointmentManageFlow({
     appointments,
+    actor: 'client',
+    rescheduleUserId: userId,
     onCancelled: async (appointmentId) => {
       const backendMode = getBackendMode();
       if (backendMode === 'mock') {
@@ -349,58 +313,17 @@ export default function ClientDashboard() {
       }
       await loadData();
     },
+    onRescheduled: async (appointmentId, newStart, newEnd) => {
+      setAppointments((prev) =>
+        prev.map((apt) =>
+          apt.id === appointmentId
+            ? { ...apt, start_time: newStart, end_time: newEnd }
+            : apt
+        )
+      );
+    },
     successAction: { label: 'Zum Dashboard', href: '/app' },
   });
-
-  const openCreateDialog = (date?: Date) => {
-    const base = date || new Date();
-    setEventDate(format(base, 'yyyy-MM-dd'));
-    setEventTitle('');
-    setEventStart('10:00');
-    setEventEnd('11:00');
-    setEventNotes('');
-    setFormError('');
-    setCreateOpen(true);
-  };
-
-  const handleCreateEvent = async () => {
-    if (!eventTitle.trim()) {
-      setFormError('Bitte gib einen Titel ein.');
-      return;
-    }
-
-    const [startH, startM] = eventStart.split(':').map(Number);
-    const [endH, endM] = eventEnd.split(':').map(Number);
-    const day = parseISO(`${eventDate}T00:00:00`);
-    const startTime = setMinutes(setHours(day, startH), startM);
-    const endTime = setMinutes(setHours(day, endH), endM);
-
-    if (endTime <= startTime) {
-      setFormError('Die Endzeit muss nach der Startzeit liegen.');
-      return;
-    }
-
-    setSubmitting(true);
-    setFormError('');
-
-    try {
-      const { error } = await createPersonalEvent({
-        title: eventTitle.trim(),
-        notes: eventNotes.trim(),
-        start_time: startTime.toISOString(),
-        end_time: endTime.toISOString(),
-      });
-
-      if (error) throw error;
-
-      setCreateOpen(false);
-      await loadData();
-    } catch (err: any) {
-      setFormError(err.message || 'Termin konnte nicht gespeichert werden.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -449,6 +372,37 @@ export default function ClientDashboard() {
         <Alert className="border-primary-green bg-primary-green/20">
           <AlertDescription className="text-text-dark font-body">{actionMessage}</AlertDescription>
         </Alert>
+      )}
+
+      {pendingRequests.length > 0 && (
+        <div className="space-y-2">
+          {pendingRequests.map((req) => (
+            <Alert
+              key={req.id}
+              className="border-primary-blue/30 bg-primary-blue/5 cursor-pointer"
+              onClick={() => openRescheduleRequestReview(req)}
+            >
+              <AlertDescription className="text-text-dark font-body text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <span>
+                  Verschiebungsanfrage
+                  {req.offerTitle ? ` für „${req.offerTitle}“` : ''} – bitte prüfen und ggf. einen
+                  neuen Termin wählen.
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-body shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openRescheduleRequestReview(req);
+                  }}
+                >
+                  Anfrage prüfen
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ))}
+        </div>
       )}
 
       {actionError && !isFlowOpen && (
@@ -535,7 +489,7 @@ export default function ClientDashboard() {
                 </CardTitle>
               </div>
               <div className="w-full sm:w-auto overflow-x-auto">
-                <div className="inline-flex min-w-full sm:min-w-0 items-center gap-1 rounded-full bg-gray-100 p-1">
+                <div className="inline-flex min-w-full sm:min-w-0 items-center gap-0.5 rounded-full bg-gray-100 p-0.5">
                   {(
                     [
                       { id: 'all', label: 'Alle' },
@@ -547,10 +501,8 @@ export default function ClientDashboard() {
                       type="button"
                       onClick={() => setFilter(tab.id)}
                       className={cn(
-                        'flex-1 sm:flex-none whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-body transition-all',
-                        filter === tab.id
-                          ? 'bg-text-dark text-white font-semibold shadow-sm'
-                          : 'text-gray-500 hover:text-text-dark'
+                        'flex-1 sm:flex-none',
+                        segmentButtonClass(filter === tab.id)
                       )}
                     >
                       {tab.label}
@@ -712,7 +664,7 @@ export default function ClientDashboard() {
           </CardContent>
         </Card>
 
-        {/* Calendar + create personal event */}
+        {/* Calendar */}
         <Card className="border-2 lg:col-span-2 overflow-hidden">
           <CardHeader className="pb-2 pt-4 px-4 sm:px-5">
             <CardTitle className="font-heading text-lg sm:text-xl text-text-dark">Kalender</CardTitle>
@@ -725,9 +677,7 @@ export default function ClientDashboard() {
               showSync={false}
               compactHours
               className="border shadow-none rounded-xl"
-              onAddEvent={() => openCreateDialog()}
               onSelectEvent={(eventId) => {
-                if (eventId.startsWith('personal-')) return;
                 setDetailAppointmentId(eventId);
                 setIsDetailModalOpen(true);
               }}
@@ -738,105 +688,10 @@ export default function ClientDashboard() {
                 <div className="w-3.5 h-3.5 rounded-sm bg-info-bg border border-primary-blue/40" />
                 <span>Buchung</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3.5 h-3.5 rounded-sm bg-primary-green/30 border border-primary-green/50" />
-                <span>Eigener Termin</span>
-              </div>
             </div>
           </CardContent>
         </Card>
       </div>
-
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="font-body w-[calc(100vw-1.5rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-heading text-xl">Termin erstellen</DialogTitle>
-            <DialogDescription className="font-body">
-              Trage eigene Termine in deinen Kalender ein – z. B. Arztbesuche oder private Termine.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="event-title">Titel</Label>
-              <Input
-                id="event-title"
-                value={eventTitle}
-                onChange={(e) => setEventTitle(e.target.value)}
-                placeholder="z. B. Arzttermin"
-                className="font-body"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="event-date">Datum</Label>
-              <Input
-                id="event-date"
-                type="date"
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-                className="font-body"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="event-start">Start</Label>
-                <Input
-                  id="event-start"
-                  type="time"
-                  value={eventStart}
-                  onChange={(e) => setEventStart(e.target.value)}
-                  className="font-body"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="event-end">Ende</Label>
-                <Input
-                  id="event-end"
-                  type="time"
-                  value={eventEnd}
-                  onChange={(e) => setEventEnd(e.target.value)}
-                  className="font-body"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="event-notes">Notizen (optional)</Label>
-              <Textarea
-                id="event-notes"
-                value={eventNotes}
-                onChange={(e) => setEventNotes(e.target.value)}
-                rows={3}
-                placeholder="Zusätzliche Infos…"
-                className="font-body"
-              />
-            </div>
-
-            {formError && (
-              <p className="text-sm text-red-600 font-body">{formError}</p>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setCreateOpen(false)}
-              className="font-body"
-            >
-              Abbrechen
-            </Button>
-            <Button
-              onClick={handleCreateEvent}
-              disabled={submitting}
-              className="bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 font-body"
-            >
-              {submitting ? 'Speichern…' : 'Termin speichern'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <AppointmentDetailModal
         appointmentId={detailAppointmentId}

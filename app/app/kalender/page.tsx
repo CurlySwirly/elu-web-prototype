@@ -73,7 +73,7 @@ interface BlockedDay {
 
 export default function ExpertCalendarPage() {
   const router = useRouter();
-  const { userId, role, loading: authLoading } = useAuth();
+  const { userId, user, role, loading: authLoading } = useAuth();
   const [expertProfileId, setExpertProfileId] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [availability, setAvailability] = useState<Availability[]>([]);
@@ -148,12 +148,15 @@ export default function ExpertCalendarPage() {
 
   const {
     openCancel,
+    openReschedule,
     actionMessage,
     actionError,
     dialogs: appointmentManageDialogs,
   } = useAppointmentManageFlow({
     appointments,
     actor: 'expert',
+    actorDisplayName: user?.fullName || null,
+    rescheduleUserId: userId,
     onCancelled: async (appointmentId) => {
       setAppointments((prev) => prev.filter((apt) => apt.id !== appointmentId));
     },
@@ -216,85 +219,41 @@ export default function ExpertCalendarPage() {
     (event, index, list) => list.findIndex((other) => other.id === event.id) === index
   );
 
-  const loadExpertData = useCallback(async () => {
+  const loadAppointments = useCallback(async (profileId: string) => {
     try {
       const backendMode = getBackendMode();
-      
+
       if (backendMode === 'mock') {
-        setExpertProfileId(`mock-expert-${userId}`);
-        await Promise.all([
-          loadAppointments(`mock-expert-${userId}`),
-          loadAvailability(`mock-expert-${userId}`),
-          loadBlockedDays(`mock-expert-${userId}`)
-        ]);
-        setLoading(false);
-        return;
-      }
-
-      const { data: profile } = await supabase
-        .from('expert_profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (profile) {
-        setExpertProfileId(profile.id);
-        await Promise.all([
-          loadAppointments(profile.id),
-          loadAvailability(profile.id),
-          loadBlockedDays(profile.id)
-        ]);
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (role !== 'expert') {
-      router.replace('/app/termine');
-      return;
-    }
-    if (userId) {
-      void loadExpertData();
-    }
-  }, [userId, role, authLoading, loadExpertData, router]);
-
-  const loadAppointments = async (profileId: string) => {
-    try {
-      const backendMode = getBackendMode();
-      
-      if (backendMode === 'mock') {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 300));
         const { mockExpertAppointments } = await import('@/lib/backend/mock/data');
-        setAppointments(mockExpertAppointments.map((apt: any) => ({
-          id: apt.id,
-          client_id: apt.client?.id || apt.client_id || apt.client?.email || apt.id,
-          start_time: apt.start_time,
-          end_time: apt.end_time,
-          status: apt.status,
-          total_price: apt.total_price,
-          notes: apt.notes,
-          is_new_booking: apt.is_new_booking,
-          client: apt.client
-            ? {
-                id: apt.client.id || apt.client.email || apt.client.full_name,
-                full_name: apt.client.full_name,
-                avatar_url: apt.client.avatar_url,
-                phone: apt.client.phone,
-              }
-            : undefined,
-          offer: apt.offer,
-        })));
+        setAppointments(
+          mockExpertAppointments.map((apt: any) => ({
+            id: apt.id,
+            client_id: apt.client?.id || apt.client_id || apt.client?.email || apt.id,
+            start_time: apt.start_time,
+            end_time: apt.end_time,
+            status: apt.status,
+            total_price: apt.total_price,
+            notes: apt.notes,
+            is_new_booking: apt.is_new_booking,
+            client: apt.client
+              ? {
+                  id: apt.client.id || apt.client.email || apt.client.full_name,
+                  full_name: apt.client.full_name,
+                  avatar_url: apt.client.avatar_url,
+                  phone: apt.client.phone,
+                }
+              : undefined,
+            offer: apt.offer,
+          }))
+        );
         return;
       }
 
       const { data, error } = await supabase
         .from('appointments')
-        .select(`
+        .select(
+          `
           id,
           client_id,
           start_time,
@@ -312,7 +271,8 @@ export default function ExpertCalendarPage() {
             title,
             format
           )
-        `)
+        `
+        )
         .eq('expert_id', profileId)
         .order('start_time', { ascending: true });
 
@@ -348,7 +308,7 @@ export default function ExpertCalendarPage() {
     } catch (err: any) {
       console.error('Error loading appointments:', err);
     }
-  };
+  }, []);
 
   const loadAvailability = useCallback(async (profileId: string) => {
     try {
@@ -397,6 +357,53 @@ export default function ExpertCalendarPage() {
       console.error('Error loading blocked days:', err);
     }
   }, []);
+
+  const loadExpertData = useCallback(async () => {
+    try {
+      const backendMode = getBackendMode();
+
+      if (backendMode === 'mock') {
+        setExpertProfileId(`mock-expert-${userId}`);
+        await Promise.all([
+          loadAppointments(`mock-expert-${userId}`),
+          loadAvailability(`mock-expert-${userId}`),
+          loadBlockedDays(`mock-expert-${userId}`),
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('expert_profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (profile) {
+        setExpertProfileId(profile.id);
+        await Promise.all([
+          loadAppointments(profile.id),
+          loadAvailability(profile.id),
+          loadBlockedDays(profile.id),
+        ]);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, loadAppointments, loadAvailability, loadBlockedDays]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (role !== 'expert') {
+      router.replace('/app/termine');
+      return;
+    }
+    if (userId) {
+      void loadExpertData();
+    }
+  }, [userId, role, authLoading, loadExpertData, router]);
 
   const isDateBlocked = useCallback(
     (date: Date) => {
@@ -672,17 +679,11 @@ export default function ExpertCalendarPage() {
                   Verwalte deine gebuchten Termine
                 </CardDescription>
               </div>
-              <TabsList className="h-8 shrink-0 self-start bg-gray-100 p-0.5">
-                <TabsTrigger
-                  value="upcoming"
-                  className="font-body text-xs h-7 px-2.5 data-[state=active]:bg-text-dark data-[state=active]:text-white"
-                >
+              <TabsList className="h-8 shrink-0 self-start">
+                <TabsTrigger value="upcoming" className="h-7 px-2.5">
                   Kommende ({upcomingAppointments.length})
                 </TabsTrigger>
-                <TabsTrigger
-                  value="past"
-                  className="font-body text-xs h-7 px-2.5 data-[state=active]:bg-text-dark data-[state=active]:text-white"
-                >
+                <TabsTrigger value="past" className="h-7 px-2.5">
                   Vergangene ({pastAppointments.length})
                 </TabsTrigger>
               </TabsList>
@@ -875,6 +876,11 @@ export default function ExpertCalendarPage() {
             }
           }}
           userRole="expert"
+          onReschedule={async (id) => {
+            setIsDetailModalOpen(false);
+            setSelectedAppointmentId(null);
+            await openReschedule(id);
+          }}
           onCancel={(id) => {
             setIsDetailModalOpen(false);
             setSelectedAppointmentId(null);

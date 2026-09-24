@@ -9,13 +9,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Home,
+  HelpCircle,
   MessageCircle,
   Settings,
   User,
   Users,
   Briefcase,
   Euro,
-  LogOut,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -40,12 +40,11 @@ export function AppNav({
   onDesktopCollapsedChange,
 }: AppNavProps) {
   const pathname = usePathname();
-  const { role, signOut } = useAuth();
+  const { role } = useAuth();
 
   const clientLinks = [
     { href: '/app', label: 'Dashboard', icon: Home },
     { href: '/app/experten', label: 'Expert:innen', icon: Users },
-    { href: '/app/termine', label: 'Termine', icon: Calendar },
     { href: '/app/nachrichten', label: 'Nachrichten', icon: MessageCircle },
     { href: '/app/profil', label: 'Profil', icon: User },
   ];
@@ -61,8 +60,10 @@ export function AppNav({
 
   const links = role === 'expert' ? expertLinks : clientLinks;
   const settingsHref = '/app/einstellungen';
+  const helpHref = '/app/hilfe';
   const settingsActive =
     pathname === settingsHref || pathname.startsWith(`${settingsHref}/`);
+  const helpActive = pathname === helpHref || pathname.startsWith(`${helpHref}/`);
 
   const NavBody = ({
     onNavigate,
@@ -102,7 +103,22 @@ export function AppNav({
         </div>
       </div>
 
-      <div className={cn('border-t border-gray-200 space-y-1.5', collapsed ? 'p-1.5' : 'p-2.5')}>
+      <div className={cn('border-t border-gray-200 space-y-0.5', collapsed ? 'p-1.5' : 'p-2.5')}>
+        <Link
+          href={helpHref}
+          onClick={onNavigate}
+          title={collapsed ? 'Hilfe' : undefined}
+          className={cn(
+            'flex items-center rounded-md transition-colors font-body text-sm',
+            collapsed ? 'justify-center px-1.5 py-2' : 'gap-2 px-2.5 py-1.5',
+            helpActive
+              ? 'bg-gradient-to-r from-primary-blue to-primary-green text-white'
+              : 'text-gray-700 hover:bg-info-bg hover:text-info-text'
+          )}
+        >
+          <HelpCircle className="w-4 h-4 shrink-0" />
+          {!collapsed && <span className="leading-tight">Hilfe</span>}
+        </Link>
         <Link
           href={settingsHref}
           onClick={onNavigate}
@@ -118,25 +134,12 @@ export function AppNav({
           <Settings className="w-4 h-4 shrink-0" />
           {!collapsed && <span className="leading-tight">Einstellungen</span>}
         </Link>
-        <Button
-          onClick={() => {
-            onNavigate?.();
-            signOut();
-          }}
-          variant="outline"
-          size="sm"
-          title={collapsed ? 'Abmelden' : undefined}
-          className={cn('font-body text-sm h-8', collapsed ? 'w-full px-0' : 'w-full')}
-        >
-          {collapsed ? <LogOut className="w-3.5 h-3.5" /> : 'Abmelden'}
-        </Button>
       </div>
     </>
   );
 
   return (
     <>
-      {/* Desktop sidebar */}
       <nav
         className={cn(
           'fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-gray-200 bg-white transition-[width] duration-200 ease-in-out lg:flex',
@@ -173,7 +176,6 @@ export function AppNav({
         <NavBody collapsed={desktopCollapsed} />
       </nav>
 
-      {/* Mobile drawer */}
       <Sheet open={mobileOpen} onOpenChange={onMobileOpenChange}>
         <SheetContent side="left" className="w-[240px] p-0 flex flex-col [&>button]:hidden">
           <SheetHeader className="px-4 py-3 border-b border-gray-200 text-left">

@@ -8,6 +8,12 @@ import { Activity, Award, Calendar, CheckCircle2, Heart, MapPin, Shield, Star, T
 import { mockPlatformReviews } from '@/lib/backend/mock/data';
 import { formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
+import {
+  SUBSCRIPTION_ACTION_PRICES,
+  SUBSCRIPTION_LIST_PRICES,
+  getYearlyListSavings,
+} from '@/lib/utils/subscription';
+import { formatEuro } from '@/lib/utils/pricing';
 
 export default function ExpertsPage() {
   return (
@@ -15,7 +21,7 @@ export default function ExpertsPage() {
       <Header />
 
       <main className="pt-16">
-        <section className="relative pt-20 pb-12" style={{backgroundColor: '#E2E8FB'}}>
+        <section className="relative pt-20 pb-12 bg-info-bg">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid md:grid-cols-2 gap-12 items-center mb-16">
               <div className="space-y-8">
@@ -233,6 +239,60 @@ export default function ExpertsPage() {
                   Falls du vor Ort arbeitest: buche Studios oder Praxen stundenweise.
                 </p>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="preise" className="py-24 bg-info-bg">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <h2 className="font-heading text-4xl md:text-5xl font-bold text-text-dark mb-4">
+                Dein elu Abo
+              </h2>
+              <p className="text-xl text-gray-700 font-body max-w-2xl mx-auto">
+                Listenpreis {formatEuro(SUBSCRIPTION_LIST_PRICES.monthly)}/Monat bzw.{' '}
+                {formatEuro(SUBSCRIPTION_LIST_PRICES.yearly)}/Jahr — Phase&nbsp;1 zum Aktionspreis{' '}
+                {formatEuro(SUBSCRIPTION_ACTION_PRICES.monthly)} /{' '}
+                {formatEuro(SUBSCRIPTION_ACTION_PRICES.yearly)}.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+              <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+                <p className="text-sm font-body font-semibold text-primary-blue mb-2">Monatsabo</p>
+                <p className="text-sm text-gray-400 font-body line-through tabular-nums">
+                  {formatEuro(SUBSCRIPTION_LIST_PRICES.monthly)}
+                </p>
+                <p className="font-heading text-4xl font-bold text-primary-blue tabular-nums">
+                  {formatEuro(SUBSCRIPTION_ACTION_PRICES.monthly)}
+                </p>
+                <p className="text-sm text-gray-600 font-body mt-4">
+                  Aktion für die ersten Expert:innen · danach Listenpreis
+                </p>
+              </div>
+              <div className="bg-white rounded-2xl border border-primary-blue/30 p-8 shadow-sm ring-1 ring-primary-blue/20">
+                <p className="text-sm font-body font-semibold text-primary-green mb-2">Jahresabo</p>
+                <p className="text-sm text-gray-400 font-body line-through tabular-nums">
+                  {formatEuro(SUBSCRIPTION_LIST_PRICES.yearly)}
+                </p>
+                <p className="font-heading text-4xl font-bold text-primary-blue tabular-nums">
+                  {formatEuro(SUBSCRIPTION_ACTION_PRICES.yearly)}
+                </p>
+                <p className="text-sm text-gray-600 font-body mt-4">
+                  {formatEuro(getYearlyListSavings())} günstiger als 12× Monat (Listenpreis)
+                </p>
+              </div>
+            </div>
+
+            <div className="text-center mt-10">
+              <Link href="/signup/expert">
+                <Button
+                  size="lg"
+                  className="bg-gradient-to-r from-primary-blue to-primary-green text-white hover:opacity-90 px-8 py-6 text-lg font-body font-semibold shadow-lg"
+                >
+                  Jetzt starten
+                </Button>
+              </Link>
             </div>
           </div>
         </section>

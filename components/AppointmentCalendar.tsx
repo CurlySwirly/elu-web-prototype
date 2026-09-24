@@ -488,10 +488,13 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
                         {role === 'expert' ? (
                           <>
                             <p className="font-heading font-semibold text-sm text-text-dark truncate">
-                              {partnerName || 'Klient:in'}
+                              {apt.offer.title || 'Termin'}
                             </p>
                             <p className="font-body text-xs text-gray-500 truncate mt-0.5">
-                              {apt.offer.title}
+                              {(apt.offer.format || '').toLowerCase().includes('online')
+                                ? 'Online'
+                                : 'Vor Ort'}
+                              {partnerName ? ` · ${partnerName}` : ''}
                             </p>
                           </>
                         ) : (
@@ -499,11 +502,12 @@ export default function AppointmentCalendar({ role }: AppointmentCalendarProps) 
                             <p className="font-heading font-semibold text-sm text-text-dark truncate">
                               {apt.offer.title}
                             </p>
-                            {partnerName && (
-                              <p className="font-body text-xs text-gray-500 truncate mt-0.5">
-                                {partnerName}
-                              </p>
-                            )}
+                            <p className="font-body text-xs text-gray-500 truncate mt-0.5">
+                              {(apt.offer.format || '').toLowerCase().includes('online')
+                                ? 'Online'
+                                : 'Vor Ort'}
+                              {partnerName ? ` · ${partnerName}` : ''}
+                            </p>
                           </>
                         )}
                       </div>

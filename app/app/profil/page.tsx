@@ -38,6 +38,8 @@ import {
   Trash2,
   ChevronDown,
 } from 'lucide-react';
+import { AppPageHeader, AppPageShell } from '@/components/AppPageHeader';
+import { getAppPageMeta } from '@/lib/app-page-meta';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { formatEuro, getClientPriceBreakdown } from '@/lib/utils/pricing';
@@ -664,21 +666,18 @@ export default function ProfilePage() {
 
   // Expert: keep a compact edit form
   if (role !== 'client') {
+    const pageMeta = getAppPageMeta('/app/profil');
     return (
-      <div className="p-3 sm:p-4 lg:p-5 space-y-4">
-        <div>
-          <h1 className="text-lg sm:text-xl font-heading font-bold text-text-dark">
-            Mein Profil
-          </h1>
-          <p className="text-sm text-gray-500 font-body mt-1">
-            Verwalte deine persönlichen Informationen.
-          </p>
-        </div>
+      <AppPageShell>
+        <AppPageHeader
+          title={pageMeta?.title || 'Mein Profil'}
+          description={pageMeta?.description || 'Verwalte deine persönlichen Informationen.'}
+        />
         <Card className="border-2 max-w-xl">
           <CardHeader>
-            <CardTitle className="font-heading text-xl">Profil</CardTitle>
+            <CardTitle className="font-heading text-xl">Kontaktdaten</CardTitle>
             <CardDescription className="font-body">
-              Name und Kontaktdaten
+              Name und E-Mail
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -713,36 +712,34 @@ export default function ProfilePage() {
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </AppPageShell>
     );
   }
 
+  const pageMeta = getAppPageMeta('/app/profil');
+
   return (
-    <div className="p-3 sm:p-4 lg:p-5 space-y-4">
-      <div>
-        <h1 className="text-lg sm:text-xl font-heading font-bold text-text-dark">
-          Mein Profil
-        </h1>
-        <p className="text-sm text-gray-500 font-body mt-1">
-          Verwalte deine persönlichen Informationen.
-        </p>
-      </div>
+    <AppPageShell>
+      <AppPageHeader
+        title={pageMeta?.title || 'Mein Profil'}
+        description={pageMeta?.description || 'Verwalte deine persönlichen Informationen.'}
+      />
 
       <div className="max-w-4xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-5">
-            <TabsTrigger value="profile" className="py-2.5">
-              <User className="w-4 h-4 mr-2" />
-              Profil
+          <TabsList className="flex w-full justify-stretch mb-5">
+            <TabsTrigger value="profile" className="flex-1 min-w-0">
+              <User className="w-3 h-3 shrink-0" />
+              <span className="truncate">Profil</span>
             </TabsTrigger>
-            <TabsTrigger value="goals" className="py-2.5">
-              <Target className="w-4 h-4 mr-2" />
-              Ziele
+            <TabsTrigger value="goals" className="flex-1 min-w-0">
+              <Target className="w-3 h-3 shrink-0" />
+              <span className="truncate">Ziele</span>
             </TabsTrigger>
-            <TabsTrigger value="bookings" className="py-2.5">
-              <Calendar className="w-4 h-4 mr-2" />
-              <span className="hidden sm:inline">Vergangene Buchungen</span>
-              <span className="sm:hidden">Buchungen</span>
+            <TabsTrigger value="bookings" className="flex-1 min-w-0">
+              <Calendar className="w-3 h-3 shrink-0" />
+              <span className="truncate hidden sm:inline">Vergangene Buchungen</span>
+              <span className="truncate sm:hidden">Buchungen</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1184,6 +1181,6 @@ export default function ProfilePage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </AppPageShell>
   );
 }

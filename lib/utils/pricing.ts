@@ -1,22 +1,29 @@
-/** Platform commission as share of the client-facing session price (gross). */
-export const PLATFORM_FEE_RATE = 0.15;
+/**
+ * Expert monetization is subscription-based (Abo) – no per-session provision.
+ * Clients pay a fixed Servicegebühr on top of the offer price.
+ */
+export const PLATFORM_FEE_RATE = 0;
 
-/** German VAT rate applied to the platform fee (expert side). */
-export const VAT_RATE = 0.19;
+/** Austrian standard VAT rate (Normalsatz, UStG). */
+export const VAT_RATE = 0.2;
 
-/** VAT on the client-facing elu service fee (Servicegebühr). */
+/** Austrian VAT rates for elu sessions: exempt (0 %) or Normalsatz (20 %). */
+export const AT_VAT_RATES = [0, 0.2] as const;
+export type AtVatRate = (typeof AT_VAT_RATES)[number];
+
+/** VAT on the client-facing elu service fee (Servicegebühr) – AT Normalsatz. */
 export const SERVICE_FEE_VAT_RATE = 0.2;
 
 export type SessionPriceBreakdown = {
-  /** What the client pays for the session */
+  /** Session / offer price (what client pays for the service itself) */
   clientPays: number;
-  /** Net platform fee (excl. VAT) */
+  /** Always 0 under Abo model */
   platformFeeNet: number;
-  /** VAT portion of the platform fee */
+  /** Always 0 under Abo model */
   vatAmount: number;
-  /** Gross platform fee (net + VAT) = what expert pays to elu */
+  /** Always 0 under Abo model */
   platformFeeGross: number;
-  /** What the expert receives */
+  /** Expert receives the full session price */
   expertPayout: number;
   feeRate: number;
   vatRate: number;
@@ -36,42 +43,73 @@ export type ClientPriceBreakdown = {
   serviceFeeVatRate: number;
 };
 
+export type BookingVatBreakdown = {
+  /** Net session price (EUR) */
+  net: number;
+  /** VAT amount (EUR) */
+  vat: number;
+  /** Gross session price (EUR) */
+  gross: number;
+  /** Applied VAT rate (0–1) */
+  vatRate: number;
+};
+
 /**
- * Split a session total into client price, platform fee (incl. VAT share) and expert payout.
- * Platform takes PLATFORM_FEE_RATE of the total; that take is treated as gross (incl. VAT).
+ * Expert payout: full session price (0 % provision; elu revenue = Expert Abo).
  */
 export function getSessionPriceBreakdown(totalPrice: number): SessionPriceBreakdown {
-  const clientPays = Number(totalPrice) || 0;
-  const platformFeeGross = roundMoney(clientPays * PLATFORM_FEE_RATE);
-  const platformFeeNet = roundMoney(platformFeeGross / (1 + VAT_RATE));
-  const vatAmount = roundMoney(platformFeeGross - platformFeeNet);
-  const expertPayout = roundMoney(clientPays - platformFeeGross);
+  const clientPays = roundMoney(Number(totalPrice) || 0);
 
   return {
     clientPays,
-    platformFeeNet,
-    vatAmount,
-    platformFeeGross,
-    expertPayout,
+    platformFeeNet: 0,
+    vatAmount: 0,
+    platformFeeGross: 0,
+    expertPayout: clientPays,
     feeRate: PLATFORM_FEE_RATE,
     vatRate: VAT_RATE,
   };
 }
 
 /**
- * Fixed client service fee by service price tier (net), VAT 20% on top.
- * bis 50 € → 0,99 / 1,19 · bis 100 € → 1,99 / 2,39 · bis/über 200 € → 2,99 / 3,59
+ * Split a gross amount by an Austrian VAT rate (backend-style fields).
+ */
+export function splitGrossByVatRate(
+  grossAmount: number,
+  vatRate: number
+): BookingVatBreakdown {
+  const gross = roundMoney(Number(grossAmount) || 0);
+  const rate = Number(vatRate) || 0;
+  if (rate <= 0 || gross === 0) {
+    return { net: gross, vat: 0, gross, vatRate: 0 };
+  }
+  const net = roundMoney(gross / (1 + rate));
+  const vat = roundMoney(gross - net);
+  return { net, vat, gross, vatRate: rate };
+}
+
+/** Convert VAT amount stored in cents to EUR. */
+export function vatCentsToEuros(cents: number) {
+  return roundMoney((Number(cents) || 0) / 100);
+}
+
+export function formatVatRatePercent(rate: number) {
+  const pct = Math.round((Number(rate) || 0) * 100);
+  return `${pct} %`;
+}
+
+/**
+ * Fixed client service fee by service price tier (net), VAT 20 % on top.
+ * unter 100 € → 1,99 / 2,39 · ab 100 € → 2,99 / 3,59
  */
 export function getClientServiceFeeNet(servicePriceGross: number): number {
   const price = Number(servicePriceGross) || 0;
-  if (price <= 50) return 0.99;
-  if (price <= 100) return 1.99;
+  if (price < 100) return 1.99;
   return 2.99;
 }
 
 /**
  * Client-facing price: Servicepreis (offer) + Servicegebühr brutto = Endpreis.
- * `servicePrice` is the offer / appointment total_price (session price).
  */
 export function getClientPriceBreakdown(servicePriceGross: number): ClientPriceBreakdown {
   const servicePrice = roundMoney(Number(servicePriceGross) || 0);
