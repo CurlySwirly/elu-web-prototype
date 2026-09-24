@@ -7,6 +7,7 @@ import {
   formatEuro,
   getClientPriceBreakdown,
   getSessionPriceBreakdown,
+  splitGrossByVatRate,
   type ClientPriceBreakdown,
 } from '@/lib/utils/pricing';
 
@@ -138,10 +139,9 @@ export function ExpertPriceBreakdownView({
   const breakdown = getSessionPriceBreakdown(sessionPrice);
   const [open, setOpen] = useState(false);
   const sessionGross = breakdown.clientPays;
-  const sessionVat = vatApplies
-    ? Math.round((sessionGross - sessionGross / (1 + breakdown.vatRate)) * 100) / 100
-    : 0;
-  const sessionNet = Math.round((sessionGross - sessionVat) * 100) / 100;
+  const split = splitGrossByVatRate(sessionGross, vatApplies ? breakdown.vatRate : 0);
+  const sessionVat = split.vat;
+  const sessionNet = split.net;
 
   return (
     <div className={cn('border-t border-gray-200 pt-3', className)}>
@@ -169,7 +169,10 @@ export function ExpertPriceBreakdownView({
           <PriceRow label="Sessionpreis brutto" value={sessionGross} className="px-0 py-1" />
           <div className="flex items-start justify-between gap-3 py-1">
             <div className="min-w-0">
-              <span className="text-sm text-gray-600 font-body">MwSt.</span>
+              <span className="text-sm text-gray-600 font-body">
+                MwSt.
+                {vatApplies ? ` (${Math.round(breakdown.vatRate * 100)} %)` : ''}
+              </span>
               {!vatApplies && (
                 <p className="text-[11px] text-gray-400 font-body mt-0.5 leading-snug">
                   Kleinunternehmerregelung, §&nbsp;6 Abs.&nbsp;1 Z&nbsp;27 UStG

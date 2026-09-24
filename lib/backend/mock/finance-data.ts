@@ -1,5 +1,7 @@
 /** Rich finance demo for expert Finanzen page */
 
+import { splitGrossByVatRate, type AtVatRate } from '@/lib/utils/pricing';
+
 export type MockFinanceBookingStatus =
   | 'COMPLETED'
   | 'CONFIRMED'
@@ -10,8 +12,14 @@ export type MockFinanceTransaction = {
   id: string;
   client_name: string;
   offer_title: string;
-  /** Gross client payment / session price (expert payout = full amount) */
+  /** Gross session price (backend: gros amount) */
   amount: number;
+  /** Net session price (backend: netto) */
+  net_amount: number;
+  /** VAT rate 0–1 (backend: mwst satz) */
+  vat_rate: AtVatRate;
+  /** Actual VAT in cents (backend: service vat amount) */
+  vat_amount_cents: number;
   status: 'completed' | 'confirmed';
   date: string;
   booking_status?: MockFinanceBookingStatus;
@@ -19,13 +27,43 @@ export type MockFinanceTransaction = {
   clawback_date?: string;
 };
 
+type MockFinanceSeed = Omit<
+  MockFinanceTransaction,
+  'net_amount' | 'vat_rate' | 'vat_amount_cents'
+> & { vat_rate?: AtVatRate };
+
 function financeDate(year: number, monthIndex: number, day: number, hour = 11) {
   return new Date(year, monthIndex, day, hour, 0, 0).toISOString();
 }
 
+/** Demo: 0 % (z. B. Physio) oder 20 % (z. B. Coaching). */
+function vatRateForOffer(offerTitle: string): AtVatRate {
+  if (
+    offerTitle.includes('Manuelle') ||
+    offerTitle.includes('Behandlung') ||
+    offerTitle.toLowerCase().includes('massage') ||
+    offerTitle.toLowerCase().includes('physio')
+  ) {
+    return 0;
+  }
+  return 0.2;
+}
+
+function withBookingVat(seed: MockFinanceSeed): MockFinanceTransaction {
+  const vatRate = seed.vat_rate ?? vatRateForOffer(seed.offer_title);
+  const split = splitGrossByVatRate(seed.amount, vatRate);
+  return {
+    ...seed,
+    amount: split.gross,
+    net_amount: split.net,
+    vat_rate: vatRate,
+    vat_amount_cents: Math.round(split.vat * 100),
+  };
+}
+
 const financeYear = 2026;
 
-export const mockExpertFinanceTransactions: MockFinanceTransaction[] = [
+const financeSeeds: MockFinanceSeed[] = [
   {
     id: 'fin-mar-1',
     client_name: 'Anna Schmidt',
@@ -114,7 +152,6 @@ export const mockExpertFinanceTransactions: MockFinanceTransaction[] = [
       'Online Beratung',
     ][i % 4],
     amount: [85, 70, 75, 50][i % 4],
-    // First half paid out (green), rest still expected (grey) → mixed May bars
     status: (i < 4 ? 'completed' : 'confirmed') as 'completed' | 'confirmed',
     booking_status: (i < 4 ? 'COMPLETED' : 'CONFIRMED') as MockFinanceBookingStatus,
     payout_date: i < 4 ? financeDate(financeYear, 4, 11 + i * 3) : undefined,
@@ -138,7 +175,6 @@ export const mockExpertFinanceTransactions: MockFinanceTransaction[] = [
     booking_status: 'CONFIRMED' as const,
     date: financeDate(financeYear, 6, 5 + i * 5),
   })),
-  // Clawback demos: payout already received, then withdrawn after timely client cancel
   {
     id: 'fin-clawback-1',
     client_name: 'Sophie Meier',
@@ -161,7 +197,6 @@ export const mockExpertFinanceTransactions: MockFinanceTransaction[] = [
     clawback_date: financeDate(financeYear, 4, 18, 9),
     date: financeDate(financeYear, 4, 6, 14),
   },
-  // Prior year (for history year filter)
   ...Array.from({ length: 10 }, (_, i) => ({
     id: `fin-2025-${i + 1}`,
     client_name: ['Anna Schmidt', 'Max Mustermann', 'Tom Weber', 'Lisa König', 'Jonas Berger'][
@@ -181,3 +216,6 @@ export const mockExpertFinanceTransactions: MockFinanceTransaction[] = [
     date: financeDate(2025, 8 + Math.floor(i / 3), 4 + (i % 3) * 8),
   })),
 ];
+
+export const mockExpertFinanceTransactions: MockFinanceTransaction[] =
+  financeSeeds.map(withBookingVat);

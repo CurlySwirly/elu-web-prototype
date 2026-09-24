@@ -35,6 +35,7 @@ import {
   startOfDay,
 } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { segmentButtonClass } from '@/components/ui/tabs';
 import {
   reviewService,
   type PendingReviewAppointment,
@@ -488,7 +489,7 @@ export default function ClientDashboard() {
                 </CardTitle>
               </div>
               <div className="w-full sm:w-auto overflow-x-auto">
-                <div className="inline-flex min-w-full sm:min-w-0 items-center gap-1 rounded-full bg-gray-100 p-1">
+                <div className="inline-flex min-w-full sm:min-w-0 items-center gap-0.5 rounded-full bg-gray-100 p-0.5">
                   {(
                     [
                       { id: 'all', label: 'Alle' },
@@ -500,10 +501,8 @@ export default function ClientDashboard() {
                       type="button"
                       onClick={() => setFilter(tab.id)}
                       className={cn(
-                        'flex-1 sm:flex-none whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-body transition-all',
-                        filter === tab.id
-                          ? 'bg-text-dark text-white font-semibold shadow-sm'
-                          : 'text-gray-500 hover:text-text-dark'
+                        'flex-1 sm:flex-none',
+                        segmentButtonClass(filter === tab.id)
                       )}
                     >
                       {tab.label}

@@ -1,10 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { CalendarCheck, CreditCard, Database, Info } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  CalendarCheck,
+  CreditCard,
+  Database,
+  Info,
+  RotateCcw,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
@@ -15,86 +23,347 @@ import {
 } from '@/components/ui/dialog';
 import { ExpertAboWall } from '@/components/ExpertAboWall';
 import {
+  applyMockAboManageScenario,
   cancelExpertSubscription,
-  formatPlanPrice,
-  getListPriceLabel,
+  getAboManageView,
   getPlanLabel,
-  getPromoForCohort,
+  getPlanPriceDisplay,
   getSubscriptionStatusLabel,
-  hasActiveSubscriptionAccess,
   loadExpertSubscription,
   resumeExpertSubscription,
   type ExpertSubscription,
+  type SubscriptionPlanId,
 } from '@/lib/utils/subscription';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { getBackendMode } from '@/lib/backend/mode';
 import { ensureMockExpertDemoState } from '@/lib/backend/mock/expert-demo-state';
+import { cn } from '@/lib/utils';
+import { formatEuro } from '@/lib/utils/pricing';
 
 type ExpertAboManageProps = {
   userId?: string | null;
   className?: string;
 };
 
-export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
-  const [sub, setSub] = useState<ExpertSubscription | null>(null);
-  const [showWall, setShowWall] = useState(false);
-  const [cancelOpen, setCancelOpen] = useState(false);
+function formatDateLabel(iso: string | null | undefined) {
+  if (!iso) return null;
+  try {
+    return format(new Date(iso), 'd. MMMM yyyy', { locale: de });
+  } catch {
+    return null;
+  }
+}
 
-  const refresh = useCallback(() => {
-    if (getBackendMode() === 'mock') {
-      ensureMockExpertDemoState(userId);
-    }
-    const next = loadExpertSubscription(userId);
-    setSub(next);
-    setShowWall(!hasActiveSubscriptionAccess(next));
-  }, [userId]);
+function PriceRow({ planId, cohort }: { planId: SubscriptionPlanId; cohort: ExpertSubscription['cohort'] }) {
+  const price = getPlanPriceDisplay(planId, cohort);
+  return (
+    <div className="flex items-start justify-between gap-3 text-sm font-body">
+      <span className="text-gray-600">Preis</span>
+      <span className="text-right tabular-nums leading-snug">
+        {price.hasDiscount ? (
+          <span className="inline-flex flex-wrap items-baseline justify-end gap-x-2">
+            <span className="text-gray-400 line-through">{formatEuro(price.listAmount)}</span>
+            <span className="font-heading font-semibold text-primary-blue">
+              {formatEuro(price.actionAmount)}
+            </span>
+          </span>
+        ) : (
+          <span className="font-heading font-semibold text-text-dark">
+            {formatEuro(price.listAmount)}
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
+  const isMock = getBackendMode() === 'mock';
+  const [sub, setSub] = useState<ExpertSubscription | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [showPlanPicker, setShowPlanPicker] = useState(false);
+
+  const refresh = useCallback(
+    (options?: { skipSeed?: boolean }) => {
+      if (isMock && !options?.skipSeed) {
+        ensureMockExpertDemoState(userId);
+      }
+      setSub(loadExpertSubscription(userId));
+      setShowPlanPicker(false);
+    },
+    [userId, isMock]
+  );
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
+  const view = useMemo(() => (sub ? getAboManageView(sub) : 'none'), [sub]);
+  const periodEndLabel = formatDateLabel(sub?.currentPeriodEnd);
+  const canceledAtLabel = formatDateLabel(sub?.canceledAt);
+  const graceEndsLabel = formatDateLabel(sub?.graceEndsAt);
+
+  const badgeClass = useMemo(() => {
+    if (view === 'active') {
+      return 'border-primary-green/40 bg-primary-green/10 text-text-dark font-body';
+    }
+    if (view === 'overdue') {
+      return 'border-red-300 bg-red-50 text-red-700 font-body';
+    }
+    if (view === 'canceled') {
+      return 'border-amber-300 bg-amber-50 text-amber-900 font-body';
+    }
+    return 'border-gray-300 bg-gray-50 text-gray-600 font-body';
+  }, [view]);
+
   if (!sub) return null;
 
-  const active = hasActiveSubscriptionAccess(sub);
-  const periodEndLabel = sub.currentPeriodEnd
-    ? format(new Date(sub.currentPeriodEnd), 'd. MMMM yyyy', { locale: de })
-    : null;
-
   const confirmCancel = () => {
-    cancelExpertSubscription(userId);
+    cancelExpertSubscription(userId, {
+      source: 'user',
+      reason: 'Auf eigenen Wunsch gekündigt',
+    });
     setCancelOpen(false);
-    refresh();
+    refresh({ skipSeed: true });
+  };
+
+  const applyScenario = (scenario: 'active' | 'none' | 'pending' | 'overdue' | 'canceled') => {
+    applyMockAboManageScenario(scenario, userId);
+    // Don't re-seed verified demo — that would overwrite none/pending back to active
+    refresh({ skipSeed: true });
   };
 
   return (
     <>
-      <Card className={`border border-gray-200 shadow-sm ${className || ''}`}>
+      <Card className={cn('border border-gray-200 shadow-sm', className)}>
         <CardHeader className="flex flex-row items-center justify-between gap-3 px-4 sm:px-5 pt-4 pb-3 space-y-0">
           <CardTitle className="font-heading text-base sm:text-lg text-text-dark flex items-center gap-2">
             <CreditCard className="w-4 h-4 text-primary-blue shrink-0" />
             dein Abo
           </CardTitle>
-          <Badge
-            variant="outline"
-            className={
-              active
-                ? 'border-primary-green/40 bg-primary-green/10 text-text-dark font-body'
-                : 'border-gray-300 bg-gray-50 text-gray-600 font-body'
-            }
-          >
+          <Badge variant="outline" className={badgeClass}>
             {getSubscriptionStatusLabel(sub)}
           </Badge>
         </CardHeader>
         <CardContent className="px-4 sm:px-5 pb-5 space-y-4">
-          {showWall || !active ? (
-            <ExpertAboWall
-              userId={userId}
-              compact
-              hideHeading
-              onActivated={refresh}
-            />
-          ) : (
+          {view === 'none' && (
+            <div className="space-y-4">
+              <Alert
+                className={
+                  sub.status === 'pending'
+                    ? 'border-primary-blue/30 bg-primary-blue/5'
+                    : 'border-red-200 bg-red-50'
+                }
+              >
+                {sub.status === 'pending' ? (
+                  <Info className="h-4 w-4 text-primary-blue" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                )}
+                <AlertDescription
+                  className={
+                    sub.status === 'pending'
+                      ? 'font-body text-sm text-text-dark leading-relaxed'
+                      : 'font-body text-sm text-red-800 leading-relaxed font-semibold'
+                  }
+                >
+                  {sub.status === 'pending'
+                    ? 'Dein Abo ist noch nicht aktiv. Schließe die Aktivierung ab, damit du Angebote anlegen und Buchungen annehmen kannst.'
+                    : 'Du hast noch kein aktives Abo.'}
+                </AlertDescription>
+              </Alert>
+
+              <div className="rounded-xl border border-gray-200 p-4 space-y-2">
+                <div className="flex items-center justify-between gap-3 text-sm font-body">
+                  <span className="text-gray-600">Plan</span>
+                  <span className="font-heading font-semibold text-text-dark">
+                    {sub.planId ? getPlanLabel(sub.planId) : 'Noch nicht gewählt'}
+                  </span>
+                </div>
+                <PriceRow
+                  planId={sub.planId || 'monthly'}
+                  cohort={sub.cohort === 'standard' ? 'launch' : sub.cohort}
+                />
+                <div className="flex items-center justify-between gap-3 text-sm font-body">
+                  <span className="text-gray-600">Status</span>
+                  <span className="text-text-dark">
+                    {sub.status === 'pending' ? 'Aktivierung ausstehend' : 'Kein Abo'}
+                  </span>
+                </div>
+              </div>
+
+              {showPlanPicker ? (
+                <ExpertAboWall
+                  userId={userId}
+                  compact
+                  hideHeading
+                  title={sub.status === 'pending' ? 'Aktivierung abschließen' : 'Abo wählen'}
+                  description={
+                    sub.status === 'pending'
+                      ? 'Wähle deinen Plan und schließe die Aktivierung ab.'
+                      : 'Wähle Monats- oder Jahresabo zum Aktionspreis.'
+                  }
+                  onActivated={() => refresh({ skipSeed: true })}
+                />
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 text-xs font-body bg-gradient-to-r from-primary-blue to-primary-green text-white"
+                    onClick={() => setShowPlanPicker(true)}
+                  >
+                    {sub.status === 'pending' ? 'Aktivierung fortsetzen' : 'Abo aktivieren'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {view === 'overdue' && (
+            <div className="space-y-4">
+              <Alert className="border-red-200 bg-red-50">
+                <AlertTriangle className="h-4 w-4 text-red-600" />
+                <AlertDescription className="font-body text-sm text-red-800 leading-relaxed">
+                  Die fällige Zahlung konnte nicht abgebucht werden.
+                  {graceEndsLabel ? (
+                    <>
+                      {' '}
+                      Bitte aktualisiere deine Zahlungsmethode bis einschließlich{' '}
+                      <span className="font-semibold">{graceEndsLabel}</span>, sonst wird der
+                      Zugang gesperrt.
+                    </>
+                  ) : (
+                    <> Bitte aktualisiere deine Zahlungsmethode, sonst wird der Zugang gesperrt.</>
+                  )}
+                </AlertDescription>
+              </Alert>
+
+              <div className="rounded-xl border border-gray-200 p-4 space-y-2">
+                <div className="flex items-center justify-between gap-3 text-sm font-body">
+                  <span className="text-gray-600">Plan</span>
+                  <span className="font-heading font-semibold text-text-dark">
+                    {getPlanLabel(sub.planId)}
+                  </span>
+                </div>
+                {sub.planId ? <PriceRow planId={sub.planId} cohort={sub.cohort} /> : null}
+                {periodEndLabel ? (
+                  <div className="flex items-center justify-between gap-3 text-sm font-body">
+                    <span className="text-gray-600">Ursprünglich fällig am</span>
+                    <span className="tabular-nums text-text-dark">{periodEndLabel}</span>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 text-xs font-body bg-gradient-to-r from-primary-blue to-primary-green text-white"
+                  onClick={() => {
+                    // Mock: treat as payment fixed → active
+                    applyMockAboManageScenario('active', userId);
+                    refresh({ skipSeed: true });
+                  }}
+                >
+                  Zahlung aktualisieren
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-body border-red-200 text-red-600 hover:bg-red-50"
+                  onClick={() => setCancelOpen(true)}
+                >
+                  Abo beenden
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {view === 'canceled' && (
+            <div className="space-y-4">
+              <Alert className="border-amber-200 bg-amber-50">
+                <Info className="h-4 w-4 text-amber-700" />
+                <AlertDescription className="font-body text-sm text-amber-950 leading-relaxed">
+                  Dein Abo ist gekündigt
+                  {sub.cancelSource === 'platform' ? ' (durch elu)' : ''}.
+                  {periodEndLabel ? (
+                    <>
+                      {' '}
+                      Du behältst Zugang bis einschließlich{' '}
+                      <span className="font-semibold">{periodEndLabel}</span>.
+                    </>
+                  ) : null}
+                </AlertDescription>
+              </Alert>
+
+              <div className="rounded-xl border border-gray-200 p-4 space-y-2">
+                <div className="flex items-center justify-between gap-3 text-sm font-body">
+                  <span className="text-gray-600">Plan</span>
+                  <span className="font-heading font-semibold text-text-dark">
+                    {getPlanLabel(sub.planId)}
+                  </span>
+                </div>
+                {sub.planId ? <PriceRow planId={sub.planId} cohort={sub.cohort} /> : null}
+                {periodEndLabel ? (
+                  <div className="flex items-center justify-between gap-3 text-sm font-body">
+                    <span className="text-gray-600">Endet am</span>
+                    <span className="tabular-nums text-text-dark">{periodEndLabel}</span>
+                  </div>
+                ) : null}
+                {canceledAtLabel ? (
+                  <div className="flex items-center justify-between gap-3 text-sm font-body">
+                    <span className="text-gray-600">Kündigung eingereicht</span>
+                    <span className="tabular-nums text-text-dark">{canceledAtLabel}</span>
+                  </div>
+                ) : null}
+                {sub.cancelReason ? (
+                  <div className="flex items-start justify-between gap-3 text-sm font-body pt-1 border-t border-gray-100">
+                    <span className="text-gray-600 shrink-0">Grund</span>
+                    <span className="text-text-dark text-right">{sub.cancelReason}</span>
+                  </div>
+                ) : null}
+              </div>
+
+              {showPlanPicker ? (
+                <ExpertAboWall
+                  userId={userId}
+                  compact
+                  hideHeading
+                  title="Account reaktivieren"
+                  onActivated={() => refresh({ skipSeed: true })}
+                />
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 text-xs font-body bg-gradient-to-r from-primary-blue to-primary-green text-white"
+                    onClick={() => {
+                      resumeExpertSubscription(userId);
+                      refresh({ skipSeed: true });
+                    }}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                    Kündigung zurücknehmen
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs font-body"
+                    onClick={() => setShowPlanPicker(true)}
+                  >
+                    Account reaktivieren
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {view === 'active' && (
             <div className="space-y-4">
               <div className="rounded-xl border border-gray-200 p-4 space-y-2">
                 <div className="flex items-center justify-between gap-3 text-sm font-body">
@@ -103,48 +372,19 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                     {getPlanLabel(sub.planId)}
                   </span>
                 </div>
-                {sub.planId && (
+                {sub.planId ? <PriceRow planId={sub.planId} cohort={sub.cohort} /> : null}
+                {periodEndLabel ? (
                   <div className="flex items-center justify-between gap-3 text-sm font-body">
-                    <span className="text-gray-600">Preis</span>
-                    <span className="tabular-nums text-text-dark text-right">
-                      {formatPlanPrice(sub.planId, sub.cohort)}
-                      {getPromoForCohort(sub.cohort) ? (
-                        <span className="block text-[11px] text-gray-500">
-                          Listenpreis {getListPriceLabel(sub.planId)}
-                          {sub.planId === 'yearly' ? '/Jahr' : '/Monat'} · Aktion{' '}
-                          {getPromoForCohort(sub.cohort)?.label}
-                        </span>
-                      ) : (
-                        <span className="block text-[11px] text-gray-500">Listenpreis</span>
-                      )}
-                    </span>
-                  </div>
-                )}
-                {periodEndLabel && (
-                  <div className="flex items-center justify-between gap-3 text-sm font-body">
-                    <span className="text-gray-600">
-                      {sub.cancelAtPeriodEnd ? 'Endet am' : 'Nächste Verlängerung'}
-                    </span>
+                    <span className="text-gray-600">Nächste Verlängerung</span>
                     <span className="tabular-nums text-text-dark">{periodEndLabel}</span>
                   </div>
-                )}
+                ) : null}
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {sub.cancelAtPeriodEnd ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs font-body"
-                    onClick={() => {
-                      resumeExpertSubscription(userId);
-                      refresh();
-                    }}
-                  >
-                    Kündigung zurücknehmen
-                  </Button>
-                ) : (
+              {showPlanPicker ? (
+                <ExpertAboWall userId={userId} compact hideHeading onActivated={() => refresh({ skipSeed: true })} />
+              ) : (
+                <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
                     size="sm"
@@ -154,19 +394,68 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                   >
                     Abo beenden
                   </Button>
-                )}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs font-body"
-                  onClick={() => setShowWall(true)}
-                >
-                  Plan wechseln
-                </Button>
-              </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs font-body"
+                    onClick={() => setShowPlanPicker(true)}
+                  >
+                    Plan wechseln
+                  </Button>
+                </div>
+              )}
             </div>
           )}
+
+          {isMock ? (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/80 p-3 space-y-2">
+              <p className="text-[11px] uppercase tracking-wide text-gray-500 font-body font-semibold">
+                Mock · Abo-Zustände (4 Screens)
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    ['active', 'Aktiv'],
+                    ['none', 'Kein Abo'],
+                    ['pending', 'Pending'],
+                    ['overdue', 'Überfällig'],
+                    ['canceled', 'Gekündigt'],
+                  ] as const
+                ).map(([key, label]) => {
+                  const selected =
+                    key === 'pending'
+                      ? sub.status === 'pending'
+                      : key === 'none'
+                        ? sub.status === 'none'
+                        : key === 'overdue'
+                          ? view === 'overdue'
+                          : key === 'canceled'
+                            ? view === 'canceled'
+                            : view === 'active';
+                  return (
+                    <Button
+                      key={key}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className={cn(
+                        'h-7 text-[11px] font-body px-2',
+                        selected && 'border-primary-blue text-primary-blue'
+                      )}
+                      onClick={() => applyScenario(key)}
+                    >
+                      {label}
+                    </Button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-gray-500 font-body leading-relaxed">
+                Kein Abo und Pending teilen dieselbe Layout-Struktur; Pending zeigt den
+                Hinweis „Aktivierung ausstehend“.
+              </p>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

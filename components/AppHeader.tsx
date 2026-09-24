@@ -12,6 +12,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { segmentButtonClass } from '@/components/ui/tabs';
 import type { BookingNotification } from '@/lib/services/booking';
 import { getAppPageMeta } from '@/lib/app-page-meta';
 import {
@@ -378,17 +379,15 @@ export function AppHeader({
             </div>
 
             <div className="px-3 sm:px-4 pb-3">
-              <div className="flex items-center gap-1 rounded-full bg-gray-100 p-1 overflow-x-auto">
+              <div className="flex items-center gap-0.5 rounded-full bg-gray-100 p-0.5 overflow-x-auto">
                 {filters.map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
                     onClick={() => setFilter(tab.id)}
                     className={cn(
-                      'flex-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] sm:text-xs font-body transition-all',
-                      filter === tab.id
-                        ? 'bg-text-dark text-white font-semibold shadow-sm'
-                        : 'text-gray-500 hover:text-text-dark'
+                      'flex-1 text-[11px] sm:text-xs',
+                      segmentButtonClass(filter === tab.id)
                     )}
                   >
                     {tab.label}

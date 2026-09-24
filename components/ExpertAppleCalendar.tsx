@@ -84,11 +84,11 @@ type ExpertAppleCalendarProps = {
   /** Show ICS sync menu (expert calendar). Default true when sync handlers exist. */
   showSync?: boolean;
   className?: string;
-  /** Month view: whether a calendar day is blocked */
+  /** Whether a calendar day is blocked (week / month) */
   isDayBlocked?: (date: Date) => boolean;
-  /** Month view: block a single day (right-click) */
+  /** Block a single day (X button or right-click) */
   onBlockDay?: (date: Date) => void;
-  /** Month view: unblock a day (right-click) */
+  /** Unblock a day (X button or right-click) */
   onUnblockDay?: (date: Date) => void;
   /** Denser hour rows without 15-min guide lines (client dashboard) */
   compactHours?: boolean;
@@ -595,6 +595,7 @@ export function ExpertAppleCalendar({
       </div>
 
       {view !== 'month' ? (
+        <TooltipProvider delayDuration={200}>
         <div className="overflow-x-auto">
           <div
             className={cn(compactHours ? 'min-w-0 w-full' : 'min-w-[720px]')}
@@ -609,22 +610,64 @@ export function ExpertAppleCalendar({
             <div className="border-b border-gray-200" />
             {dayColumns.map((day) => {
               const today = isSameDay(day, new Date());
+              const blocked = Boolean(isDayBlocked?.(day));
+              const canToggleBlock = Boolean(onBlockDay || onUnblockDay);
+              const canBlock = Boolean(onBlockDay) && !blocked;
+              const canUnblock = Boolean(onUnblockDay) && blocked;
               return (
                 <div
                   key={`head-${day.toISOString()}`}
                   className={cn(
-                    'border-b border-l border-gray-200 text-center',
-                    compactHours ? 'px-0.5 py-1' : 'px-2 py-2'
+                    'border-b border-l border-gray-200 text-center relative',
+                    compactHours ? 'px-0.5 py-1' : 'px-2 py-2',
+                    blocked && 'bg-amber-50'
                   )}
+                  onContextMenu={(e) => {
+                    if (!canToggleBlock) return;
+                    e.preventDefault();
+                    setDayMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      day,
+                      blocked,
+                    });
+                  }}
                 >
-                  <div
-                    className={cn(
-                      'font-body text-gray-500',
-                      compactHours ? 'text-[10px]' : 'text-xs',
-                      today && 'text-primary-blue font-semibold'
-                    )}
-                  >
-                    {format(day, compactHours ? 'EEEEEE' : 'EE', { locale: de })}
+                  <div className="flex items-start justify-center gap-0.5 relative">
+                    <div
+                      className={cn(
+                        'font-body text-gray-500',
+                        compactHours ? 'text-[10px]' : 'text-xs',
+                        today && 'text-primary-blue font-semibold',
+                        blocked && !today && 'text-amber-800'
+                      )}
+                    >
+                      {format(day, compactHours ? 'EEEEEE' : 'EE', { locale: de })}
+                    </div>
+                    {canBlock || canUnblock ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label={blocked ? 'Tag entsperren' : 'Tag sperren'}
+                            className={cn(
+                              'absolute right-0 top-0 inline-flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-colors',
+                              blocked && 'text-amber-500 hover:text-amber-700 hover:bg-amber-100'
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (blocked) onUnblockDay?.(day);
+                              else onBlockDay?.(day);
+                            }}
+                          >
+                            <X className="w-3 h-3" strokeWidth={2.5} />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="font-body text-xs">
+                          {blocked ? 'Tag entsperren' : 'Tag sperren'}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : null}
                   </div>
                   <div
                     className={cn(
@@ -632,11 +675,17 @@ export function ExpertAppleCalendar({
                       compactHours
                         ? 'mt-0.5 h-6 w-6 text-xs'
                         : 'mt-1 h-8 w-8 text-lg',
-                      today ? 'bg-primary-blue text-white' : 'text-text-dark'
+                      today ? 'bg-primary-blue text-white' : 'text-text-dark',
+                      blocked && !today && 'text-amber-900'
                     )}
                   >
                     {format(day, 'd')}
                   </div>
+                  {blocked && !compactHours ? (
+                    <span className="mt-0.5 block text-[9px] font-body text-amber-800 leading-none">
+                      Gesperrt
+                    </span>
+                  ) : null}
                 </div>
               );
             })}
@@ -652,13 +701,27 @@ export function ExpertAppleCalendar({
             >
               {compactHours ? '' : 'Ganztägig'}
             </div>
-            {dayColumns.map((day) => (
+            {dayColumns.map((day) => {
+              const blocked = Boolean(isDayBlocked?.(day));
+              const canToggleBlock = Boolean(onBlockDay || onUnblockDay);
+              return (
               <div
                 key={`allday-${day.toISOString()}`}
                 className={cn(
                   'border-b border-l border-gray-200 px-1 py-1 flex flex-col gap-1',
-                  compactHours ? 'min-h-[24px]' : 'min-h-[36px]'
+                  compactHours ? 'min-h-[24px]' : 'min-h-[36px]',
+                  blocked && 'bg-amber-50/80'
                 )}
+                onContextMenu={(e) => {
+                  if (!canToggleBlock) return;
+                  e.preventDefault();
+                  setDayMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    day,
+                    blocked,
+                  });
+                }}
               >
                 {allDayForDay(day).map((event) => {
                   const color = COLOR_STYLES[event.color || 'green'];
@@ -681,7 +744,8 @@ export function ExpertAppleCalendar({
                   );
                 })}
               </div>
-            ))}
+              );
+            })}
 
             {/* Time grid */}
             <div className="relative border-r border-gray-100">
@@ -696,11 +760,27 @@ export function ExpertAppleCalendar({
               ))}
             </div>
 
-            {dayColumns.map((day) => (
+            {dayColumns.map((day) => {
+              const blocked = Boolean(isDayBlocked?.(day));
+              const canToggleBlock = Boolean(onBlockDay || onUnblockDay);
+              return (
               <div
                 key={`grid-${day.toISOString()}`}
-                className="relative border-l border-gray-100 isolate"
+                className={cn(
+                  'relative border-l border-gray-100 isolate',
+                  blocked && 'bg-amber-50/60'
+                )}
                 style={{ height: HOURS.length * hourHeight }}
+                onContextMenu={(e) => {
+                  if (!canToggleBlock) return;
+                  e.preventDefault();
+                  setDayMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    day,
+                    blocked,
+                  });
+                }}
               >
                 <div className="pointer-events-none absolute inset-0">
                   {HOURS.map((hour) => (
@@ -714,9 +794,11 @@ export function ExpertAppleCalendar({
                 </div>
                 {laidOutTimedForDay(day).map(renderTimedEvent)}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
+        </TooltipProvider>
       ) : (
         <div className="p-3 sm:p-4">
           <TooltipProvider delayDuration={200}>

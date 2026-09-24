@@ -318,7 +318,6 @@ export function ExpertSedcard({
         )}
       </div>
 
-      {mode === 'public' && (
       <Collapsible open={reviewsOpen} onOpenChange={setReviewsOpen}>
         <Card className="border-2 overflow-hidden">
           <CollapsibleTrigger asChild>
@@ -422,7 +421,6 @@ export function ExpertSedcard({
           </CollapsibleContent>
         </Card>
       </Collapsible>
-      )}
     </div>
   );
 }

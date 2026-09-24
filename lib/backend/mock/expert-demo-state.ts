@@ -35,13 +35,19 @@ function seedVerifiedExpert(userId: string) {
     const next: ExpertSubscription = {
       status: 'active',
       planId: 'monthly',
-      cohort: 'standard',
+      cohort: 'launch',
       currentPeriodEnd: addMonths(now, 1),
       graceEndsAt: null,
       activatedAt: now,
       cancelAtPeriodEnd: false,
+      canceledAt: null,
+      cancelReason: null,
+      cancelSource: null,
     };
     saveExpertSubscription(next, userId);
+  } else if (sub.cohort === 'standard' || !sub.cohort) {
+    // Keep verified demo on action pricing so list/action display is visible
+    saveExpertSubscription({ ...sub, cohort: 'launch' }, userId);
   }
 
   if (!loadStripeConnectStatus(userId).completed) {

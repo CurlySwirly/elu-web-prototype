@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { segmentButtonClass, segmentTrackClass } from '@/components/ui/tabs';
 
 export type FinanceChartMode = 'month' | 'week';
 
@@ -51,7 +52,7 @@ export function FinanceOverviewChart({
     <div className="w-full">
       {onModeChange && (
         <div className="flex justify-end mb-3 px-1">
-          <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+          <div className={cn(segmentTrackClass)}>
             {(
               [
                 { id: 'week' as const, label: 'Woche' },
@@ -62,12 +63,7 @@ export function FinanceOverviewChart({
                 key={opt.id}
                 type="button"
                 onClick={() => onModeChange(opt.id)}
-                className={cn(
-                  'px-3 py-1.5 text-xs sm:text-sm font-body rounded-md transition-colors',
-                  mode === opt.id
-                    ? 'bg-white text-text-dark font-medium shadow-sm'
-                    : 'text-gray-500 hover:text-text-dark'
-                )}
+                className={segmentButtonClass(mode === opt.id)}
               >
                 {opt.label}
               </button>
@@ -198,7 +194,7 @@ export function FinanceOverviewChart({
                 'min-w-0 text-center text-[9px] sm:text-[11px] font-body truncate py-0.5 rounded-full transition-colors',
                 isWeek ? 'flex-1 min-w-[14px]' : 'flex-1',
                 isSelected
-                  ? 'bg-text-dark text-white font-medium'
+                  ? 'bg-white text-text-dark font-medium shadow-sm'
                   : 'text-gray-400 hover:text-text-dark'
               )}
             >

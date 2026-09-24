@@ -679,17 +679,11 @@ export default function ExpertCalendarPage() {
                   Verwalte deine gebuchten Termine
                 </CardDescription>
               </div>
-              <TabsList className="h-8 shrink-0 self-start bg-gray-100 p-0.5">
-                <TabsTrigger
-                  value="upcoming"
-                  className="font-body text-xs h-7 px-2.5 data-[state=active]:bg-text-dark data-[state=active]:text-white"
-                >
+              <TabsList className="h-8 shrink-0 self-start">
+                <TabsTrigger value="upcoming" className="h-7 px-2.5">
                   Kommende ({upcomingAppointments.length})
                 </TabsTrigger>
-                <TabsTrigger
-                  value="past"
-                  className="font-body text-xs h-7 px-2.5 data-[state=active]:bg-text-dark data-[state=active]:text-white"
-                >
+                <TabsTrigger value="past" className="h-7 px-2.5">
                   Vergangene ({pastAppointments.length})
                 </TabsTrigger>
               </TabsList>

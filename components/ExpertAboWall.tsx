@@ -5,14 +5,11 @@ import { Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
-  SUBSCRIPTION_LIST_PRICES,
   YEARLY_FREE_MONTH_PROMO_CODE,
   activateExpertSubscription,
-  formatPlanPrice,
   getDefaultCohort,
-  getDiscountedFirstPrice,
-  getFirstInvoiceDiscountPercent,
-  getListPriceLabel,
+  getPlanPriceDisplay,
+  getPromoForCohort,
   getYearlyListSavings,
   type PricingCohort,
   type SubscriptionPlanId,
@@ -76,33 +73,35 @@ export function ExpertAboWall({
 
   return (
     <div className={cn('space-y-4', className)}>
-      {!hideHeading && (
+      {(!hideHeading || description) && (
         <div className="space-y-1.5">
-          <h3 className="font-heading text-lg sm:text-xl font-bold text-text-dark">{title}</h3>
+          {!hideHeading && (
+            <h3 className="font-heading text-lg sm:text-xl font-bold text-text-dark">{title}</h3>
+          )}
           {description ? (
             <p className="text-sm text-gray-600 font-body leading-relaxed">{description}</p>
           ) : null}
         </div>
       )}
 
-      <div className="rounded-xl border border-primary-blue/25 bg-primary-blue/5 px-3.5 py-3">
-        <p className="text-sm font-body text-text-dark leading-relaxed">
-          <span className="font-heading font-semibold text-primary-blue">Nur jetzt:</span> Teste
-          elu 1 Monat gratis bei Abschluss eines Jahresabos — nutze Code{' '}
-          <span className="font-heading font-bold tracking-wide text-text-dark">
-            {YEARLY_FREE_MONTH_PROMO_CODE}
-          </span>
-        </p>
-      </div>
+      {!compact && (
+        <div className="rounded-xl border border-primary-blue/25 bg-primary-blue/5 px-3.5 py-3">
+          <p className="text-sm font-body text-text-dark leading-relaxed">
+            <span className="font-heading font-semibold text-primary-blue">Nur jetzt:</span> Teste
+            elu 1 Monat gratis bei Abschluss eines Jahresabos — nutze Code{' '}
+            <span className="font-heading font-bold tracking-wide text-text-dark">
+              {YEARLY_FREE_MONTH_PROMO_CODE}
+            </span>
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {(['monthly', 'yearly'] as SubscriptionPlanId[]).map((id) => {
           const selected = planId === id;
           const isYearly = id === 'yearly';
-          const first = getDiscountedFirstPrice(id, cohort);
-          const list = SUBSCRIPTION_LIST_PRICES[id];
-          const discountPct = getFirstInvoiceDiscountPercent(id, cohort);
-          const hasDiscount = first < list;
+          const price = getPlanPriceDisplay(id, cohort);
+          const promo = getPromoForCohort(cohort);
 
           return (
             <button
@@ -121,23 +120,26 @@ export function ExpertAboWall({
                   <p className="font-heading font-semibold text-sm text-text-dark">
                     {isYearly ? 'Jahresabo' : 'Monatsabo'}
                   </p>
-                  <p className="font-heading font-bold text-xl text-text-dark mt-1.5 tabular-nums">
-                    {formatPlanPrice(id, cohort)}
-                  </p>
-                  {hasDiscount ? (
-                    <p className="text-[11px] text-gray-500 font-body mt-0.5">
-                      <span className="line-through">
-                        {getListPriceLabel(id)}
-                        {isYearly ? '/Jahr' : '/Monat'}
+                  <p className="font-heading font-bold text-xl text-text-dark mt-1.5 tabular-nums leading-tight">
+                    {price.hasDiscount ? (
+                      <span className="inline-flex flex-wrap items-baseline gap-x-2">
+                        <span className="text-base font-normal text-gray-400 line-through">
+                          {formatEuro(price.listAmount)}
+                        </span>
+                        <span className="text-primary-blue">
+                          {formatEuro(price.actionAmount)}
+                        </span>
                       </span>
-                      {discountPct > 0 ? (
-                        <span className="text-primary-green ml-1.5">{discountPct} % Rabatt</span>
-                      ) : null}
+                    ) : (
+                      formatEuro(price.listAmount)
+                    )}
+                  </p>
+                  {promo ? (
+                    <p className="text-[11px] text-primary-green font-body mt-0.5">
+                      {promo.label}
                     </p>
                   ) : (
-                    <p className="text-[11px] text-gray-500 font-body mt-0.5">
-                      {isYearly ? 'pro Jahr' : 'pro Monat'} · Listenpreis
-                    </p>
+                    <p className="text-[11px] text-gray-500 font-body mt-0.5">Listenpreis</p>
                   )}
                 </div>
                 <span

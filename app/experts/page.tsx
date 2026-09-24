@@ -9,9 +9,8 @@ import { mockPlatformReviews } from '@/lib/backend/mock/data';
 import { formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
 import {
+  SUBSCRIPTION_ACTION_PRICES,
   SUBSCRIPTION_LIST_PRICES,
-  SUBSCRIPTION_PROMOS,
-  getDiscountedFirstPrice,
   getYearlyListSavings,
 } from '@/lib/utils/subscription';
 import { formatEuro } from '@/lib/utils/pricing';
@@ -252,35 +251,35 @@ export default function ExpertsPage() {
               </h2>
               <p className="text-xl text-gray-700 font-body max-w-2xl mx-auto">
                 Listenpreis {formatEuro(SUBSCRIPTION_LIST_PRICES.monthly)}/Monat bzw.{' '}
-                {formatEuro(SUBSCRIPTION_LIST_PRICES.yearly)}/Jahr — Phase&nbsp;1 mit Rabattaktion:{' '}
-                {SUBSCRIPTION_PROMOS.launch.label}.
+                {formatEuro(SUBSCRIPTION_LIST_PRICES.yearly)}/Jahr — Phase&nbsp;1 zum Aktionspreis{' '}
+                {formatEuro(SUBSCRIPTION_ACTION_PRICES.monthly)} /{' '}
+                {formatEuro(SUBSCRIPTION_ACTION_PRICES.yearly)}.
               </p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
               <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
                 <p className="text-sm font-body font-semibold text-primary-blue mb-2">Monatsabo</p>
-                <p className="font-heading text-4xl font-bold text-text-dark tabular-nums">
-                  {formatEuro(getDiscountedFirstPrice('monthly', 'launch'))}
+                <p className="text-sm text-gray-400 font-body line-through tabular-nums">
+                  {formatEuro(SUBSCRIPTION_LIST_PRICES.monthly)}
                 </p>
-                <p className="text-sm text-gray-500 font-body mt-1 line-through">
-                  {formatEuro(SUBSCRIPTION_LIST_PRICES.monthly)}/Monat
+                <p className="font-heading text-4xl font-bold text-primary-blue tabular-nums">
+                  {formatEuro(SUBSCRIPTION_ACTION_PRICES.monthly)}
                 </p>
                 <p className="text-sm text-gray-600 font-body mt-4">
-                  Aktion: {SUBSCRIPTION_PROMOS.launch.label} (100&nbsp;% Rabatt), danach Listenpreis
+                  Aktion für die ersten Expert:innen · danach Listenpreis
                 </p>
               </div>
               <div className="bg-white rounded-2xl border border-primary-blue/30 p-8 shadow-sm ring-1 ring-primary-blue/20">
                 <p className="text-sm font-body font-semibold text-primary-green mb-2">Jahresabo</p>
-                <p className="font-heading text-4xl font-bold text-text-dark tabular-nums">
-                  {formatEuro(getDiscountedFirstPrice('yearly', 'launch'))}
+                <p className="text-sm text-gray-400 font-body line-through tabular-nums">
+                  {formatEuro(SUBSCRIPTION_LIST_PRICES.yearly)}
                 </p>
-                <p className="text-sm text-gray-500 font-body mt-1 line-through">
-                  {formatEuro(SUBSCRIPTION_LIST_PRICES.yearly)}/Jahr
+                <p className="font-heading text-4xl font-bold text-primary-blue tabular-nums">
+                  {formatEuro(SUBSCRIPTION_ACTION_PRICES.yearly)}
                 </p>
                 <p className="text-sm text-gray-600 font-body mt-4">
-                  1 Monat als Rabatt verrechnet · {formatEuro(getYearlyListSavings())} günstiger als
-                  12× Monat
+                  {formatEuro(getYearlyListSavings())} günstiger als 12× Monat (Listenpreis)
                 </p>
               </div>
             </div>
