@@ -39,6 +39,7 @@ import {
   hasActiveSubscriptionAccess,
   loadExpertSubscription,
 } from '@/lib/utils/subscription';
+import { formatPlatformFeePercent, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
 import { loadStripeConnectStatus } from '@/lib/utils/stripe-connect';
 import { ensureMockExpertDemoState } from '@/lib/backend/mock/expert-demo-state';
 
@@ -62,6 +63,7 @@ interface ChecklistItem {
   status: 'completed' | 'pending' | 'in_review';
   link: string;
   key: string;
+  optional?: boolean;
 }
 
 export default function ExpertDashboard() {
@@ -418,15 +420,16 @@ export default function ExpertDashboard() {
         key: 'offers'
       },
       {
-        title: 'elu Abo aktivieren',
-        description: 'Erforderlich, um neue Angebote anzulegen',
+        title: 'elu Abo aktivieren (optional)',
+        description: `0 % Platformabgabe statt ${formatPlatformFeePercent(PLATFORM_FEE_RATE)}`,
         status:
           expertProfile?.checklist_abo_active ||
           hasActiveSubscriptionAccess(loadExpertSubscription(user?.id))
             ? 'completed'
             : 'pending',
         link: '/app/expert-profil?tab=konto',
-        key: 'abo'
+        key: 'abo',
+        optional: true,
       },
       {
         title: 'Verfügbarkeit anlegen',
@@ -446,9 +449,10 @@ export default function ExpertDashboard() {
   };
 
   const checklist = getChecklist();
-  const completedItems = checklist.filter(item => item.status === 'completed').length;
-  const inReviewItems = checklist.filter(item => item.status === 'in_review').length;
-  const allComplete = completedItems === checklist.length;
+  const requiredChecklist = checklist.filter((item) => !item.optional);
+  const completedItems = requiredChecklist.filter((item) => item.status === 'completed').length;
+  const inReviewItems = checklist.filter((item) => item.status === 'in_review').length;
+  const allComplete = completedItems === requiredChecklist.length;
 
   const verificationStatus = expertProfile?.verification_status || 'not_verified_incomplete';
   const isVerified = verificationStatus === 'verified';
@@ -553,7 +557,7 @@ export default function ExpertDashboard() {
               Verifizierungs-Checkliste
             </CardTitle>
             <CardDescription className="font-body text-xs sm:text-sm">
-              {completedItems} von {checklist.length} Schritten abgeschlossen
+              {completedItems} von {requiredChecklist.length} Schritten abgeschlossen
               {inReviewItems > 0 && ` · ${inReviewItems} in Prüfung`}
             </CardDescription>
           </CardHeader>
@@ -561,7 +565,9 @@ export default function ExpertDashboard() {
             <div className="w-full bg-gray-100 rounded-full h-1.5">
               <div
                 className="bg-gradient-to-r from-primary-blue to-primary-green h-1.5 rounded-full transition-all duration-500"
-                style={{ width: `${(completedItems / checklist.length) * 100}%` }}
+                style={{
+                  width: `${requiredChecklist.length ? (completedItems / requiredChecklist.length) * 100 : 0}%`,
+                }}
               />
             </div>
 

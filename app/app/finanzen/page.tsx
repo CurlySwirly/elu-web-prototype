@@ -35,7 +35,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { downloadInvoiceBundle, type InvoiceData } from '@/lib/utils/invoice';
 import {
   AT_VAT_RATES,
+  formatPlatformFeePercent,
   formatVatRatePercent,
+  getSessionPriceBreakdown,
+  PLATFORM_FEE_RATE,
   vatCentsToEuros,
   type AtVatRate,
 } from '@/lib/utils/pricing';
@@ -44,6 +47,10 @@ import {
   mockExpertFinanceTransactions,
   type MockFinanceBookingStatus,
 } from '@/lib/backend/mock/finance-data';
+import {
+  hasActiveSubscriptionAccess,
+  loadExpertSubscription,
+} from '@/lib/utils/subscription';
 
 type HistoryStatusFilter = 'all' | 'pending' | 'paid';
 type ExpertVatStatus = 'kleinunternehmer' | 'regelbesteuerung';
@@ -166,6 +173,18 @@ function matchesVatRateFilter(t: Transaction, filter: VatRateFilter, vatStatus: 
   return String(ratePct) === filter;
 }
 
+/** Session VAT money + platform fee → expert payout. */
+function expertEarnings(t: Transaction, vatStatus: ExpertVatStatus, waivePlatformFee: boolean) {
+  const money = bookingMoney(t, vatStatus);
+  const session = getSessionPriceBreakdown(money.gross, { waivePlatformFee });
+  return {
+    ...money,
+    fee: session.platformFeeNet,
+    feeRate: session.feeRate,
+    payout: session.expertPayout,
+  };
+}
+
 const INITIAL_TRANSACTIONS: Transaction[] = mockExpertFinanceTransactions.map((t) => ({
   id: t.id,
   client_name: t.client_name,
@@ -203,6 +222,11 @@ export default function FinancesPage() {
   useEffect(() => {
     setVatStatus(loadVatStatus());
   }, []);
+
+  const waivePlatformFee = useMemo(
+    () => hasActiveSubscriptionAccess(loadExpertSubscription(userId)),
+    [userId]
+  );
 
   const availableYears = useMemo(() => {
     const years = new Set<number>();
@@ -253,17 +277,17 @@ export default function FinancesPage() {
       );
       const paid = monthTx
         .filter((t) => t.status === 'completed')
-        .reduce((sum, t) => sum + bookingMoney(t, vatStatus).net, 0);
+        .reduce((sum, t) => sum + expertEarnings(t, vatStatus, waivePlatformFee).payout, 0);
       const expected = monthTx
         .filter((t) => t.status === 'confirmed')
-        .reduce((sum, t) => sum + bookingMoney(t, vatStatus).net, 0);
+        .reduce((sum, t) => sum + expertEarnings(t, vatStatus, waivePlatformFee).payout, 0);
       return {
         label,
         paid: Math.round(paid * 100) / 100,
         expected: Math.round(expected * 100) / 100,
       };
     });
-  }, [yearTransactions, vatStatus]);
+  }, [yearTransactions, vatStatus, waivePlatformFee]);
 
   const weekMeta = useMemo(() => {
     const weeks: { week: number; label: string; start: Date; end: Date }[] = [];
@@ -312,17 +336,17 @@ export default function FinancesPage() {
       });
       const paid = weekTx
         .filter((t) => t.status === 'completed')
-        .reduce((sum, t) => sum + bookingMoney(t, vatStatus).net, 0);
+        .reduce((sum, t) => sum + expertEarnings(t, vatStatus, waivePlatformFee).payout, 0);
       const expected = weekTx
         .filter((t) => t.status === 'confirmed')
-        .reduce((sum, t) => sum + bookingMoney(t, vatStatus).net, 0);
+        .reduce((sum, t) => sum + expertEarnings(t, vatStatus, waivePlatformFee).payout, 0);
       return {
         label: meta.label,
         paid: Math.round(paid * 100) / 100,
         expected: Math.round(expected * 100) / 100,
       };
     });
-  }, [yearTransactions, weekMeta, year, vatStatus]);
+  }, [yearTransactions, weekMeta, year, vatStatus, waivePlatformFee]);
 
   const chartData = chartMode === 'month' ? monthChartData : weekChartData;
   const selectedPeriodIndex = chartMode === 'month' ? selectedMonthIndex : selectedWeekIndex;
@@ -374,13 +398,17 @@ export default function FinancesPage() {
     const revenueTx = periodTransactions.filter(isRevenueTransaction);
     const paidNet = revenueTx
       .filter((t) => t.status === 'completed')
-      .reduce((sum, t) => sum + bookingMoney(t, vatStatus).net, 0);
+      .reduce((sum, t) => sum + expertEarnings(t, vatStatus, waivePlatformFee).payout, 0);
     const pendingNet = revenueTx
       .filter((t) => t.status === 'confirmed')
-      .reduce((sum, t) => sum + bookingMoney(t, vatStatus).net, 0);
+      .reduce((sum, t) => sum + expertEarnings(t, vatStatus, waivePlatformFee).payout, 0);
     const serviceNet = revenueTx.reduce((sum, t) => sum + bookingMoney(t, vatStatus).net, 0);
     const serviceVat = revenueTx.reduce((sum, t) => sum + bookingMoney(t, vatStatus).vat, 0);
     const serviceGross = revenueTx.reduce((sum, t) => sum + bookingMoney(t, vatStatus).gross, 0);
+    const platformFee = revenueTx.reduce(
+      (sum, t) => sum + expertEarnings(t, vatStatus, waivePlatformFee).fee,
+      0
+    );
     const vatApplies = serviceVat > 0 || vatStatus === 'regelbesteuerung';
     const payout = paidNet + pendingNet;
     return {
@@ -390,10 +418,12 @@ export default function FinancesPage() {
       serviceNet: Math.round(serviceNet * 100) / 100,
       serviceVat: Math.round(serviceVat * 100) / 100,
       serviceGross: Math.round(serviceGross * 100) / 100,
+      platformFee: Math.round(platformFee * 100) / 100,
+      feeRate: waivePlatformFee ? 0 : PLATFORM_FEE_RATE,
       vatApplies,
       payout: Math.round(payout * 100) / 100,
     };
-  }, [periodTransactions, vatStatus]);
+  }, [periodTransactions, vatStatus, waivePlatformFee]);
 
   const vatOverviewByMonth = useMemo(() => {
     return MONTH_TITLE.map((title, monthIndex) => {
@@ -425,7 +455,7 @@ export default function FinancesPage() {
       .forEach((t) => {
         map.set(
           t.offer_title,
-          (map.get(t.offer_title) || 0) + bookingMoney(t, vatStatus).net
+          (map.get(t.offer_title) || 0) + expertEarnings(t, vatStatus, waivePlatformFee).payout
         );
       });
     const rows = Array.from(map.entries())
@@ -452,7 +482,7 @@ export default function FinancesPage() {
         pct: Math.max(4, (r.net / total) * 100),
       })),
     };
-  }, [yearTransactions, vatStatus]);
+  }, [yearTransactions, vatStatus, waivePlatformFee]);
 
   const history = useMemo(
     () =>
@@ -503,13 +533,16 @@ export default function FinancesPage() {
         t.status === 'confirmed' &&
         matchesVatRateFilter(t, vatRateFilter, vatStatus)
     );
-    const amount = pending.reduce((sum, t) => sum + bookingMoney(t, vatStatus).net, 0);
+    const amount = pending.reduce(
+      (sum, t) => sum + expertEarnings(t, vatStatus, waivePlatformFee).payout,
+      0
+    );
     return {
       date,
       amount: Math.round(amount * 100) / 100,
       sessionCount: pending.length,
     };
-  }, [transactions, vatRateFilter, vatStatus]);
+  }, [transactions, vatRateFilter, vatStatus, waivePlatformFee]);
 
   const historyFilterActive = historyStatus !== 'all' || vatRateFilter !== 'all';
 
@@ -518,14 +551,14 @@ export default function FinancesPage() {
       .map((t) => {
         let status = t.status === 'completed' ? 'Ausbezahlt' : 'Erwartet';
         if (isClawback(t)) status = 'Rückbuchung';
-        const money = bookingMoney(t, vatStatus);
+        const money = expertEarnings(t, vatStatus, waivePlatformFee);
         return `<tr>
           <td>${format(parseISO(t.date), 'd. MMMM yyyy, HH:mm', { locale: de })} Uhr</td>
           <td>${t.offer_title}</td>
           <td>${t.client_name}</td>
           <td>${status}</td>
           <td>${formatVatRatePercent(money.rate)}</td>
-          <td style="text-align:right">${formatEuroDe(money.net)}</td>
+          <td style="text-align:right">${formatEuroDe(money.payout)}</td>
         </tr>`;
       })
       .join('');
@@ -786,6 +819,21 @@ export default function FinancesPage() {
                   <span className="text-text-dark">Servicepreis netto</span>
                   <span className="tabular-nums text-text-dark shrink-0">
                     {formatEuroDe(monthSummary.serviceNet)}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-4 py-2.5 text-sm font-body">
+                  <div className="min-w-0">
+                    <p className="text-text-dark">
+                      Platformabgabe ({formatPlatformFeePercent(monthSummary.feeRate)})
+                    </p>
+                    {waivePlatformFee ? (
+                      <p className="text-xs text-primary-green mt-0.5 leading-snug">
+                        0 % dank aktivem Abo
+                      </p>
+                    ) : null}
+                  </div>
+                  <span className="tabular-nums text-text-dark shrink-0 pt-0.5">
+                    {formatEuroDe(monthSummary.platformFee)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-4 py-3 mt-1 border-t border-gray-200 text-sm font-body">
@@ -1116,7 +1164,7 @@ export default function FinancesPage() {
                         )}
                       >
                         {clawback ? '−' : ''}
-                        {formatEuroDe(bookingMoney(t, vatStatus).net)}
+                        {formatEuroDe(expertEarnings(t, vatStatus, waivePlatformFee).payout)}
                       </p>
                     </div>
                   </div>
@@ -1218,7 +1266,7 @@ export default function FinancesPage() {
                     </p>
                   </div>
                   <p className="font-heading font-bold text-sm text-text-dark tabular-nums shrink-0">
-                    {formatEuroDe(bookingMoney(t, vatStatus).net)}
+                    {formatEuroDe(expertEarnings(t, vatStatus, waivePlatformFee).payout)}
                   </p>
                   <Button
                     type="button"

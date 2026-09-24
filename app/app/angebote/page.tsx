@@ -15,17 +15,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, Clock, MapPin, Video, Edit, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { AppPageHeader, AppPageShell } from '@/components/AppPageHeader';
-import { ExpertAboWall } from '@/components/ExpertAboWall';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import {
   formatOfferLocation,
   isOnlineOfferFormat,
 } from '@/lib/utils/offer-location';
-import {
-  hasActiveSubscriptionAccess,
-  loadExpertSubscription,
-} from '@/lib/utils/subscription';
 import { ensureMockExpertDemoState } from '@/lib/backend/mock/expert-demo-state';
 
 interface ExpertOffer {
@@ -79,7 +74,6 @@ export default function OffersPage() {
   const [success, setSuccess] = useState('');
 
   const [formData, setFormData] = useState(emptyForm);
-  const [showAboWall, setShowAboWall] = useState(false);
   const [profileAddress, setProfileAddress] = useState({
     address: '',
     postal_code: '',
@@ -162,18 +156,8 @@ export default function OffersPage() {
   }, [userId, loadExpertProfile]);
 
   const handleOpenDialog = (offer?: ExpertOffer) => {
-    // New offers require an active Abo; editing existing ones stays allowed.
-    if (!offer) {
-      if (getBackendMode() === 'mock') {
-        ensureMockExpertDemoState(userId);
-      }
-      const sub = loadExpertSubscription(userId);
-      if (!hasActiveSubscriptionAccess(sub)) {
-        setShowAboWall(true);
-        setError('');
-        setSuccess('');
-        return;
-      }
+    if (!offer && getBackendMode() === 'mock') {
+      ensureMockExpertDemoState(userId);
     }
 
     if (offer) {
@@ -738,27 +722,6 @@ export default function OffersPage() {
               {editingOffer ? 'Aktualisieren' : 'Erstellen'}
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showAboWall} onOpenChange={setShowAboWall}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="font-heading text-text-dark">Abo erforderlich</DialogTitle>
-            <DialogDescription className="font-body text-sm">
-              Neue Angebote kannst du erst mit aktivem Abo anlegen.
-            </DialogDescription>
-          </DialogHeader>
-          <ExpertAboWall
-            userId={userId}
-            compact
-            title="Abo aktivieren"
-            description="Aktiviere dein Abo, um Angebote anzulegen und buchbar zu sein."
-            onActivated={() => {
-              setShowAboWall(false);
-              handleOpenDialog();
-            }}
-          />
         </DialogContent>
       </Dialog>
     </AppPageShell>

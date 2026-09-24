@@ -14,15 +14,17 @@ import {
   type PricingCohort,
   type SubscriptionPlanId,
 } from '@/lib/utils/subscription';
-import { formatEuro } from '@/lib/utils/pricing';
+import { formatEuro, formatPlatformFeePercent, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
 
 const PLAN_BENEFITS: Record<SubscriptionPlanId, string[]> = {
   monthly: [
+    '0 % Platformabgabe statt 10 %',
     'Unbegrenzte Angebote & Buchungen',
     'Kalender, Nachrichten & Profil-Tools',
     'Jederzeit kündbar zum Periodenende',
   ],
   yearly: [
+    '0 % Platformabgabe statt 10 %',
     'Unbegrenzte Angebote & Buchungen',
     'Kalender, Nachrichten & Profil-Tools',
     'Jederzeit kündbar zum Periodenende',
@@ -59,6 +61,11 @@ export function ExpertAboWall({
   const cohort = useMemo<PricingCohort>(() => getDefaultCohort(), []);
   const [planId, setPlanId] = useState<SubscriptionPlanId>('monthly');
   const [loading, setLoading] = useState(false);
+  const resolvedDescription =
+    description ??
+    (hideHeading
+      ? undefined
+      : `Standard: ${formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe pro Buchung. Mit Abo: 0 % — du behältst 100 % deines Sessionpreises.`);
 
   const handleActivate = async () => {
     setLoading(true);
@@ -73,13 +80,13 @@ export function ExpertAboWall({
 
   return (
     <div className={cn('space-y-4', className)}>
-      {(!hideHeading || description) && (
+      {(!hideHeading || resolvedDescription) && (
         <div className="space-y-1.5">
           {!hideHeading && (
             <h3 className="font-heading text-lg sm:text-xl font-bold text-text-dark">{title}</h3>
           )}
-          {description ? (
-            <p className="text-sm text-gray-600 font-body leading-relaxed">{description}</p>
+          {resolvedDescription ? (
+            <p className="text-sm text-gray-600 font-body leading-relaxed">{resolvedDescription}</p>
           ) : null}
         </div>
       )}

@@ -1,15 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   formatEuro,
+  formatPlatformFeePercent,
   getClientPriceBreakdown,
   getSessionPriceBreakdown,
   splitGrossByVatRate,
   type ClientPriceBreakdown,
 } from '@/lib/utils/pricing';
+import { hasActiveSubscriptionAccess, loadExpertSubscription } from '@/lib/utils/subscription';
+import { useAuth } from '@/contexts/AuthContext';
 
 type ClientPriceBreakdownViewProps = {
   /** Offer / appointment session price (Servicepreis brutto) */
@@ -128,6 +131,8 @@ type ExpertPriceBreakdownViewProps = {
   className?: string;
   /** Demo / default: Kleinunternehmer → keine USt auf den Servicepreis */
   vatApplies?: boolean;
+  /** Override: waive 10 % platform fee (defaults from active Abo) */
+  waivePlatformFee?: boolean;
 };
 
 /** Expert session payout: collapsible, top line, no bordered container (matches client style). */
@@ -135,8 +140,20 @@ export function ExpertPriceBreakdownView({
   sessionPrice,
   className,
   vatApplies = false,
+  waivePlatformFee: waiveOverride,
 }: ExpertPriceBreakdownViewProps) {
-  const breakdown = getSessionPriceBreakdown(sessionPrice);
+  const { userId } = useAuth();
+  const [waiveFee, setWaiveFee] = useState(Boolean(waiveOverride));
+
+  useEffect(() => {
+    if (typeof waiveOverride === 'boolean') {
+      setWaiveFee(waiveOverride);
+      return;
+    }
+    setWaiveFee(hasActiveSubscriptionAccess(loadExpertSubscription(userId)));
+  }, [waiveOverride, userId]);
+
+  const breakdown = getSessionPriceBreakdown(sessionPrice, { waivePlatformFee: waiveFee });
   const [open, setOpen] = useState(false);
   const sessionGross = breakdown.clientPays;
   const split = splitGrossByVatRate(sessionGross, vatApplies ? breakdown.vatRate : 0);
@@ -184,6 +201,21 @@ export function ExpertPriceBreakdownView({
             </span>
           </div>
           <PriceRow label="Servicepreis netto" value={sessionNet} className="px-0 py-1" />
+          <div className="flex items-start justify-between gap-3 py-1">
+            <div className="min-w-0">
+              <span className="text-sm text-gray-600 font-body">
+                Platformabgabe ({formatPlatformFeePercent(breakdown.feeRate)})
+              </span>
+              {waiveFee ? (
+                <p className="text-[11px] text-primary-green font-body mt-0.5 leading-snug">
+                  0 % dank aktivem Abo
+                </p>
+              ) : null}
+            </div>
+            <span className="text-sm font-body font-medium text-text-dark tabular-nums shrink-0">
+              {formatEuro(breakdown.platformFeeNet)}
+            </span>
+          </div>
           <div className="flex items-center justify-between gap-3 py-1">
             <span className="text-sm font-heading font-semibold text-text-dark">Auszahlung</span>
             <span className="text-sm font-heading font-semibold text-text-dark tabular-nums">

@@ -38,8 +38,8 @@ import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { getBackendMode } from '@/lib/backend/mode';
 import { ensureMockExpertDemoState } from '@/lib/backend/mock/expert-demo-state';
+import { formatEuro, formatPlatformFeePercent, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
 import { cn } from '@/lib/utils';
-import { formatEuro } from '@/lib/utils/pricing';
 
 type ExpertAboManageProps = {
   userId?: string | null;
@@ -153,24 +153,18 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                 className={
                   sub.status === 'pending'
                     ? 'border-primary-blue/30 bg-primary-blue/5'
-                    : 'border-red-200 bg-red-50'
+                    : 'border-gray-200 bg-gray-50'
                 }
               >
                 {sub.status === 'pending' ? (
                   <Info className="h-4 w-4 text-primary-blue" />
                 ) : (
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <Info className="h-4 w-4 text-gray-500" />
                 )}
-                <AlertDescription
-                  className={
-                    sub.status === 'pending'
-                      ? 'font-body text-sm text-text-dark leading-relaxed'
-                      : 'font-body text-sm text-red-800 leading-relaxed font-semibold'
-                  }
-                >
+                <AlertDescription className="font-body text-sm text-text-dark leading-relaxed">
                   {sub.status === 'pending'
-                    ? 'Dein Abo ist noch nicht aktiv. Schließe die Aktivierung ab, damit du Angebote anlegen und Buchungen annehmen kannst.'
-                    : 'Du hast noch kein aktives Abo.'}
+                    ? 'Dein Abo ist noch nicht aktiv. Schließe die Aktivierung ab, um auf 0 % Platformabgabe zu wechseln.'
+                    : `Du nutzt das Provisionsmodell (${formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe). Mit Abo entfällt die Abgabe.`}
                 </AlertDescription>
               </Alert>
 
@@ -186,9 +180,15 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                   cohort={sub.cohort === 'standard' ? 'launch' : sub.cohort}
                 />
                 <div className="flex items-center justify-between gap-3 text-sm font-body">
+                  <span className="text-gray-600">Platformabgabe</span>
+                  <span className="text-text-dark">
+                    {formatPlatformFeePercent(PLATFORM_FEE_RATE)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm font-body">
                   <span className="text-gray-600">Status</span>
                   <span className="text-text-dark">
-                    {sub.status === 'pending' ? 'Aktivierung ausstehend' : 'Kein Abo'}
+                    {sub.status === 'pending' ? 'Aktivierung ausstehend' : 'Kein Abo · Provision'}
                   </span>
                 </div>
               </div>
@@ -202,7 +202,7 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                   description={
                     sub.status === 'pending'
                       ? 'Wähle deinen Plan und schließe die Aktivierung ab.'
-                      : 'Wähle Monats- oder Jahresabo zum Aktionspreis.'
+                      : `Wechsle auf 0 % Platformabgabe mit Monats- oder Jahresabo.`
                   }
                   onActivated={() => refresh({ skipSeed: true })}
                 />
@@ -231,11 +231,15 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                     <>
                       {' '}
                       Bitte aktualisiere deine Zahlungsmethode bis einschließlich{' '}
-                      <span className="font-semibold">{graceEndsLabel}</span>, sonst wird der
-                      Zugang gesperrt.
+                      <span className="font-semibold">{graceEndsLabel}</span>, sonst gilt wieder{' '}
+                      {formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe.
                     </>
                   ) : (
-                    <> Bitte aktualisiere deine Zahlungsmethode, sonst wird der Zugang gesperrt.</>
+                    <>
+                      {' '}
+                      Bitte aktualisiere deine Zahlungsmethode, sonst gilt wieder{' '}
+                      {formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe.
+                    </>
                   )}
                 </AlertDescription>
               </Alert>
@@ -292,10 +296,13 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                   {periodEndLabel ? (
                     <>
                       {' '}
-                      Du behältst Zugang bis einschließlich{' '}
-                      <span className="font-semibold">{periodEndLabel}</span>.
+                      Bis einschließlich <span className="font-semibold">{periodEndLabel}</span>{' '}
+                      gilt noch 0 % Platformabgabe — danach wieder{' '}
+                      {formatPlatformFeePercent(PLATFORM_FEE_RATE)}.
                     </>
-                  ) : null}
+                  ) : (
+                    <> Danach gilt wieder {formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe.</>
+                  )}
                 </AlertDescription>
               </Alert>
 
@@ -373,6 +380,10 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                   </span>
                 </div>
                 {sub.planId ? <PriceRow planId={sub.planId} cohort={sub.cohort} /> : null}
+                <div className="flex items-center justify-between gap-3 text-sm font-body">
+                  <span className="text-gray-600">Platformabgabe</span>
+                  <span className="font-heading font-semibold text-primary-green">0 %</span>
+                </div>
                 {periodEndLabel ? (
                   <div className="flex items-center justify-between gap-3 text-sm font-body">
                     <span className="text-gray-600">Nächste Verlängerung</span>

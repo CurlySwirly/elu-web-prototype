@@ -1,8 +1,10 @@
 /**
- * Expert monetization is subscription-based (Abo) – no per-session provision.
- * Clients pay a fixed Servicegebühr on top of the offer price.
+ * Hybrid monetization:
+ * - Default: 10 % Platformabgabe (commission) per booking
+ * - With active Abo: 0 % Platformabgabe
+ * - Clients always pay a fixed Servicegebühr on top of the offer price
  */
-export const PLATFORM_FEE_RATE = 0;
+export const PLATFORM_FEE_RATE = 0.1;
 
 /** Austrian standard VAT rate (Normalsatz, UStG). */
 export const VAT_RATE = 0.2;
@@ -17,13 +19,13 @@ export const SERVICE_FEE_VAT_RATE = 0.2;
 export type SessionPriceBreakdown = {
   /** Session / offer price (what client pays for the service itself) */
   clientPays: number;
-  /** Always 0 under Abo model */
+  /** Platform commission (0 when Abo waives fee) */
   platformFeeNet: number;
-  /** Always 0 under Abo model */
+  /** Reserved; platform fee shown without separate VAT line */
   vatAmount: number;
-  /** Always 0 under Abo model */
+  /** Same as platformFeeNet for display */
   platformFeeGross: number;
-  /** Expert receives the full session price */
+  /** Expert receives session price minus platform fee */
   expertPayout: number;
   feeRate: number;
   vatRate: number;
@@ -54,19 +56,39 @@ export type BookingVatBreakdown = {
   vatRate: number;
 };
 
+export type SessionPriceOptions = {
+  /** Active Abo → no platform commission */
+  waivePlatformFee?: boolean;
+};
+
+export function getEffectivePlatformFeeRate(options?: SessionPriceOptions) {
+  if (options?.waivePlatformFee) return 0;
+  return PLATFORM_FEE_RATE;
+}
+
+export function formatPlatformFeePercent(rate: number = PLATFORM_FEE_RATE) {
+  return `${Math.round((Number(rate) || 0) * 100)} %`;
+}
+
 /**
- * Expert payout: full session price (0 % provision; elu revenue = Expert Abo).
+ * Expert payout: session price minus platform fee (0 % with Abo).
  */
-export function getSessionPriceBreakdown(totalPrice: number): SessionPriceBreakdown {
+export function getSessionPriceBreakdown(
+  totalPrice: number,
+  options?: SessionPriceOptions
+): SessionPriceBreakdown {
   const clientPays = roundMoney(Number(totalPrice) || 0);
+  const feeRate = getEffectivePlatformFeeRate(options);
+  const platformFeeNet = roundMoney(clientPays * feeRate);
+  const expertPayout = roundMoney(clientPays - platformFeeNet);
 
   return {
     clientPays,
-    platformFeeNet: 0,
+    platformFeeNet,
     vatAmount: 0,
-    platformFeeGross: 0,
-    expertPayout: clientPays,
-    feeRate: PLATFORM_FEE_RATE,
+    platformFeeGross: platformFeeNet,
+    expertPayout,
+    feeRate,
     vatRate: VAT_RATE,
   };
 }

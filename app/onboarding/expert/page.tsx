@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { DocumentUpload } from '@/components/DocumentUpload';
 import { ExpertAboWall } from '@/components/ExpertAboWall';
 import { StripeConnectOnboarding } from '@/components/StripeConnectOnboarding';
+import { formatPlatformFeePercent, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
 import { AlertCircle } from 'lucide-react';
 
 const GENDER_OPTIONS = [
@@ -347,7 +348,7 @@ export default function ExpertOnboardingPage() {
                 </h4>
                 <ul className="text-xs text-gray-600 font-body space-y-1 list-disc list-inside leading-relaxed">
                   <li>Dokumente werden von unserem Team geprüft</li>
-                  <li>Abo aktivieren</li>
+                  <li>Optional: Abo für 0 % Platformabgabe</li>
                   <li>Stripe Connect für Auszahlungen einrichten</li>
                 </ul>
               </div>
@@ -357,9 +358,9 @@ export default function ExpertOnboardingPage() {
           {step === 4 && (
             <ExpertAboWall
               userId={userId}
-              title="Abo aktivieren"
-              description="Aktiviere dein Abo, um Angebote anzulegen und buchbar zu sein."
-              skipLabel="Später im Profil"
+              title="Abo aktivieren (optional)"
+              description={`Standard: ${formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe. Mit Abo: 0 % — du behältst 100 % deines Sessionpreises.`}
+              skipLabel="Weiter mit Provision"
               onActivated={() => {
                 setAboActive(true);
                 setStep(5);

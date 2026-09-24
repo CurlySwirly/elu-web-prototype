@@ -13,7 +13,7 @@ import {
   SUBSCRIPTION_LIST_PRICES,
   getYearlyListSavings,
 } from '@/lib/utils/subscription';
-import { formatEuro } from '@/lib/utils/pricing';
+import { formatEuro, formatPlatformFeePercent, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
 
 export default function ExpertsPage() {
   return (
@@ -247,17 +247,25 @@ export default function ExpertsPage() {
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-12">
               <h2 className="font-heading text-4xl md:text-5xl font-bold text-text-dark mb-4">
-                Dein elu Abo
+                So verdienst du mit elu
               </h2>
               <p className="text-xl text-gray-700 font-body max-w-2xl mx-auto">
-                Listenpreis {formatEuro(SUBSCRIPTION_LIST_PRICES.monthly)}/Monat bzw.{' '}
-                {formatEuro(SUBSCRIPTION_LIST_PRICES.yearly)}/Jahr — Phase&nbsp;1 zum Aktionspreis{' '}
-                {formatEuro(SUBSCRIPTION_ACTION_PRICES.monthly)} /{' '}
-                {formatEuro(SUBSCRIPTION_ACTION_PRICES.yearly)}.
+                Starte mit {formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe — oder
+                wähle ein Abo und behalte 100 % deines Sessionpreises. Die Servicegebühr zahlt
+                weiterhin die Klient:in.
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+            <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-10">
+              <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
+                <p className="text-sm font-body font-semibold text-gray-600 mb-2">Starter</p>
+                <p className="font-heading text-4xl font-bold text-text-dark tabular-nums">
+                  {formatPlatformFeePercent(PLATFORM_FEE_RATE)}
+                </p>
+                <p className="text-sm text-gray-600 font-body mt-4">
+                  Platformabgabe pro Buchung · sofort starten, ohne Fixkosten
+                </p>
+              </div>
               <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
                 <p className="text-sm font-body font-semibold text-primary-blue mb-2">Monatsabo</p>
                 <p className="text-sm text-gray-400 font-body line-through tabular-nums">
@@ -267,7 +275,7 @@ export default function ExpertsPage() {
                   {formatEuro(SUBSCRIPTION_ACTION_PRICES.monthly)}
                 </p>
                 <p className="text-sm text-gray-600 font-body mt-4">
-                  Aktion für die ersten Expert:innen · danach Listenpreis
+                  0 % Platformabgabe · Aktion für die ersten Expert:innen
                 </p>
               </div>
               <div className="bg-white rounded-2xl border border-primary-blue/30 p-8 shadow-sm ring-1 ring-primary-blue/20">
@@ -279,7 +287,7 @@ export default function ExpertsPage() {
                   {formatEuro(SUBSCRIPTION_ACTION_PRICES.yearly)}
                 </p>
                 <p className="text-sm text-gray-600 font-body mt-4">
-                  {formatEuro(getYearlyListSavings())} günstiger als 12× Monat (Listenpreis)
+                  0 % Platformabgabe · {formatEuro(getYearlyListSavings())} günstiger als 12× Monat
                 </p>
               </div>
             </div>
