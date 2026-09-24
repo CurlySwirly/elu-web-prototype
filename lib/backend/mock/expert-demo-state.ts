@@ -79,6 +79,9 @@ function seedOnboardingExpert(userId: string, forceReset: boolean) {
       graceEndsAt: null,
       activatedAt: null,
       cancelAtPeriodEnd: false,
+      canceledAt: null,
+      cancelReason: null,
+      cancelSource: null,
     },
     userId
   );
