@@ -153,12 +153,21 @@ export function ExpertPriceBreakdownView({
     setWaiveFee(hasActiveSubscriptionAccess(loadExpertSubscription(userId)));
   }, [waiveOverride, userId]);
 
-  const breakdown = getSessionPriceBreakdown(sessionPrice, { waivePlatformFee: waiveFee });
+  const breakdown = getSessionPriceBreakdown(sessionPrice, {
+    hasActiveAbo: waiveFee,
+    bookingIndex: waiveFee ? undefined : 0, // detail view: treat as next booking if no abo → may be launch-free
+  });
   const [open, setOpen] = useState(false);
   const sessionGross = breakdown.clientPays;
   const split = splitGrossByVatRate(sessionGross, vatApplies ? breakdown.vatRate : 0);
   const sessionVat = split.vat;
   const sessionNet = split.net;
+  const feeHint =
+    breakdown.waiverReason === 'abo'
+      ? '0 % dank aktivem Abo'
+      : breakdown.waiverReason === 'launch'
+        ? '0 % Launch-Aktion (erste Buchungen)'
+        : null;
 
   return (
     <div className={cn('border-t border-gray-200 pt-3', className)}>
@@ -206,9 +215,9 @@ export function ExpertPriceBreakdownView({
               <span className="text-sm text-gray-600 font-body">
                 Platformabgabe ({formatPlatformFeePercent(breakdown.feeRate)})
               </span>
-              {waiveFee ? (
+              {feeHint ? (
                 <p className="text-[11px] text-primary-green font-body mt-0.5 leading-snug">
-                  0 % dank aktivem Abo
+                  {feeHint}
                 </p>
               ) : null}
             </div>

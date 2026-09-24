@@ -42,6 +42,8 @@ import {
 import { formatPlatformFeePercent, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
 import { loadStripeConnectStatus } from '@/lib/utils/stripe-connect';
 import { ensureMockExpertDemoState } from '@/lib/backend/mock/expert-demo-state';
+import { ExpertAboSavingsTip } from '@/components/ExpertAboSavingsTip';
+import { mockExpertFinanceTransactions } from '@/lib/backend/mock/finance-data';
 
 interface ExpertProfile {
   id: string;
@@ -518,6 +520,17 @@ export default function ExpertDashboard() {
     ? 'Du bist noch nicht verifiziert. Bitte schließe alle 5 Schritte unten ab und warte auf unsere Qualifikationsprüfung.'
     : 'Verwalte deine Angebote, Termine und Finanzen.';
 
+  const hasActiveAbo = hasActiveSubscriptionAccess(loadExpertSubscription(user?.id));
+  const completedSessionPrices = mockExpertFinanceTransactions
+    .filter(
+      (t) =>
+        t.status === 'completed' &&
+        t.booking_status !== 'REFUNDED_CLAWBACK' &&
+        t.booking_status !== 'REFUNDED'
+    )
+    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+    .map((t) => t.amount);
+
   return (
     <div className="p-3 sm:p-4 lg:p-5 space-y-4 max-w-7xl mx-auto">
       <section className="relative overflow-hidden rounded-2xl border-2 border-primary-blue/15 bg-white">
@@ -549,6 +562,11 @@ export default function ExpertDashboard() {
       </section>
 
       {getAlertMessage()}
+
+      <ExpertAboSavingsTip
+        sessionPrices={completedSessionPrices}
+        hasActiveAbo={hasActiveAbo}
+      />
 
       {!isVerified && (
         <Card className="border border-gray-200 shadow-sm">

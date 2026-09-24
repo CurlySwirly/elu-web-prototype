@@ -14,18 +14,18 @@ import {
   type PricingCohort,
   type SubscriptionPlanId,
 } from '@/lib/utils/subscription';
-import { formatEuro, formatPlatformFeePercent, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
+import { formatEuro, formatPlatformFeePercent, LAUNCH_FEE_FREE_BOOKINGS, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
 
 const PLAN_BENEFITS: Record<SubscriptionPlanId, string[]> = {
   monthly: [
     '0 % Platformabgabe statt 10 %',
-    'Unbegrenzte Angebote & Buchungen',
+    'Priorisierte Sichtbarkeit & Premium-Tools',
     'Kalender, Nachrichten & Profil-Tools',
     'Jederzeit kündbar zum Periodenende',
   ],
   yearly: [
     '0 % Platformabgabe statt 10 %',
-    'Unbegrenzte Angebote & Buchungen',
+    'Priorisierte Sichtbarkeit & Premium-Tools',
     'Kalender, Nachrichten & Profil-Tools',
     'Jederzeit kündbar zum Periodenende',
     '1 Monat gratis mit Code bei Abschluss',
@@ -65,7 +65,7 @@ export function ExpertAboWall({
     description ??
     (hideHeading
       ? undefined
-      : `Standard: ${formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe pro Buchung. Mit Abo: 0 % — du behältst 100 % deines Sessionpreises.`);
+      : `Standard: ${formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe (z. B. €100 → €90). Launch: erste ${LAUNCH_FEE_FREE_BOOKINGS} Buchungen ohne Abgabe. Mit Abo: dauerhaft 0 %.`);
 
   const handleActivate = async () => {
     setLoading(true);
@@ -92,7 +92,11 @@ export function ExpertAboWall({
       )}
 
       {!compact && (
-        <div className="rounded-xl border border-primary-blue/25 bg-primary-blue/5 px-3.5 py-3">
+        <div className="rounded-xl border border-primary-blue/25 bg-primary-blue/5 px-3.5 py-3 space-y-1.5">
+          <p className="text-sm font-body text-text-dark leading-relaxed">
+            <span className="font-heading font-semibold text-primary-blue">Launch-Aktion:</span>{' '}
+            Die ersten {LAUNCH_FEE_FREE_BOOKINGS} Buchungen ohne Platformabgabe — null Risiko.
+          </p>
           <p className="text-sm font-body text-text-dark leading-relaxed">
             <span className="font-heading font-semibold text-primary-blue">Nur jetzt:</span> Teste
             elu 1 Monat gratis bei Abschluss eines Jahresabos — nutze Code{' '}

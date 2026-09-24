@@ -1,10 +1,17 @@
 /**
  * Hybrid monetization:
  * - Default: 10 % Platformabgabe (commission) per booking
+ * - Launch: first 3 bookings without platform fee
  * - With active Abo: 0 % Platformabgabe
  * - Clients always pay a fixed Servicegebühr on top of the offer price
+ *
+ * Example: Service €100 → Client pays €100 + Servicegebühr; Expert gets €90
+ * (or €100 during launch-free bookings / with Abo).
  */
 export const PLATFORM_FEE_RATE = 0.1;
+
+/** Launch Aktion: first N completed bookings without platform fee. */
+export const LAUNCH_FEE_FREE_BOOKINGS = 3;
 
 /** Austrian standard VAT rate (Normalsatz, UStG). */
 export const VAT_RATE = 0.2;
@@ -16,10 +23,20 @@ export type AtVatRate = (typeof AT_VAT_RATES)[number];
 /** VAT on the client-facing elu service fee (Servicegebühr) – AT Normalsatz. */
 export const SERVICE_FEE_VAT_RATE = 0.2;
 
+/** Premium Abo benefits shown in upsell tips. */
+export const ABO_PREMIUM_BENEFITS = [
+  '0 % Platformabgabe auf alle Buchungen',
+  'Priorisierte Sichtbarkeit in der Expert:innen-Suche',
+  'Erweiterte Kalender-, Profil- & Statistik-Tools',
+  'Bevorzugter Support',
+] as const;
+
+export type PlatformFeeWaiverReason = 'abo' | 'launch' | null;
+
 export type SessionPriceBreakdown = {
   /** Session / offer price (what client pays for the service itself) */
   clientPays: number;
-  /** Platform commission (0 when Abo waives fee) */
+  /** Platform commission (0 when Abo / launch waives fee) */
   platformFeeNet: number;
   /** Reserved; platform fee shown without separate VAT line */
   vatAmount: number;
@@ -29,6 +46,7 @@ export type SessionPriceBreakdown = {
   expertPayout: number;
   feeRate: number;
   vatRate: number;
+  waiverReason: PlatformFeeWaiverReason;
 };
 
 export type ClientPriceBreakdown = {
@@ -57,13 +75,42 @@ export type BookingVatBreakdown = {
 };
 
 export type SessionPriceOptions = {
-  /** Active Abo → no platform commission */
+  /** Explicit override (takes precedence) */
   waivePlatformFee?: boolean;
+  waiverReason?: PlatformFeeWaiverReason;
+  /** Active Abo → no platform commission */
+  hasActiveAbo?: boolean;
+  /** 0-based index among completed fee-eligible bookings (launch free uses 0..2) */
+  bookingIndex?: number;
 };
 
+export function resolvePlatformFeeWaiver(options?: SessionPriceOptions): {
+  waive: boolean;
+  reason: PlatformFeeWaiverReason;
+  feeRate: number;
+} {
+  if (options?.waivePlatformFee === true) {
+    return {
+      waive: true,
+      reason: options.waiverReason ?? 'abo',
+      feeRate: 0,
+    };
+  }
+  if (options?.waivePlatformFee === false) {
+    return { waive: false, reason: null, feeRate: PLATFORM_FEE_RATE };
+  }
+  if (options?.hasActiveAbo) {
+    return { waive: true, reason: 'abo', feeRate: 0 };
+  }
+  const idx = options?.bookingIndex;
+  if (typeof idx === 'number' && idx >= 0 && idx < LAUNCH_FEE_FREE_BOOKINGS) {
+    return { waive: true, reason: 'launch', feeRate: 0 };
+  }
+  return { waive: false, reason: null, feeRate: PLATFORM_FEE_RATE };
+}
+
 export function getEffectivePlatformFeeRate(options?: SessionPriceOptions) {
-  if (options?.waivePlatformFee) return 0;
-  return PLATFORM_FEE_RATE;
+  return resolvePlatformFeeWaiver(options).feeRate;
 }
 
 export function formatPlatformFeePercent(rate: number = PLATFORM_FEE_RATE) {
@@ -71,15 +118,16 @@ export function formatPlatformFeePercent(rate: number = PLATFORM_FEE_RATE) {
 }
 
 /**
- * Expert payout: session price minus platform fee (0 % with Abo).
+ * Expert payout: session price minus platform fee
+ * (0 % with Abo or during launch free bookings).
  */
 export function getSessionPriceBreakdown(
   totalPrice: number,
   options?: SessionPriceOptions
 ): SessionPriceBreakdown {
   const clientPays = roundMoney(Number(totalPrice) || 0);
-  const feeRate = getEffectivePlatformFeeRate(options);
-  const platformFeeNet = roundMoney(clientPays * feeRate);
+  const resolved = resolvePlatformFeeWaiver(options);
+  const platformFeeNet = roundMoney(clientPays * resolved.feeRate);
   const expertPayout = roundMoney(clientPays - platformFeeNet);
 
   return {
@@ -88,9 +136,59 @@ export function getSessionPriceBreakdown(
     vatAmount: 0,
     platformFeeGross: platformFeeNet,
     expertPayout,
-    feeRate,
+    feeRate: resolved.feeRate,
     vatRate: VAT_RATE,
+    waiverReason: resolved.reason,
   };
+}
+
+/**
+ * Sum platform fees paid across completed sessions (respects launch free + Abo).
+ */
+export function calculatePlatformFeesOnSessions(
+  sessionPrices: number[],
+  options?: { hasActiveAbo?: boolean }
+): {
+  totalFees: number;
+  billableCount: number;
+  freeLaunchCount: number;
+  bookingCount: number;
+} {
+  if (options?.hasActiveAbo) {
+    return {
+      totalFees: 0,
+      billableCount: 0,
+      freeLaunchCount: 0,
+      bookingCount: sessionPrices.length,
+    };
+  }
+  let totalFees = 0;
+  let billableCount = 0;
+  let freeLaunchCount = 0;
+  sessionPrices.forEach((price, bookingIndex) => {
+    const breakdown = getSessionPriceBreakdown(price, { bookingIndex });
+    if (breakdown.waiverReason === 'launch') {
+      freeLaunchCount += 1;
+      return;
+    }
+    billableCount += 1;
+    totalFees += breakdown.platformFeeNet;
+  });
+  return {
+    totalFees: roundMoney(totalFees),
+    billableCount,
+    freeLaunchCount,
+    bookingCount: sessionPrices.length,
+  };
+}
+
+/** Remaining launch bookings without platform fee (0 when Abo or exhausted). */
+export function getLaunchFeeFreeRemaining(
+  completedBookingCount: number,
+  hasActiveAbo?: boolean
+) {
+  if (hasActiveAbo) return 0;
+  return Math.max(0, LAUNCH_FEE_FREE_BOOKINGS - Math.max(0, completedBookingCount));
 }
 
 /**

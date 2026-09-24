@@ -13,7 +13,7 @@ import {
   SUBSCRIPTION_LIST_PRICES,
   getYearlyListSavings,
 } from '@/lib/utils/subscription';
-import { formatEuro, formatPlatformFeePercent, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
+import { formatEuro, formatPlatformFeePercent, LAUNCH_FEE_FREE_BOOKINGS, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
 
 export default function ExpertsPage() {
   return (
@@ -250,9 +250,10 @@ export default function ExpertsPage() {
                 So verdienst du mit elu
               </h2>
               <p className="text-xl text-gray-700 font-body max-w-2xl mx-auto">
-                Starte mit {formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe — oder
-                wähle ein Abo und behalte 100 % deines Sessionpreises. Die Servicegebühr zahlt
-                weiterhin die Klient:in.
+                Starte mit {formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe (z. B. €100
+                Service → €90 Auszahlung) — Launch: erste {LAUNCH_FEE_FREE_BOOKINGS} Buchungen ohne
+                Abgabe. Oder wähle ein Abo und behalte 100 % deines Sessionpreises. Die
+                Servicegebühr zahlt weiterhin die Klient:in.
               </p>
             </div>
 
@@ -263,7 +264,7 @@ export default function ExpertsPage() {
                   {formatPlatformFeePercent(PLATFORM_FEE_RATE)}
                 </p>
                 <p className="text-sm text-gray-600 font-body mt-4">
-                  Platformabgabe pro Buchung · sofort starten, ohne Fixkosten
+                  Platformabgabe pro Buchung · erste {LAUNCH_FEE_FREE_BOOKINGS} Buchungen gratis
                 </p>
               </div>
               <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">

@@ -22,6 +22,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ExpertAboWall } from '@/components/ExpertAboWall';
+import { ExpertAboSavingsTip } from '@/components/ExpertAboSavingsTip';
+import { mockExpertFinanceTransactions } from '@/lib/backend/mock/finance-data';
 import {
   applyMockAboManageScenario,
   cancelExpertSubscription,
@@ -29,16 +31,17 @@ import {
   getPlanLabel,
   getPlanPriceDisplay,
   getSubscriptionStatusLabel,
+  hasActiveSubscriptionAccess,
   loadExpertSubscription,
   resumeExpertSubscription,
   type ExpertSubscription,
   type SubscriptionPlanId,
 } from '@/lib/utils/subscription';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { getBackendMode } from '@/lib/backend/mode';
 import { ensureMockExpertDemoState } from '@/lib/backend/mock/expert-demo-state';
-import { formatEuro, formatPlatformFeePercent, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
+import { formatEuro, formatPlatformFeePercent, LAUNCH_FEE_FREE_BOOKINGS, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
 import { cn } from '@/lib/utils';
 
 type ExpertAboManageProps = {
@@ -134,6 +137,17 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
     refresh({ skipSeed: true });
   };
 
+  const completedSessionPrices = mockExpertFinanceTransactions
+    .filter(
+      (t) =>
+        t.status === 'completed' &&
+        t.booking_status !== 'REFUNDED_CLAWBACK' &&
+        t.booking_status !== 'REFUNDED'
+    )
+    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime())
+    .map((t) => t.amount);
+  const tipHasAbo = hasActiveSubscriptionAccess(sub);
+
   return (
     <>
       <Card className={cn('border border-gray-200 shadow-sm', className)}>
@@ -149,6 +163,10 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
         <CardContent className="px-4 sm:px-5 pb-5 space-y-4">
           {view === 'none' && (
             <div className="space-y-4">
+              <ExpertAboSavingsTip
+                sessionPrices={completedSessionPrices}
+                hasActiveAbo={tipHasAbo}
+              />
               <Alert
                 className={
                   sub.status === 'pending'
@@ -164,7 +182,7 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                 <AlertDescription className="font-body text-sm text-text-dark leading-relaxed">
                   {sub.status === 'pending'
                     ? 'Dein Abo ist noch nicht aktiv. Schließe die Aktivierung ab, um auf 0 % Platformabgabe zu wechseln.'
-                    : `Du nutzt das Provisionsmodell (${formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe). Mit Abo entfällt die Abgabe.`}
+                    : `Du nutzt das Provisionsmodell (${formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe, z. B. €100 → €90). Launch: erste ${LAUNCH_FEE_FREE_BOOKINGS} Buchungen ohne Abgabe. Mit Abo entfällt die Abgabe dauerhaft.`}
                 </AlertDescription>
               </Alert>
 
