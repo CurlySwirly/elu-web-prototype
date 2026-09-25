@@ -359,8 +359,8 @@ export default function ExpertOnboardingPage() {
             <ExpertAboWall
               userId={userId}
               title="Abo aktivieren (optional)"
-              description={`Standard: ${formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe. Mit Abo: 0 % — du behältst 100 % deines Sessionpreises.`}
-              skipLabel="Weiter mit Provision"
+              description={`Ohne Abo: ${formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe. Mit Abo: 0 %.`}
+              skipLabel="Später entscheiden"
               onActivated={() => {
                 setAboActive(true);
                 setStep(5);

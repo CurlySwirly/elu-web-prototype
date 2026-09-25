@@ -23,13 +23,15 @@ export type AtVatRate = (typeof AT_VAT_RATES)[number];
 /** VAT on the client-facing elu service fee (Servicegebühr) – AT Normalsatz. */
 export const SERVICE_FEE_VAT_RATE = 0.2;
 
-/** Premium Abo benefits shown in upsell tips. */
-export const ABO_PREMIUM_BENEFITS = [
+/** Benefits shown on Abo plan cards (expert-facing, product-true). */
+export const ABO_PLAN_BENEFITS = [
   '0 % Platformabgabe auf alle Buchungen',
-  'Priorisierte Sichtbarkeit in der Expert:innen-Suche',
-  'Erweiterte Kalender-, Profil- & Statistik-Tools',
-  'Bevorzugter Support',
+  'Kalender, Nachrichten & Profil-Tools',
+  'Jederzeit kündbar zum Periodenende',
 ] as const;
+
+/** @deprecated use ABO_PLAN_BENEFITS */
+export const ABO_PREMIUM_BENEFITS = ABO_PLAN_BENEFITS;
 
 export type PlatformFeeWaiverReason = 'abo' | 'launch' | null;
 

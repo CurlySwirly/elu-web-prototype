@@ -41,7 +41,7 @@ import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { getBackendMode } from '@/lib/backend/mode';
 import { ensureMockExpertDemoState } from '@/lib/backend/mock/expert-demo-state';
-import { formatEuro, formatPlatformFeePercent, LAUNCH_FEE_FREE_BOOKINGS, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
+import { formatEuro, formatPlatformFeePercent, PLATFORM_FEE_RATE } from '@/lib/utils/pricing';
 import { cn } from '@/lib/utils';
 
 type ExpertAboManageProps = {
@@ -182,7 +182,7 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                 <AlertDescription className="font-body text-sm text-text-dark leading-relaxed">
                   {sub.status === 'pending'
                     ? 'Dein Abo ist noch nicht aktiv. Schließe die Aktivierung ab, um auf 0 % Platformabgabe zu wechseln.'
-                    : `Du nutzt das Provisionsmodell (${formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe, z. B. €100 → €90). Launch: erste ${LAUNCH_FEE_FREE_BOOKINGS} Buchungen ohne Abgabe. Mit Abo entfällt die Abgabe dauerhaft.`}
+                    : `Aktuell ${formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe. Mit Abo: 0 %.`}
                 </AlertDescription>
               </Alert>
 
@@ -206,7 +206,7 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                 <div className="flex items-center justify-between gap-3 text-sm font-body">
                   <span className="text-gray-600">Status</span>
                   <span className="text-text-dark">
-                    {sub.status === 'pending' ? 'Aktivierung ausstehend' : 'Kein Abo · Provision'}
+                    {sub.status === 'pending' ? 'Aktivierung ausstehend' : 'Kein Abo'}
                   </span>
                 </div>
               </div>
@@ -220,7 +220,7 @@ export function ExpertAboManage({ userId, className }: ExpertAboManageProps) {
                   description={
                     sub.status === 'pending'
                       ? 'Wähle deinen Plan und schließe die Aktivierung ab.'
-                      : `Wechsle auf 0 % Platformabgabe mit Monats- oder Jahresabo.`
+                      : 'Mit Abo entfällt die Platformabgabe.'
                   }
                   onActivated={() => refresh({ skipSeed: true })}
                 />

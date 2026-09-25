@@ -851,13 +851,9 @@ export default function FinancesPage() {
                       Platformabgabe ({formatPlatformFeePercent(monthSummary.feeRate)})
                     </p>
                     {hasActiveAbo ? (
-                      <p className="text-xs text-primary-green mt-0.5 leading-snug">
-                        0 % dank aktivem Abo
-                      </p>
+                      <p className="text-xs text-primary-green mt-0.5 leading-snug">0 % mit Abo</p>
                     ) : monthSummary.platformFee === 0 ? (
-                      <p className="text-xs text-primary-green mt-0.5 leading-snug">
-                        Launch-Aktion: erste Buchungen ohne Abgabe
-                      </p>
+                      <p className="text-xs text-primary-green mt-0.5 leading-snug">0 % (Launch)</p>
                     ) : null}
                   </div>
                   <span className="tabular-nums text-text-dark shrink-0 pt-0.5">

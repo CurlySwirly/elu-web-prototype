@@ -164,9 +164,9 @@ export function ExpertPriceBreakdownView({
   const sessionNet = split.net;
   const feeHint =
     breakdown.waiverReason === 'abo'
-      ? '0 % dank aktivem Abo'
+      ? '0 % mit Abo'
       : breakdown.waiverReason === 'launch'
-        ? '0 % Launch-Aktion (erste Buchungen)'
+        ? '0 % (Launch)'
         : null;
 
   return (

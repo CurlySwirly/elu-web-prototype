@@ -250,10 +250,8 @@ export default function ExpertsPage() {
                 So verdienst du mit elu
               </h2>
               <p className="text-xl text-gray-700 font-body max-w-2xl mx-auto">
-                Starte mit {formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe (z. B. €100
-                Service → €90 Auszahlung) — Launch: erste {LAUNCH_FEE_FREE_BOOKINGS} Buchungen ohne
-                Abgabe. Oder wähle ein Abo und behalte 100 % deines Sessionpreises. Die
-                Servicegebühr zahlt weiterhin die Klient:in.
+                Starter: {formatPlatformFeePercent(PLATFORM_FEE_RATE)} Platformabgabe · erste{' '}
+                {LAUNCH_FEE_FREE_BOOKINGS} Buchungen ohne Abgabe. Oder Abo mit 0 % Platformabgabe.
               </p>
             </div>
 
