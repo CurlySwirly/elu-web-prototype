@@ -19,12 +19,10 @@ import { formatEuro, formatPlatformFeePercent, LAUNCH_FEE_FREE_BOOKINGS, PLATFOR
 const PLAN_BENEFITS: Record<SubscriptionPlanId, string[]> = {
   monthly: [
     '0 % Platformabgabe statt 10 %',
-    'Kalender, Nachrichten & Profil-Tools',
     'Jederzeit kündbar zum Periodenende',
   ],
   yearly: [
     '0 % Platformabgabe statt 10 %',
-    'Kalender, Nachrichten & Profil-Tools',
     'Jederzeit kündbar zum Periodenende',
     '1 Monat gratis mit Code bei Abschluss',
   ],
